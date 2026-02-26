@@ -13,9 +13,9 @@ from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.common.paths import (
+from pyssp_sysml2.paths import (
     ARCHITECTURE_DIR,
     BUILD_DIR,
     GENERATED_DIR,
@@ -23,12 +23,13 @@ from scripts.common.paths import (
     ensure_directory,
 )
 
-from scripts.common.fmi_helpers import format_value, map_fmi_type
+from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 
-from pycps_sysmlv2 import (
-    SysMLPartDefinition,
-    load_system
-)
+from pycps_sysmlv2 import SysMLPartDefinition, load_system
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_ARCH_PATH = ARCHITECTURE_DIR
 DEFAULT_OUTPUT_DIR = GENERATED_DIR / "model_descriptions"
@@ -52,8 +53,7 @@ class VariableSpec:
 
 def _port_attribute_variables(
     part: SysMLPartDefinition, starting_ref: int, starting_index: int
-) -> tuple[list[VariableSpec], int, list[int]]:
-    print("Parsing ports")
+) -> tuple[list[VariableSpec], int, int]:
 
     variables: list[VariableSpec] = []
     value_ref = starting_ref
@@ -62,7 +62,7 @@ def _port_attribute_variables(
     for port, port_def, attr in part.get_port_attributes():
 
         var_name = f"{port.name}.{attr.name}"
-        fmi_type = attr.type.as_string()
+        fmi_type = map_fmi_type(attr.type.as_string())
         description = attr.doc or port.doc or (port_def.doc if port_def else None)
 
         spec = VariableSpec(
@@ -83,15 +83,13 @@ def _port_attribute_variables(
 def _parameter_variables(
     part: SysMLPartDefinition, starting_ref: int, starting_index: int
 ) -> tuple[list[VariableSpec], int]:
-    
-    print("Parsing parameters")
 
     variables: list[VariableSpec] = []
     value_ref = starting_ref
     value_index = starting_index
 
     for attr_name, attr in part.attributes.items():
-        print(f"Parsing {attr_name}, {attr.type}")
+        logger.debug("Parsing attribute %s (%s)", attr_name, attr.type)
 
         fmi_type = "Real"
 
@@ -113,7 +111,6 @@ def _parameter_variables(
                 value_index += 1
 
         else:
-            print("Not list")
             fmi_type = map_fmi_type(attr.type.as_string())
 
             spec = VariableSpec(
@@ -134,7 +131,6 @@ def _parameter_variables(
 
 
 def _get_variables(part: SysMLPartDefinition):
-    print("Parsing variables")
     value_ref = 0
     index = 1
 
@@ -170,7 +166,7 @@ def _build_model_description_tree(
         .isoformat()
         .replace("+00:00", "Z")
     )
-    guid = str(uuid5(NAMESPACE_URL, f"ssp_airplane/{package_name}/{part.name}"))
+    guid = str(uuid5(NAMESPACE_URL, f"pyssp_sysml2/{package_name}/{part.name}"))
 
     root = ET.Element(
         "fmiModelDescription",
@@ -180,7 +176,7 @@ def _build_model_description_tree(
             "guid": f"{{{guid}}}",
             "description": part.doc or "",
             "version": "1.0",
-            "generationTool": "ssp_airplane tooling",
+            "generationTool": "pyssp_sysml2 tooling",
             "generationDateAndTime": timestamp,
             "variableNamingConvention": "structured",
             "numberOfEventIndicators": "0",
@@ -223,14 +219,12 @@ def generate_model_descriptions(
 
     written: list[Path] = []
     for part_inst_name, part_ref in parts.items():
-        print(f"Generating MD for {part_inst_name}")
+        logger.info("Generating model description for %s", part_inst_name)
 
         component_dir = output_dir / part_ref.part_name
         output_path = component_dir / "modelDescription.xml"
-        fmu_dir = BUILD_DIR / "fmu_pre"
-
         ensure_directory(component_dir)
-        ensure_directory(fmu_dir)
+        ensure_directory(BUILD_DIR / "fmu_pre")
 
         tree = _build_model_description_tree(part_ref.part_def, system.name)
 

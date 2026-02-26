@@ -1,4 +1,4 @@
 pytest
 
--e ./3rd_party/pysysml2_cps
--e ./3rd_party/pyssp_standard
+./3rd_party/pysysml2_cps
+./3rd_party/pyssp_standard

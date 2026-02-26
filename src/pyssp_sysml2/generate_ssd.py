@@ -10,15 +10,15 @@ from typing import Optional
 
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from scripts.common.paths import (
+from pyssp_sysml2.paths import (
     COMPOSITION_NAME,
     ARCHITECTURE_DIR,
     GENERATED_DIR,
     ensure_parent_dir,
 )
-from scripts.common.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
+from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
 
 from pyssp_standard.common_content_ssc import (
     TypeBoolean,

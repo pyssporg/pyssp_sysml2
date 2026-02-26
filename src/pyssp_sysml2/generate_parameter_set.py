@@ -8,13 +8,18 @@ from pathlib import Path
 from typing import Iterable, Optional
 
 if __package__ in {None, ""}:
-    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from pyssp_standard.ssv import SSV
 
 from pycps_sysmlv2 import SysMLAttribute, load_system
-from scripts.common.paths import ARCHITECTURE_DIR, GENERATED_DIR, COMPOSITION_NAME, ensure_parent_dir
-from scripts.common.fmi_helpers import format_value
+from pyssp_sysml2.paths import (
+    ARCHITECTURE_DIR,
+    GENERATED_DIR,
+    COMPOSITION_NAME,
+    ensure_parent_dir,
+)
+from pyssp_sysml2.fmi_helpers import format_value
 
 DEFAULT_ARCH_PATH = ARCHITECTURE_DIR
 DEFAULT_OUTPUT = GENERATED_DIR / "parameters.ssv"
@@ -30,7 +35,7 @@ def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, SysMLA
 
         if isinstance(attr.value, (list, tuple)):
 
-            for idx, item in enumerate(attr.value, start=1):
+            for idx, item in enumerate(attr.value, start=0):
                 indexed_name = f"{name}[{idx}]"
                 formatted = format_value(data_type, item)
                 ssv.add_parameter(indexed_name, ptype=data_type, value=formatted)
