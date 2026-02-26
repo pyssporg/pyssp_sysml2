@@ -4,6 +4,7 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.fmi import generate_model_descriptions
+from tests.reference_utils import FIXED_GENERATION_TIME, normalize_generation_time
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
 REFERENCE_DIR = Path(__file__).parent / "reference"
@@ -26,6 +27,8 @@ def test_generate_model_descriptions_from_fixture() -> None:
         output_dir=output_dir,
         composition="AircraftComposition",
     )
+    for artifact in written:
+        normalize_generation_time(artifact)
 
     assert len(written) == 3
 

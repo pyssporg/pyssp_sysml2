@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.MissionComputer" guid="{2323fcc8-7d47-57c6-9ea4-3c319ef28f4a}" description="F-16C/D mission computer blending pilot HOTAS inputs with fly-by-wire control laws and stores management." version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-02-26T13:30:38Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.MissionComputer" guid="{2323fcc8-7d47-57c6-9ea4-3c319ef28f4a}" description="F-16C/D mission computer blending pilot HOTAS inputs with fly-by-wire control laws and stores management." version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2000-00-00T00:00:00Z" variableNamingConvention="structured" numberOfEventIndicators="0">
   <CoSimulation modelIdentifier="MissionComputer" />
   <ModelVariables>
     <ScalarVariable name="autopilotInput.stick_pitch_norm" valueReference="0" causality="input" description="Autopilot command bundle using same HOTAS signal structure.">

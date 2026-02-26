@@ -7,6 +7,7 @@ from pycps_sysmlv2 import load_system
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
+from tests.reference_utils import normalize_generation_time
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
 REFERENCE_DIR = Path(__file__).parent / "reference"
@@ -27,6 +28,7 @@ def test_generate_ssd_from_fixture() -> None:
 
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)
+    normalize_generation_time(output_path)
 
     tree = ET.parse(output_path)
     root = tree.getroot()

@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.Environment" guid="{d3964b09-08b1-5a96-bb83-b3271dfcb9f7}" description="Tracking position and velocities of the aircraft and feeds the sensors" version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-02-26T13:30:38Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.Environment" guid="{d3964b09-08b1-5a96-bb83-b3271dfcb9f7}" description="Tracking position and velocities of the aircraft and feeds the sensors" version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2000-00-00T00:00:00Z" variableNamingConvention="structured" numberOfEventIndicators="0">
   <CoSimulation modelIdentifier="Environment" />
   <ModelVariables>
     <ScalarVariable name="direction_command.roll_deg" valueReference="0" causality="input" description="Air vehicle orientation expressed as Euler angles in degrees.">

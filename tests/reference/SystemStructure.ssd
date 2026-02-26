@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='utf-8'?>
-<ssd:SystemStructureDescription xmlns:ssd="http://ssp-standard.org/SSP1/SystemStructureDescription" xmlns:ssc="http://ssp-standard.org/SSP1/SystemStructureCommon" version="1.0" name="AircraftComposition" generationTool="pyssp_standard" generationDateAndTime="2026-02-26T14:30:37.944397">
+<ssd:SystemStructureDescription xmlns:ssd="http://ssp-standard.org/SSP1/SystemStructureDescription" xmlns:ssc="http://ssp-standard.org/SSP1/SystemStructureCommon" version="1.0" name="AircraftComposition" generationTool="pyssp_standard" generationDateAndTime="2000-00-00T00:00:00Z">
   <ssd:System name="AircraftComposition">
     <ssd:Elements>
       <ssd:Component name="autopilot" type="application/x-fmu-sharedlibrary" source="resources/AutopilotModule.fmu">
