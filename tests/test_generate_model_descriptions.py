@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from pyssp_sysml2.generate_model_descriptions import generate_model_descriptions
+from pyssp_sysml2.fmi import generate_model_descriptions
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
+REFERENCE_DIR = Path(__file__).parent / "reference"
 
 
 def _variable_names(root: ET.Element) -> set[str]:
@@ -16,8 +17,9 @@ def _variable_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_model_descriptions_from_fixture(tmp_path: Path) -> None:
-    output_dir = tmp_path / "model_descriptions"
+def test_generate_model_descriptions_from_fixture() -> None:
+    output_dir = REFERENCE_DIR / "model_descriptions"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     written = generate_model_descriptions(
         architecture_path=FIXTURE_DIR,

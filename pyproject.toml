@@ -23,9 +23,7 @@ dev = [
 ]
 
 [project.scripts]
-pyssp-generate-ssd = "pyssp_sysml2.generate_ssd:main"
-pyssp-generate-ssv = "pyssp_sysml2.generate_parameter_set:main"
-pyssp-generate-model-descriptions = "pyssp_sysml2.generate_model_descriptions:main"
+pyssp = "pyssp_sysml2.cli:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

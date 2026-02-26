@@ -6,9 +6,10 @@ import xml.etree.ElementTree as ET
 from pycps_sysmlv2 import load_system
 from pyssp_standard.ssd import SSD
 
-from pyssp_sysml2.generate_ssd import build_ssd
+from pyssp_sysml2.ssd import build_ssd
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
+REFERENCE_DIR = Path(__file__).parent / "reference"
 
 
 def _connector_names(root: ET.Element) -> set[str]:
@@ -19,8 +20,9 @@ def _connector_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_ssd_from_fixture(tmp_path: Path) -> None:
-    output_path = tmp_path / "SystemStructure.ssd"
+def test_generate_ssd_from_fixture() -> None:
+    REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = REFERENCE_DIR / "SystemStructure.ssd"
     system = load_system(FIXTURE_DIR, "AircraftComposition")
 
     with SSD(output_path, mode="w") as ssd:

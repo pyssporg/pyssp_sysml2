@@ -3,9 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from pyssp_sysml2.generate_parameter_set import generate_parameter_set
+from pyssp_sysml2.ssv import generate_parameter_set
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
+REFERENCE_DIR = Path(__file__).parent  / "reference"
 
 
 def _parameter_names(root: ET.Element) -> set[str]:
@@ -16,8 +17,9 @@ def _parameter_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_parameter_set_uses_zero_based_indexing(tmp_path: Path) -> None:
-    output_path = tmp_path / "parameters.ssv"
+def test_generate_parameter_set_uses_zero_based_indexing() -> None:
+    REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
+    output_path = REFERENCE_DIR / "parameters.ssv"
     written = generate_parameter_set(FIXTURE_DIR, output_path, "AircraftComposition")
 
     assert written == output_path

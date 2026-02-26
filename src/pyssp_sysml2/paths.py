@@ -9,8 +9,8 @@ REPO_ROOT = SRC_DIR.parent
 
 BUILD_DIR = REPO_ROOT / "build"
 GENERATED_DIR = BUILD_DIR / "generated"
-ARCHITECTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "aircraft_subset"
-COMPOSITION_NAME = "AircraftComposition"
+TEST_ARCHITECTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "aircraft_subset"
+TEST_COMPOSITION_NAME = "AircraftComposition"
 
 
 def ensure_directory(path: Path) -> Path:

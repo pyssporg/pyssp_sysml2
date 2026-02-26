@@ -1,0 +1,20 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" xmlns:ssc="http://ssp-standard.org/SSP1/SystemStructureCommon" version="1.0" name="default">
+  <ssv:Parameters>
+    <ssv:Parameter name="autopilot.comment">
+      <ssv:String value="uses waypoint tracking"/>
+    </ssv:Parameter>
+    <ssv:Parameter name="autopilot.waypointCount">
+      <ssv:Integer value="10"/>
+    </ssv:Parameter>
+    <ssv:Parameter name="autopilot.waypointX_km[0]">
+      <ssv:Real value="0"/>
+    </ssv:Parameter>
+    <ssv:Parameter name="autopilot.waypointX_km[1]">
+      <ssv:Real value="10"/>
+    </ssv:Parameter>
+    <ssv:Parameter name="autopilot.waypointX_km[2]">
+      <ssv:Real value="20"/>
+    </ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>

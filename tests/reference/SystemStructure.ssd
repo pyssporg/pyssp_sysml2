@@ -1,0 +1,151 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ssd:SystemStructureDescription xmlns:ssd="http://ssp-standard.org/SSP1/SystemStructureDescription" xmlns:ssc="http://ssp-standard.org/SSP1/SystemStructureCommon" version="1.0" name="AircraftComposition" generationTool="pyssp_standard" generationDateAndTime="2026-02-26T14:30:37.944397">
+  <ssd:System name="AircraftComposition">
+    <ssd:Elements>
+      <ssd:Component name="autopilot" type="application/x-fmu-sharedlibrary" source="resources/AutopilotModule.fmu">
+        <ssd:Connectors>
+          <ssd:Connector name="feedbackBus.airspeed_mps" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="feedbackBus.angle_of_attack_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="feedbackBus.health_code" kind="input">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="currentLocation.x_km" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="currentLocation.y_km" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="currentLocation.z_km" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="currentOrientation.roll_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="currentOrientation.pitch_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="currentOrientation.yaw_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="autopilotCmd.stick_pitch_norm" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="autopilotCmd.stick_roll_norm" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="autopilotCmd.mode_switch" kind="output">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="missionStatus.waypoint_index" kind="output">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="missionStatus.total_waypoints" kind="output">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="missionStatus.complete" kind="output">
+            <ssc:Boolean/>
+          </ssd:Connector>
+          <ssd:Connector name="comment" kind="parameter">
+            <ssc:String/>
+          </ssd:Connector>
+          <ssd:Connector name="waypointCount" kind="parameter">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="waypointX_km[0]" kind="parameter">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="waypointX_km[1]" kind="parameter">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="waypointX_km[2]" kind="parameter">
+            <ssc:Real/>
+          </ssd:Connector>
+        </ssd:Connectors>
+      </ssd:Component>
+      <ssd:Component name="missionComputer" type="application/x-fmu-sharedlibrary" source="resources/MissionComputer.fmu">
+        <ssd:Connectors>
+          <ssd:Connector name="autopilotInput.stick_pitch_norm" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="autopilotInput.stick_roll_norm" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="autopilotInput.mode_switch" kind="input">
+            <ssc:Integer/>
+          </ssd:Connector>
+          <ssd:Connector name="direction_command.roll_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="direction_command.pitch_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="direction_command.yaw_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+        </ssd:Connectors>
+      </ssd:Component>
+      <ssd:Component name="environment" type="application/x-fmu-sharedlibrary" source="resources/Environment.fmu">
+        <ssd:Connectors>
+          <ssd:Connector name="direction_command.roll_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="direction_command.pitch_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="direction_command.yaw_deg" kind="input">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="orientation.roll_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="orientation.pitch_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="orientation.yaw_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="location.x_km" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="location.y_km" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="location.z_km" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="flight_status.airspeed_mps" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="flight_status.angle_of_attack_deg" kind="output">
+            <ssc:Real/>
+          </ssd:Connector>
+          <ssd:Connector name="flight_status.health_code" kind="output">
+            <ssc:Integer/>
+          </ssd:Connector>
+        </ssd:Connectors>
+      </ssd:Component>
+    </ssd:Elements>
+    <ssd:Connections>
+      <ssd:Connection startElement="autopilot" startConnector="autopilotCmd.stick_pitch_norm" endElement="missionComputer" endConnector="autopilotInput.stick_pitch_norm"/>
+      <ssd:Connection startElement="autopilot" startConnector="autopilotCmd.stick_roll_norm" endElement="missionComputer" endConnector="autopilotInput.stick_roll_norm"/>
+      <ssd:Connection startElement="autopilot" startConnector="autopilotCmd.mode_switch" endElement="missionComputer" endConnector="autopilotInput.mode_switch"/>
+      <ssd:Connection startElement="missionComputer" startConnector="direction_command.roll_deg" endElement="environment" endConnector="direction_command.roll_deg"/>
+      <ssd:Connection startElement="missionComputer" startConnector="direction_command.pitch_deg" endElement="environment" endConnector="direction_command.pitch_deg"/>
+      <ssd:Connection startElement="missionComputer" startConnector="direction_command.yaw_deg" endElement="environment" endConnector="direction_command.yaw_deg"/>
+      <ssd:Connection startElement="environment" startConnector="orientation.roll_deg" endElement="autopilot" endConnector="currentOrientation.roll_deg"/>
+      <ssd:Connection startElement="environment" startConnector="orientation.pitch_deg" endElement="autopilot" endConnector="currentOrientation.pitch_deg"/>
+      <ssd:Connection startElement="environment" startConnector="orientation.yaw_deg" endElement="autopilot" endConnector="currentOrientation.yaw_deg"/>
+      <ssd:Connection startElement="environment" startConnector="location.x_km" endElement="autopilot" endConnector="currentLocation.x_km"/>
+      <ssd:Connection startElement="environment" startConnector="location.y_km" endElement="autopilot" endConnector="currentLocation.y_km"/>
+      <ssd:Connection startElement="environment" startConnector="location.z_km" endElement="autopilot" endConnector="currentLocation.z_km"/>
+      <ssd:Connection startElement="environment" startConnector="flight_status.airspeed_mps" endElement="autopilot" endConnector="feedbackBus.airspeed_mps"/>
+      <ssd:Connection startElement="environment" startConnector="flight_status.angle_of_attack_deg" endElement="autopilot" endConnector="feedbackBus.angle_of_attack_deg"/>
+      <ssd:Connection startElement="environment" startConnector="flight_status.health_code" endElement="autopilot" endConnector="feedbackBus.health_code"/>
+    </ssd:Connections>
+  </ssd:System>
+  <ssd:DefaultExperiment startTime="0" stopTime="3600"/>
+</ssd:SystemStructureDescription>

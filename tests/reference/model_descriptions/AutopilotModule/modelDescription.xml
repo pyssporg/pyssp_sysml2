@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.AutopilotModule" guid="{4f4f78f4-565e-5e59-acf0-365690fb6d3e}" description="F-16 autopilot, takes in sensor data and translates it into a equivalent hotas command." version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-02-26T13:30:38Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="AutopilotModule" />
+  <ModelVariables>
+    <ScalarVariable name="comment" valueReference="0" causality="parameter" variability="fixed">
+      <String start="uses waypoint tracking" />
+    </ScalarVariable>
+    <ScalarVariable name="waypointCount" valueReference="1" causality="parameter" variability="fixed">
+      <Integer start="10" />
+    </ScalarVariable>
+    <ScalarVariable name="waypointX_km[0]" valueReference="2" causality="parameter" variability="fixed">
+      <Real start="0" />
+    </ScalarVariable>
+    <ScalarVariable name="waypointX_km[1]" valueReference="3" causality="parameter" variability="fixed">
+      <Real start="10" />
+    </ScalarVariable>
+    <ScalarVariable name="waypointX_km[2]" valueReference="4" causality="parameter" variability="fixed">
+      <Real start="20" />
+    </ScalarVariable>
+    <ScalarVariable name="feedbackBus.airspeed_mps" valueReference="5" causality="input" description="Mission-computer flight status back into autopilot.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="feedbackBus.angle_of_attack_deg" valueReference="6" causality="input" description="Mission-computer flight status back into autopilot.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="feedbackBus.health_code" valueReference="7" causality="input" description="Mission-computer flight status back into autopilot.">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="currentLocation.x_km" valueReference="8" causality="input" description="Current local position from sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="currentLocation.y_km" valueReference="9" causality="input" description="Current local position from sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="currentLocation.z_km" valueReference="10" causality="input" description="Current local position from sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="currentOrientation.roll_deg" valueReference="11" causality="input" description="Current attitude from sensors.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="currentOrientation.pitch_deg" valueReference="12" causality="input" description="Current attitude from sensors.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="currentOrientation.yaw_deg" valueReference="13" causality="input" description="Current attitude from sensors.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="autopilotCmd.stick_pitch_norm" valueReference="14" causality="output" description="HOTAS-equivalent command stream for mission computer blending.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="autopilotCmd.stick_roll_norm" valueReference="15" causality="output" description="HOTAS-equivalent command stream for mission computer blending.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="autopilotCmd.mode_switch" valueReference="16" causality="output" description="HOTAS-equivalent command stream for mission computer blending.">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="missionStatus.waypoint_index" valueReference="17" causality="output" description="Waypoint progression for logging and verification.">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="missionStatus.total_waypoints" valueReference="18" causality="output" description="Waypoint progression for logging and verification.">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="missionStatus.complete" valueReference="19" causality="output" description="Waypoint progression for logging and verification.">
+      <Boolean />
+    </ScalarVariable>
+  </ModelVariables>
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="15" />
+      <Unknown index="16" />
+      <Unknown index="17" />
+      <Unknown index="18" />
+      <Unknown index="19" />
+      <Unknown index="20" />
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="15" />
+      <Unknown index="16" />
+      <Unknown index="17" />
+      <Unknown index="18" />
+      <Unknown index="19" />
+      <Unknown index="20" />
+    </InitialUnknowns>
+  </ModelStructure>
+</fmiModelDescription>

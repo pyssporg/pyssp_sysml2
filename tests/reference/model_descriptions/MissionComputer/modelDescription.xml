@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.MissionComputer" guid="{2323fcc8-7d47-57c6-9ea4-3c319ef28f4a}" description="F-16C/D mission computer blending pilot HOTAS inputs with fly-by-wire control laws and stores management." version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-02-26T13:30:38Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="MissionComputer" />
+  <ModelVariables>
+    <ScalarVariable name="autopilotInput.stick_pitch_norm" valueReference="0" causality="input" description="Autopilot command bundle using same HOTAS signal structure.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="autopilotInput.stick_roll_norm" valueReference="1" causality="input" description="Autopilot command bundle using same HOTAS signal structure.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="autopilotInput.mode_switch" valueReference="2" causality="input" description="Autopilot command bundle using same HOTAS signal structure.">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="direction_command.roll_deg" valueReference="3" causality="output" description="Command how to alter the current velocity vector, pith, yaw, roll">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="direction_command.pitch_deg" valueReference="4" causality="output" description="Command how to alter the current velocity vector, pith, yaw, roll">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="direction_command.yaw_deg" valueReference="5" causality="output" description="Command how to alter the current velocity vector, pith, yaw, roll">
+      <Real />
+    </ScalarVariable>
+  </ModelVariables>
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="4" />
+      <Unknown index="5" />
+      <Unknown index="6" />
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="4" />
+      <Unknown index="5" />
+      <Unknown index="6" />
+    </InitialUnknowns>
+  </ModelStructure>
+</fmiModelDescription>

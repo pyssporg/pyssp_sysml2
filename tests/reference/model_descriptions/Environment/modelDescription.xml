@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fmiModelDescription fmiVersion="2.0" modelName="AircraftComposition.Environment" guid="{d3964b09-08b1-5a96-bb83-b3271dfcb9f7}" description="Tracking position and velocities of the aircraft and feeds the sensors" version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-02-26T13:30:38Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="Environment" />
+  <ModelVariables>
+    <ScalarVariable name="direction_command.roll_deg" valueReference="0" causality="input" description="Air vehicle orientation expressed as Euler angles in degrees.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="direction_command.pitch_deg" valueReference="1" causality="input" description="Air vehicle orientation expressed as Euler angles in degrees.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="direction_command.yaw_deg" valueReference="2" causality="input" description="Air vehicle orientation expressed as Euler angles in degrees.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="orientation.roll_deg" valueReference="3" causality="output" description="Feedback for simulated sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="orientation.pitch_deg" valueReference="4" causality="output" description="Feedback for simulated sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="orientation.yaw_deg" valueReference="5" causality="output" description="Feedback for simulated sensors">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="location.x_km" valueReference="6" causality="output" description="Local navigation frame expressed in kilometers (x=North, y=East, z=Up).">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="location.y_km" valueReference="7" causality="output" description="Local navigation frame expressed in kilometers (x=North, y=East, z=Up).">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="location.z_km" valueReference="8" causality="output" description="Local navigation frame expressed in kilometers (x=North, y=East, z=Up).">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="flight_status.airspeed_mps" valueReference="9" causality="output" description="Mission computer status feedback consumed by autonomy and analysis models.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="flight_status.angle_of_attack_deg" valueReference="10" causality="output" description="Mission computer status feedback consumed by autonomy and analysis models.">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="flight_status.health_code" valueReference="11" causality="output" description="Mission computer status feedback consumed by autonomy and analysis models.">
+      <Integer />
+    </ScalarVariable>
+  </ModelVariables>
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="4" />
+      <Unknown index="5" />
+      <Unknown index="6" />
+      <Unknown index="7" />
+      <Unknown index="8" />
+      <Unknown index="9" />
+      <Unknown index="10" />
+      <Unknown index="11" />
+      <Unknown index="12" />
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="4" />
+      <Unknown index="5" />
+      <Unknown index="6" />
+      <Unknown index="7" />
+      <Unknown index="8" />
+      <Unknown index="9" />
+      <Unknown index="10" />
+      <Unknown index="11" />
+      <Unknown index="12" />
+    </InitialUnknowns>
+  </ModelStructure>
+</fmiModelDescription>
