@@ -1,0 +1,4 @@
+pytest
+
+-e ./3rd_party/pysysml2_cps
+-e ./3rd_party/pyssp_standard
