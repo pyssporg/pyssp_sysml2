@@ -2,6 +2,8 @@
 
 This document is for maintainers and contributors.
 
+If you are using the package (not developing it), start with `README.md`.
+
 ## Architecture Overview
 
 Core modules:
@@ -21,13 +23,14 @@ Dependencies:
 
 
 ```bash
-python -m venv venv
+python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 ```
 
-requirements_local.txt is for utilizing local installs of modules for shared development between module and sub-module
+`requirements_local.txt` is for local/shared development setups where dependencies are
+available from local paths instead of remote package indexes.
 
 ## Tests
 
@@ -60,7 +63,13 @@ Subcommands:
 
 ```bash
 bash examples/cli_usage.sh
-PYTHONPATH=src python examples/module_usage.py
+PYTHONPATH=src python3 examples/module_usage.py
+```
+
+If `pyssp` is not installed as a console script, the CLI example falls back to:
+
+```bash
+PYTHONPATH=src python3 -m pyssp_sysml2.cli ...
 ```
 
 ## Troubleshooting
@@ -69,7 +78,7 @@ If `pyssp` is not found after install:
 
 ```bash
 pip install -e .
-python -m pyssp_sysml2.cli --help
+python3 -m pyssp_sysml2.cli --help
 ```
 
 If dependency resolution from `requirements.txt` fails in your environment, use `requirements_local.txt` with bundled third-party packages.
