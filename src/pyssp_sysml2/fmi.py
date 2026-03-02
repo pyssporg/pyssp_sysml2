@@ -66,16 +66,17 @@ def _parameter_variables(
 
     for _attr_name, attr in part.attributes.items():
         if attr.is_list():
+            list_item_type = map_fmi_type(attr.type.as_string())
             for idx, item in enumerate(attr.value, start=0):
                 variables.append(
                     VariableSpec(
                         name=f"{attr.name}[{idx}]",
                         causality="parameter",
                         value_reference=value_ref,
-                        fmi_type="Real",
+                        fmi_type=list_item_type,
                         variability="fixed",
                         description=attr.doc,
-                        start_value=format_value("Real", item),
+                        start_value=format_value(list_item_type, item),
                         index=value_index,
                     )
                 )

@@ -35,7 +35,11 @@ def map_fmi_type(type_name: Optional[str], default: str = "Real") -> str:
     """Return a canonical primitive name (Real/Integer/Boolean/String) for SysML types."""
     if not type_name:
         return default
-    key = type_name.strip().lower()
+    key = type_name.strip()
+    # Support list syntax like List[Integer] by mapping the element primitive.
+    if key.startswith("List[") and key.endswith("]"):
+        key = key[len("List[") : -1].strip()
+    key = key.lower()
     return FMI_TYPE_MAP.get(key, default)
 
 def format_value(tag: str, literal):

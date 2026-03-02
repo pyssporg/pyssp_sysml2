@@ -17,6 +17,32 @@ def _connector_names(root: ET.Element) -> set[str]:
     }
 
 
+def _connection_tuples(root: ET.Element) -> set[tuple[str, str, str, str]]:
+    connections = set()
+    for elem in root.findall(".//{*}Connection"):
+        connections.add(
+            (
+                elem.get("startElement"),
+                elem.get("startConnector"),
+                elem.get("endElement"),
+                elem.get("endConnector"),
+            )
+        )
+    return connections
+
+
+def _connector_type_map(root: ET.Element) -> dict[tuple[str, str], str]:
+    result = {}
+    for component in root.findall(".//{*}Component"):
+        cname = component.get("name")
+        for connector in component.findall("./{*}Connectors/{*}Connector"):
+            connector_name = connector.get("name")
+            type_elem = next(iter(connector), None)
+            if cname and connector_name and type_elem is not None:
+                result[(cname, connector_name)] = type_elem.tag.split("}", 1)[-1]
+    return result
+
+
 def test_generate_ssd_from_small_snippet(tmp_path) -> None:
     architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
     output_path = tmp_path / "SystemStructure.ssd"
@@ -38,3 +64,26 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
     assert "gains[0]" in names
     assert "gains[1]" in names
     assert "gains[2]" in names
+
+    conn_tuples = _connection_tuples(root)
+    assert ("a", "cmd.pitch", "b", "cmdIn.pitch") in conn_tuples
+    assert ("a", "cmd.mode", "b", "cmdIn.mode") in conn_tuples
+    assert ("b", "pos.x", "c", "posIn.x") in conn_tuples
+    assert ("b", "pos.y", "c", "posIn.y") in conn_tuples
+
+    component_connectors = {}
+    for component in root.findall(".//{*}Component"):
+        cname = component.get("name")
+        component_connectors[cname] = {
+            (connector.get("name"), connector.get("kind"))
+            for connector in component.findall(".//{*}Connector")
+        }
+
+    assert ("cmd.pitch", "output") in component_connectors["a"]
+    assert ("cmdIn.pitch", "input") in component_connectors["b"]
+    assert ("gains[0]", "parameter") in component_connectors["a"]
+
+    type_map = _connector_type_map(root)
+    assert type_map[("a", "cmd.mode")] == "Integer"
+    assert type_map[("b", "pos.x")] == "Real"
+    assert type_map[("a", "gains[0]")] == "Real"

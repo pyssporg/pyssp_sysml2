@@ -40,7 +40,7 @@ Run:
 Behavior:
 
 - Uses small explicit SysML snippets written per test case under `tmp_path`
-- Focuses each test on a single behavior instead of relying on a large shared fixture model
+- Follows a one-model-per-behavior style where practical, to keep test intent explicit
 - Keeps generated artifacts inside pytest temporary directories
 
 ## CLI Contract

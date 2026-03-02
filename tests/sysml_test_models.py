@@ -46,6 +46,7 @@ def write_connected_triplet_architecture(root: Path) -> Path:
 
           part def C {
             in port posIn : Pos;
+            in port cmdIn : Cmd;
           }
         }
         """,
@@ -62,6 +63,66 @@ def write_connected_triplet_architecture(root: Path) -> Path:
 
             connect a.cmd to b.cmdIn;
             connect b.pos to c.posIn;
+          }}
+        }}
+        """,
+    )
+
+    return root
+
+
+def write_ssv_type_coverage_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "parts.sysml",
+        f"""
+        package Example {{
+          part def Params {{
+            attribute r = 1.5;
+            attribute i = 7;
+            attribute b = true;
+            attribute s = "abc";
+            attribute i_list = [1, 2];
+            attribute b_list = [True, False];
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part p : Params;
+          }}
+        }}
+        """,
+    )
+
+    return root
+
+
+def write_fmi_list_type_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "ports.sysml",
+        """
+        package Example {
+          port def Status {
+            attribute ok: Boolean;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "parts.sysml",
+        f"""
+        package Example {{
+          part def Comp {{
+            attribute int_list = [1, 2];
+            attribute bool_list = [True, False];
+            out port status : Status;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part c : Comp;
           }}
         }}
         """,
