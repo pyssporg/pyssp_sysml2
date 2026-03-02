@@ -23,6 +23,22 @@ def _variable_map(root: ET.Element) -> dict[str, ET.Element]:
     return vars_by_name
 
 
+def _output_indexes(root: ET.Element) -> list[int]:
+    return [
+        int(elem.get("index"))
+        for elem in root.findall("./ModelStructure/Outputs/Unknown")
+        if elem.get("index") is not None
+    ]
+
+
+def _scalar_variable_order(root: ET.Element) -> list[str]:
+    return [
+        elem.get("name")
+        for elem in root.findall(".//ScalarVariable")
+        if elem.get("name") is not None
+    ]
+
+
 def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
     architecture_dir = write_fmi_list_type_architecture(tmp_path / "arch")
     output_dir = tmp_path / "model_descriptions"
@@ -58,3 +74,12 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
     assert bool_list_type == "Boolean"
     assert next(iter(var_map["int_list[0]"])).get("start") == "1"
     assert next(iter(var_map["bool_list[0]"])).get("start") == "true"
+
+    value_references = [int(elem.get("valueReference")) for elem in var_map.values()]
+    assert len(value_references) == len(set(value_references))
+    assert value_references == sorted(value_references)
+
+    scalar_order = _scalar_variable_order(root)
+    status_index = scalar_order.index("status.ok") + 1
+    output_indexes = _output_indexes(root)
+    assert output_indexes == [status_index]

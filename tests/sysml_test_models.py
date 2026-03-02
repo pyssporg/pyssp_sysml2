@@ -71,6 +71,52 @@ def write_connected_triplet_architecture(root: Path) -> Path:
     return root
 
 
+def write_sync_pair_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "ports.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x: Real;
+            attribute y: Real;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "parts.sysml",
+        """
+        package Example {
+          part def Producer {
+            out port outSig : Signal;
+          }
+
+          part def Consumer {
+            in port inSig : Signal;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part src : Producer;
+            part dst : Consumer;
+            connect src.outSig to dst.inSig;
+          }}
+        }}
+        """,
+    )
+
+    return root
+
+
 def write_ssv_type_coverage_architecture(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
 

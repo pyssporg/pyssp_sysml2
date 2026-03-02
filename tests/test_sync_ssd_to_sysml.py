@@ -8,7 +8,11 @@ from pycps_sysmlv2 import SysMLParser
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
-from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
+from tests.sysml_test_models import (
+    COMPOSITION_NAME,
+    write_connected_triplet_architecture,
+    write_sync_pair_architecture,
+)
 
 SSD_NS = {"ssd": "http://ssp-standard.org/SSP1/SystemStructureDescription"}
 
@@ -75,17 +79,34 @@ def test_sync_ssd_changes_are_reflected_in_sysml(tmp_path: Path) -> None:
     assert len(keys) == 1
 
 
+def test_sync_ssd_is_idempotent_when_no_changes(tmp_path: Path) -> None:
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
+
+    written = sync_sysml_from_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
+    assert any(path.name == "composition.sysml" for path in written)
+
+    architecture = SysMLParser(arch_dir).parse()
+    system = architecture.get_part(COMPOSITION_NAME)
+    keys = {
+        (conn.src_component, conn.src_port, conn.dst_component, conn.dst_port)
+        for conn in system.connections
+    }
+    assert keys == {("src", "outSig", "dst", "inSig")}
+
+
 def test_sync_ssd_rejects_partial_port_mapping(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     _remove_connections(
         ssd_path,
-        start_element="b",
-        start_connector_prefix="pos.x",
-        end_element="c",
-        end_connector_prefix="posIn.x",
+        start_element="src",
+        start_connector_prefix="outSig.x",
+        end_element="dst",
+        end_connector_prefix="inSig.x",
     )
 
     with pytest.raises(ValueError, match="partial/invalid attribute mapping"):
@@ -93,18 +114,18 @@ def test_sync_ssd_rejects_partial_port_mapping(tmp_path: Path) -> None:
 
 
 def test_sync_ssd_rejects_attribute_remapping(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     def rewrite(connection: ET.Element) -> None:
         if (
-            connection.get("startElement") == "b"
-            and connection.get("startConnector") == "pos.x"
-            and connection.get("endElement") == "c"
-            and connection.get("endConnector") == "posIn.x"
+            connection.get("startElement") == "src"
+            and connection.get("startConnector") == "outSig.x"
+            and connection.get("endElement") == "dst"
+            and connection.get("endConnector") == "inSig.x"
         ):
-            connection.set("endConnector", "posIn.y")
+            connection.set("endConnector", "inSig.y")
 
     _rewrite_connections(ssd_path, rewrite)
 
@@ -113,12 +134,12 @@ def test_sync_ssd_rejects_attribute_remapping(tmp_path: Path) -> None:
 
 
 def test_sync_ssd_rejects_unknown_component(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     def rewrite(connection: ET.Element) -> None:
-        if connection.get("startElement") == "b":
+        if connection.get("startElement") == "src":
             connection.set("startElement", "ghost")
 
     _rewrite_connections(ssd_path, rewrite)
@@ -128,14 +149,14 @@ def test_sync_ssd_rejects_unknown_component(tmp_path: Path) -> None:
 
 
 def test_sync_ssd_rejects_unknown_port(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     def rewrite(connection: ET.Element) -> None:
-        if connection.get("endElement") == "c" and connection.get("endConnector") == "posIn.x":
+        if connection.get("endElement") == "dst" and connection.get("endConnector") == "inSig.x":
             connection.set("endConnector", "unknownPort.x")
-        if connection.get("endElement") == "c" and connection.get("endConnector") == "posIn.y":
+        if connection.get("endElement") == "dst" and connection.get("endConnector") == "inSig.y":
             connection.set("endConnector", "unknownPort.y")
 
     _rewrite_connections(ssd_path, rewrite)
@@ -162,17 +183,17 @@ def test_sync_ssd_rejects_incompatible_ports(tmp_path: Path) -> None:
 
 
 def test_sync_ssd_writes_to_output_architecture_dir(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_sync_pair_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     out_dir = tmp_path / "synced"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     _remove_connections(
         ssd_path,
-        start_element="b",
-        start_connector_prefix="pos.",
-        end_element="c",
-        end_connector_prefix="posIn.",
+        start_element="src",
+        start_connector_prefix="outSig.",
+        end_element="dst",
+        end_connector_prefix="inSig.",
     )
 
     written = sync_sysml_from_ssd(

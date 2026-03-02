@@ -62,10 +62,13 @@ def test_pyssp_generate_ssd_cli_fails_for_unknown_composition(tmp_path: Path) ->
         ]
     )
     assert code == 1
+    assert not output.exists()
 
 
 def test_pyssp_sync_ssd_cli_fails_for_missing_ssd(tmp_path: Path) -> None:
     arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    composition_path = arch_dir / "composition.sysml"
+    before = composition_path.read_text(encoding="utf-8")
     code = main(
         [
             "sync",
@@ -79,3 +82,5 @@ def test_pyssp_sync_ssd_cli_fails_for_missing_ssd(tmp_path: Path) -> None:
         ]
     )
     assert code == 1
+    after = composition_path.read_text(encoding="utf-8")
+    assert after == before
