@@ -9,6 +9,7 @@ from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.paths import TEST_ARCHITECTURE_DIR, TEST_COMPOSITION_NAME, GENERATED_DIR
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.sync import sync_sysml_from_ssd
 
 
 def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
@@ -31,6 +32,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     generate_parser = root_subparsers.add_parser("generate", help="Generate SSP/FMI artifacts")
     generate_subparsers = generate_parser.add_subparsers(dest="artifact", required=True)
+    sync_parser = root_subparsers.add_parser(
+        "sync", help="Sync external artifacts back into SysML"
+    )
+    sync_subparsers = sync_parser.add_subparsers(dest="artifact", required=True)
 
     ssd_parser = generate_subparsers.add_parser("ssd", help="Generate SystemStructure.ssd")
     _add_common_architecture_args(ssd_parser)
@@ -59,6 +64,23 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Output directory for modelDescription.xml files.",
     )
 
+    sync_ssd_parser = sync_subparsers.add_parser(
+        "ssd", help="Sync SysML composition connections from an external SSD"
+    )
+    _add_common_architecture_args(sync_ssd_parser)
+    sync_ssd_parser.add_argument(
+        "--ssd",
+        type=Path,
+        required=True,
+        help="Path to external SystemStructure.ssd used as sync source.",
+    )
+    sync_ssd_parser.add_argument(
+        "--output-architecture-dir",
+        type=Path,
+        default=None,
+        help="Optional output directory for updated .sysml files (defaults to architecture source).",
+    )
+
     args = parser.parse_args(argv)
 
     try:
@@ -79,6 +101,17 @@ def main(argv: Optional[list[str]] = None) -> int:
             if not written:
                 print("No components matched the provided criteria.")
                 return 1
+            for path in written:
+                print(f"Wrote {path}")
+            return 0
+
+        if args.command == "sync" and args.artifact == "ssd":
+            written = sync_sysml_from_ssd(
+                architecture_path=args.architecture,
+                ssd_path=args.ssd,
+                composition=args.composition,
+                output_architecture_dir=args.output_architecture_dir,
+            )
             for path in written:
                 print(f"Wrote {path}")
             return 0

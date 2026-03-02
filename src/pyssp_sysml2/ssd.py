@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pycps_sysmlv2 import SysMLPartDefinition, load_system
+from pycps_sysmlv2 import SysMLPartDefinition, SysMLParser
 from pyssp_standard.common_content_ssc import TypeBoolean, TypeInteger, TypeReal, TypeString
 from pyssp_standard.ssd import Component, Connection, Connector, DefaultExperiment, SSD, System
 
@@ -35,14 +35,18 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
         component.component_type = "application/x-fmu-sharedlibrary"
         component.source = fmu_resource_path(part.name)
 
-        for port_ref, _port_def, attribute in part.get_port_attributes():
-            component.connectors.append(
-                Connector(
-                    name=f"{port_ref.name}.{attribute.name}",
-                    kind=to_fmi_direction_definition(port_ref.direction),
-                    type_=_type_from_primitive(attribute.type.as_string()),
+        for port_ref in part.ports.values():
+            port_def = port_ref.port_def
+            if port_def is None:
+                raise ValueError(f"Unresolved port definition for {part.name}.{port_ref.name}")
+            for attribute in port_def.attributes.values():
+                component.connectors.append(
+                    Connector(
+                        name=f"{port_ref.name}.{attribute.name}",
+                        kind=to_fmi_direction_definition(port_ref.direction),
+                        type_=_type_from_primitive(attribute.type.as_string()),
+                    )
                 )
-            )
 
         for attrib_name, attribute in part.attributes.items():
             for idx, _ in attribute.enumerator():
@@ -82,7 +86,7 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
 
 
 def generate_ssd(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    system = load_system(architecture_path, composition)
+    system = SysMLParser(architecture_path).parse().get_part(composition)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)

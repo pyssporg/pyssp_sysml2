@@ -14,7 +14,7 @@ Core modules:
 
 Dependencies:
 
-- `pycps_sysmlv2` for SysML parsing (`load_system`)
+- `pycps_sysmlv2` for SysML parsing (`SysMLParser(...).parse().get_part(...)`)
 - `pyssp_standard` for SSP/FMI XML object handling
 
 ## Local Setup
@@ -60,6 +60,7 @@ Subcommands:
 - `pyssp generate ssd`
 - `pyssp generate ssv`
 - `pyssp generate fmi`
+- `pyssp sync ssd`
 
 ## Example Validation
 

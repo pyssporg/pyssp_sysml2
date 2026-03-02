@@ -10,10 +10,11 @@ pip install git+https://github.com/pyssporg/pyssp_sysml2
 
 ## 2) Generate Artifacts (CLI)
 
-`pyssp` exposes one command family:
+`pyssp` exposes two command families:
 
 ```bash
 pyssp generate <ssd|ssv|fmi> [options]
+pyssp sync ssd [options]
 ```
 
 Common options:
@@ -48,7 +49,28 @@ pyssp generate fmi \
   --output-dir build/generated/model_descriptions
 ```
 
-## 3) Use as a Python Module
+## 3) Sync Back from SSD to SysML
+
+Apply edited SSD connection wiring back into SysML composition:
+
+```bash
+pyssp sync ssd \
+  --architecture tests/fixtures/aircraft_subset \
+  --composition AircraftComposition \
+  --ssd build/generated/SystemStructure.ssd
+```
+
+Optional output directory (instead of overwriting source architecture files):
+
+```bash
+pyssp sync ssd \
+  --architecture tests/fixtures/aircraft_subset \
+  --composition AircraftComposition \
+  --ssd build/generated/SystemStructure.ssd \
+  --output-architecture-dir build/synced_sysml
+```
+
+## 4) Use as a Python Module
 
 ```python
 from pathlib import Path
@@ -56,6 +78,7 @@ from pathlib import Path
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_set
 from pyssp_sysml2.fmi import generate_model_descriptions
+from pyssp_sysml2.sync import sync_sysml_from_ssd
 
 architecture = Path("tests/fixtures/aircraft_subset")
 composition = "AircraftComposition"
@@ -63,6 +86,12 @@ composition = "AircraftComposition"
 generate_ssd(architecture, Path("build/generated/SystemStructure.ssd"), composition)
 generate_parameter_set(architecture, Path("build/generated/parameters.ssv"), composition)
 generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
+sync_sysml_from_ssd(
+    architecture,
+    Path("build/generated/SystemStructure.ssd"),
+    composition,
+    output_architecture_dir=Path("build/synced_sysml"),
+)
 ```
 
 ## Runnable Examples
@@ -78,6 +107,8 @@ pyssp generate --help
 pyssp generate ssd --help
 pyssp generate ssv --help
 pyssp generate fmi --help
+pyssp sync --help
+pyssp sync ssd --help
 ```
 
 ## Outputs

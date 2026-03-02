@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pycps_sysmlv2 import SysMLAttribute, load_system
+from pycps_sysmlv2 import SysMLAttribute, SysMLParser
 from pyssp_standard.ssv import SSV
 
 from pyssp_sysml2.fmi_helpers import format_value
@@ -39,7 +39,7 @@ def _strip_none_parameter_attrs(ssv: SSV) -> None:
 
 
 def generate_parameter_set(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    system = load_system(architecture_path, composition)
+    system = SysMLParser(architecture_path).parse().get_part(composition)
 
     pairs = []
     for part_name, part in system.parts.items():

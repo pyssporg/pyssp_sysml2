@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
-from pycps_sysmlv2 import load_system
+from pycps_sysmlv2 import SysMLParser
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
@@ -24,7 +24,7 @@ def _connector_names(root: ET.Element) -> set[str]:
 def test_generate_ssd_from_fixture() -> None:
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
     output_path = REFERENCE_DIR / "SystemStructure.ssd"
-    system = load_system(FIXTURE_DIR, "AircraftComposition")
+    system = SysMLParser(FIXTURE_DIR).parse().get_part("AircraftComposition")
 
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)

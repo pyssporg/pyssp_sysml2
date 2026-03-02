@@ -8,7 +8,7 @@ from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
-from pycps_sysmlv2 import SysMLPartDefinition, load_system
+from pycps_sysmlv2 import SysMLPartDefinition, SysMLParser
 
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
@@ -37,18 +37,22 @@ def _port_attribute_variables(
     value_ref = starting_ref
     value_index = starting_index
 
-    for port, port_def, attr in part.get_port_attributes():
-        spec = VariableSpec(
-            name=f"{port.name}.{attr.name}",
-            causality="input" if port.direction == "in" else "output",
-            value_reference=value_ref,
-            fmi_type=map_fmi_type(attr.type.as_string()),
-            description=attr.doc or port.doc or (port_def.doc if port_def else None),
-            index=value_index,
-        )
-        variables.append(spec)
-        value_ref += 1
-        value_index += 1
+    for port in part.ports.values():
+        port_def = port.port_def
+        if port_def is None:
+            raise ValueError(f"Unresolved port definition for {part.name}.{port.name}")
+        for attr in port_def.attributes.values():
+            spec = VariableSpec(
+                name=f"{port.name}.{attr.name}",
+                causality="input" if port.direction == "in" else "output",
+                value_reference=value_ref,
+                fmi_type=map_fmi_type(attr.type.as_string()),
+                description=attr.doc or port.doc or port_def.doc,
+                index=value_index,
+            )
+            variables.append(spec)
+            value_ref += 1
+            value_index += 1
 
     return variables, value_ref, value_index
 
@@ -182,7 +186,7 @@ def generate_model_descriptions(
     ensure_directory(output_dir)
     ensure_directory(BUILD_DIR / "fmu_pre")
 
-    system = load_system(architecture_path, composition)
+    system = SysMLParser(architecture_path).parse().get_part(composition)
 
     written: list[Path] = []
     for _part_inst_name, part_ref in system.parts.items():
