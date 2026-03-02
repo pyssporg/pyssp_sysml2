@@ -1,24 +1,23 @@
 from __future__ import annotations
 
-import shutil
 from pathlib import Path
 
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
-
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
+from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
 
 
 def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
+    architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
     output = tmp_path / "SystemStructure.ssd"
     code = main(
         [
             "generate",
             "ssd",
             "--architecture",
-            str(FIXTURE_DIR),
+            str(architecture_dir),
             "--composition",
-            "AircraftComposition",
+            COMPOSITION_NAME,
             "--output",
             str(output),
         ]
@@ -28,10 +27,9 @@ def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
 
 
 def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
-    arch_dir = tmp_path / "arch"
-    shutil.copytree(FIXTURE_DIR, arch_dir)
+    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
-    generate_ssd(arch_dir, ssd_path, "AircraftComposition")
+    generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     code = main(
         [
@@ -40,7 +38,7 @@ def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
             "--architecture",
             str(arch_dir),
             "--composition",
-            "AircraftComposition",
+            COMPOSITION_NAME,
             "--ssd",
             str(ssd_path),
         ]

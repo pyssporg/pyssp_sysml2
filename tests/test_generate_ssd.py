@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from pycps_sysmlv2 import SysMLParser
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
-from tests.reference_utils import normalize_generation_time
-
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
-REFERENCE_DIR = Path(__file__).parent / "reference"
+from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
 
 
 def _connector_names(root: ET.Element) -> set[str]:
@@ -21,14 +17,13 @@ def _connector_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_ssd_from_fixture() -> None:
-    REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = REFERENCE_DIR / "SystemStructure.ssd"
-    system = SysMLParser(FIXTURE_DIR).parse().get_part("AircraftComposition")
+def test_generate_ssd_from_small_snippet(tmp_path) -> None:
+    architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    output_path = tmp_path / "SystemStructure.ssd"
+    system = SysMLParser(architecture_dir).parse().get_part(COMPOSITION_NAME)
 
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)
-    normalize_generation_time(output_path)
 
     tree = ET.parse(output_path)
     root = tree.getroot()
@@ -37,9 +32,9 @@ def test_generate_ssd_from_fixture() -> None:
     assert len(components) == 3
 
     connections = root.findall(".//{*}Connection")
-    assert len(connections) == 15
+    assert len(connections) == 4
 
     names = _connector_names(root)
-    assert "waypointX_km[0]" in names
-    assert "waypointX_km[1]" in names
-    assert "waypointX_km[2]" in names
+    assert "gains[0]" in names
+    assert "gains[1]" in names
+    assert "gains[2]" in names

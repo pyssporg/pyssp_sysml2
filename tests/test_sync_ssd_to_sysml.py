@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,8 +8,8 @@ from pycps_sysmlv2 import SysMLParser
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
+from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
 
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
 SSD_NS = {"ssd": "http://ssp-standard.org/SSP1/SystemStructureDescription"}
 
 
@@ -38,43 +37,43 @@ def _remove_connections(
 
 
 def test_sync_ssd_changes_are_reflected_in_sysml(tmp_path: Path) -> None:
-    arch_dir = tmp_path / "arch"
-    shutil.copytree(FIXTURE_DIR, arch_dir)
+    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
-    generate_ssd(arch_dir, ssd_path, "AircraftComposition")
+    generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     _remove_connections(
         ssd_path,
-        start_element="environment",
-        start_connector_prefix="location.",
-        end_element="autopilot",
-        end_connector_prefix="currentLocation.",
+        start_element="b",
+        start_connector_prefix="pos.",
+        end_element="c",
+        end_connector_prefix="posIn.",
     )
 
-    written = sync_sysml_from_ssd(arch_dir, ssd_path, "AircraftComposition")
+    written = sync_sysml_from_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
     assert any(path.name == "composition.sysml" for path in written)
 
     architecture = SysMLParser(arch_dir).parse()
-    system = architecture.get_part("AircraftComposition")
+    system = architecture.get_part(COMPOSITION_NAME)
     keys = {
         (conn.src_component, conn.src_port, conn.dst_component, conn.dst_port)
         for conn in system.connections
     }
-    assert ("environment", "location", "autopilot", "currentLocation") not in keys
-    assert len(keys) == 4
+    assert ("b", "pos", "c", "posIn") not in keys
+    assert len(keys) == 1
 
 
 def test_sync_ssd_rejects_partial_port_mapping(tmp_path: Path) -> None:
+    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
-    generate_ssd(FIXTURE_DIR, ssd_path, "AircraftComposition")
+    generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     _remove_connections(
         ssd_path,
-        start_element="environment",
-        start_connector_prefix="orientation.roll_deg",
-        end_element="autopilot",
-        end_connector_prefix="currentOrientation.roll_deg",
+        start_element="b",
+        start_connector_prefix="pos.x",
+        end_element="c",
+        end_connector_prefix="posIn.x",
     )
 
     with pytest.raises(ValueError, match="partial/invalid attribute mapping"):
-        sync_sysml_from_ssd(FIXTURE_DIR, ssd_path, "AircraftComposition")
+        sync_sysml_from_ssd(arch_dir, ssd_path, COMPOSITION_NAME)

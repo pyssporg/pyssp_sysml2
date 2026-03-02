@@ -39,15 +39,9 @@ Run:
 
 Behavior:
 
-- Generates/updates reference artifacts under `tests/reference` for git diff comparison
-- Keeps generated files in repo (no cleanup)
-- Normalizes `generationDateAndTime` to a fixed value to avoid timestamp-only diffs
-
-Reference files produced by tests:
-
-- `tests/reference/SystemStructure.ssd`
-- `tests/reference/parameters.ssv`
-- `tests/reference/model_descriptions/*/modelDescription.xml`
+- Uses small explicit SysML snippets written per test case under `tmp_path`
+- Focuses each test on a single behavior instead of relying on a large shared fixture model
+- Keeps generated artifacts inside pytest temporary directories
 
 ## CLI Contract
 

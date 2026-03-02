@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.fmi import generate_model_descriptions
-from tests.reference_utils import FIXED_GENERATION_TIME, normalize_generation_time
-
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
-REFERENCE_DIR = Path(__file__).parent / "reference"
+from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
 
 
 def _variable_names(root: ET.Element) -> set[str]:
@@ -18,27 +14,25 @@ def _variable_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_model_descriptions_from_fixture() -> None:
-    output_dir = REFERENCE_DIR / "model_descriptions"
-    output_dir.mkdir(parents=True, exist_ok=True)
+def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
+    architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    output_dir = tmp_path / "model_descriptions"
 
     written = generate_model_descriptions(
-        architecture_path=FIXTURE_DIR,
+        architecture_path=architecture_dir,
         output_dir=output_dir,
-        composition="AircraftComposition",
+        composition=COMPOSITION_NAME,
     )
-    for artifact in written:
-        normalize_generation_time(artifact)
 
     assert len(written) == 3
 
-    autopilot_path = output_dir / "AutopilotModule" / "modelDescription.xml"
-    assert autopilot_path in written
+    a_path = output_dir / "A" / "modelDescription.xml"
+    assert a_path in written
 
-    root = ET.parse(autopilot_path).getroot()
+    root = ET.parse(a_path).getroot()
     assert root.get("generationTool") == "pyssp_sysml2 tooling"
 
     names = _variable_names(root)
-    assert "waypointX_km[0]" in names
-    assert "waypointX_km[1]" in names
-    assert "waypointX_km[2]" in names
+    assert "gains[0]" in names
+    assert "gains[1]" in names
+    assert "gains[2]" in names

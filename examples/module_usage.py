@@ -7,7 +7,7 @@ Run from repository root:
 Optional arguments:
 
     PYTHONPATH=src python examples/module_usage.py \
-      --architecture tests/fixtures/aircraft_subset \
+      --architecture examples/aircraft_subset \
       --composition AircraftComposition \
       --output-root build/generated
 """
@@ -27,7 +27,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--architecture",
         type=Path,
-        default=Path("tests/fixtures/aircraft_subset"),
+        default=Path("examples/aircraft_subset"),
         help="Path to SysML architecture directory or a file inside it.",
     )
     parser.add_argument(

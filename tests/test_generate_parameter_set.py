@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from pathlib import Path
 import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.ssv import generate_parameter_set
-from tests.reference_utils import normalize_generation_time
-
-FIXTURE_DIR = Path(__file__).parent / "fixtures" / "aircraft_subset"
-REFERENCE_DIR = Path(__file__).parent / "reference"
+from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
 
 
 def _parameter_names(root: ET.Element) -> set[str]:
@@ -18,11 +14,10 @@ def _parameter_names(root: ET.Element) -> set[str]:
     }
 
 
-def test_generate_parameter_set_uses_zero_based_indexing() -> None:
-    REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = REFERENCE_DIR / "parameters.ssv"
-    written = generate_parameter_set(FIXTURE_DIR, output_path, "AircraftComposition")
-    normalize_generation_time(output_path)
+def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
+    architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    output_path = tmp_path / "parameters.ssv"
+    written = generate_parameter_set(architecture_dir, output_path, COMPOSITION_NAME)
 
     assert written == output_path
     assert output_path.exists()
@@ -30,7 +25,7 @@ def test_generate_parameter_set_uses_zero_based_indexing() -> None:
     root = ET.parse(output_path).getroot()
     names = _parameter_names(root)
 
-    assert "autopilot.waypointX_km[0]" in names
-    assert "autopilot.waypointX_km[1]" in names
-    assert "autopilot.waypointX_km[2]" in names
-    assert "autopilot.waypointX_km[3]" not in names
+    assert "a.gains[0]" in names
+    assert "a.gains[1]" in names
+    assert "a.gains[2]" in names
+    assert "a.gains[3]" not in names
