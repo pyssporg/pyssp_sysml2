@@ -39,6 +39,7 @@ def write_cli_architecture(root: Path) -> Path:
 
 
 def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
+    """CLI generate ssd succeeds and writes the requested SSD file."""
     architecture_dir = write_cli_architecture(tmp_path / "arch")
     output = tmp_path / "SystemStructure.ssd"
     code = main(
@@ -58,6 +59,7 @@ def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
 
 
 def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
+    """CLI sync ssd succeeds for a valid architecture and generated SSD."""
     arch_dir = write_cli_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
@@ -78,6 +80,7 @@ def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
 
 
 def test_pyssp_generate_ssd_cli_fails_for_unknown_composition(tmp_path: Path) -> None:
+    """CLI generate ssd returns an error when the composition does not exist."""
     architecture_dir = write_cli_architecture(tmp_path / "arch")
     output = tmp_path / "SystemStructure.ssd"
     code = main(
@@ -97,6 +100,7 @@ def test_pyssp_generate_ssd_cli_fails_for_unknown_composition(tmp_path: Path) ->
 
 
 def test_pyssp_sync_ssd_cli_fails_for_missing_ssd(tmp_path: Path) -> None:
+    """CLI sync ssd fails for a missing SSD path and leaves source files unchanged."""
     arch_dir = write_cli_architecture(tmp_path / "arch")
     composition_path = arch_dir / "model.sysml"
     before = composition_path.read_text(encoding="utf-8")

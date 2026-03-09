@@ -17,6 +17,7 @@ def _parameter_summary(ssv_path) -> list[str]:
 
 
 def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
+    """List attributes are exported to SSV parameters with zero-based indices."""
     architecture_dir = tmp_path / "arch"
     architecture_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,6 +49,7 @@ def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
 
 
 def test_generate_parameter_set_formats_scalar_types(tmp_path) -> None:
+    """Scalar Real/Integer/Boolean/String attributes are formatted correctly in SSV."""
 
     write_model(
         tmp_path / "arch" / "parts.sysml",

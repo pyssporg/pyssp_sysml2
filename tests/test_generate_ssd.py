@@ -42,6 +42,7 @@ def _ssd_summary(ssd_path) -> list[str]:
 
 
 def test_generate_ssd_from_small_snippet(tmp_path) -> None:
+    """Generated SSD contains expected connectors, parameters, and expanded connections."""
     architecture_dir = tmp_path / "arch"
     architecture_dir.mkdir(parents=True, exist_ok=True)
 

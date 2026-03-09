@@ -36,6 +36,7 @@ def _model_description_summary(path) -> list[str]:
 
 
 def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
+    """Model description export preserves expected FMI variables and output markers."""
     architecture_dir = tmp_path / "arch"
     architecture_dir.mkdir(parents=True, exist_ok=True)
 
