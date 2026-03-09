@@ -10,6 +10,12 @@ Optional arguments:
       --architecture examples/aircraft_subset \
       --composition AircraftComposition \
       --output-root build/generated
+
+    PYTHONPATH=src python3 examples/module_usage.py \
+      --architecture examples/aircraft_subset \
+      --composition AircraftComposition \
+      --output-root build/generated \
+      --bootstrap-architecture-dir build/new_architecture
 """
 
 from __future__ import annotations
@@ -42,6 +48,12 @@ def parse_args() -> argparse.Namespace:
         default=Path("build/generated"),
         help="Output root directory.",
     )
+    parser.add_argument(
+        "--bootstrap-architecture-dir",
+        type=Path,
+        default=None,
+        help="Optional empty directory to bootstrap a minimal SysML architecture from SSD.",
+    )
     return parser.parse_args()
 
 
@@ -62,6 +74,14 @@ def main() -> None:
         args.composition,
         output_architecture_dir=sync_dir,
     )
+    bootstrapped = []
+    if args.bootstrap_architecture_dir is not None:
+        args.bootstrap_architecture_dir.mkdir(parents=True, exist_ok=True)
+        bootstrapped = sync_sysml_from_ssd(
+            args.bootstrap_architecture_dir,
+            ssd_path,
+            args.composition,
+        )
 
     print(f"SSD: {ssd_path}")
     print(f"SSV: {ssv_path}")
@@ -71,6 +91,10 @@ def main() -> None:
     print("Synced SysML files:")
     for path in synced:
         print(f"  - {path}")
+    if bootstrapped:
+        print("Bootstrapped SysML files:")
+        for path in bootstrapped:
+            print(f"  - {path}")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ set -euo pipefail
 ARCH="${1:-examples/aircraft_subset}"
 COMP="${2:-AircraftComposition}"
 OUT_DIR="${3:-build/generated}"
+BOOTSTRAP_DIR="$OUT_DIR/new_architecture"
 
 if command -v pyssp >/dev/null 2>&1; then
   RUNNER=(pyssp)
@@ -50,8 +51,15 @@ printf "Command      : %s\n" "${RUNNER[*]}"
   --ssd "$OUT_DIR/SystemStructure.ssd" \
   --output-architecture-dir "$OUT_DIR/synced_sysml"
 
+mkdir -p "$BOOTSTRAP_DIR"
+"${RUNNER[@]}" sync ssd \
+  --architecture "$BOOTSTRAP_DIR" \
+  --composition "$COMP" \
+  --ssd "$OUT_DIR/SystemStructure.ssd"
+
 printf "\nGenerated artifacts:\n"
 printf "- %s\n" "$OUT_DIR/SystemStructure.ssd"
 printf "- %s\n" "$OUT_DIR/parameters.ssv"
 printf "- %s\n" "$OUT_DIR/model_descriptions"
 printf "- %s\n" "$OUT_DIR/synced_sysml"
+printf "- %s\n" "$BOOTSTRAP_DIR/architecture.sysml"
