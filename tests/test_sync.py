@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 from pycps_sysmlv2 import SysMLParser
-from pyssp_standard.ssd import Component, Connection, SSD
+from pyssp_standard.common_content_ssc import TypeReal
+from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
@@ -206,4 +207,68 @@ def test_sync_sysml_from_ssd_removes_part_missing_from_ssd_components(tmp_path: 
 
     assert _composition_summary(output_dir) == [
         "part src:Source",
+    ]
+
+
+def test_sync_sysml_from_ssd_bootstraps_architecture_when_sysml_is_missing(tmp_path: Path) -> None:
+    """Sync can recover a SysML architecture directly from SSD when no .sysml files exist."""
+    architecture_dir = tmp_path / "empty_arch"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+    ssd_path = tmp_path / "SystemStructure.ssd"
+
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.name = COMPOSITION_NAME
+        ssd.version = "1.0"
+        ssd.system = System(name=COMPOSITION_NAME)
+
+        src = Component()
+        src.name = "src"
+        src.source = "resources/Source.fmu"
+        src.connectors.extend(
+            [
+                Connector(name="outSig.x", kind="output", type_=TypeReal(unit=None)),
+                Connector(name="outSig.y", kind="output", type_=TypeReal(unit=None)),
+            ]
+        )
+        ssd.system.elements.append(src)
+
+        dst = Component()
+        dst.name = "dst"
+        dst.source = "resources/Sink.fmu"
+        dst.connectors.extend(
+            [
+                Connector(name="inSig.x", kind="input", type_=TypeReal(unit=None)),
+                Connector(name="inSig.y", kind="input", type_=TypeReal(unit=None)),
+            ]
+        )
+        ssd.system.elements.append(dst)
+
+        ssd.system.connections.extend(
+            [
+                Connection(
+                    start_element="src",
+                    start_connector="outSig.x",
+                    end_element="dst",
+                    end_connector="inSig.x",
+                ),
+                Connection(
+                    start_element="src",
+                    start_connector="outSig.y",
+                    end_element="dst",
+                    end_connector="inSig.y",
+                ),
+            ]
+        )
+
+    written = sync_sysml_from_ssd(
+        architecture_path=architecture_dir,
+        ssd_path=ssd_path,
+        composition=COMPOSITION_NAME,
+    )
+
+    assert written == [architecture_dir / "architecture.sysml"]
+    assert _composition_summary(architecture_dir) == [
+        "part dst:Sink",
+        "part src:Source",
+        "connect src.outSig->dst.inSig",
     ]

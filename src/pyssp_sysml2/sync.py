@@ -25,6 +25,136 @@ def _load_ssd_system(ssd_path: Path):
         return ssd.system
 
 
+def _type_name_from_connector(connector) -> str:
+    type_name = connector.type_.__class__.__name__
+    if type_name.startswith("Type"):
+        return type_name[4:]
+    return "Real"
+
+
+def _part_name_from_component(component: Component) -> str:
+    if component.source:
+        return Path(component.source).stem
+    if component.name:
+        return component.name
+    raise ValueError("SSD component without a name cannot be synced")
+
+
+def _build_architecture_from_ssd(ssd_system, composition: str):
+    from pycps_sysmlv2 import (
+        SysMLArchitecture,
+        SysMLAttribute,
+        SysMLPartDefinition,
+        SysMLPortDefinition,
+        SysMLType,
+    )
+
+    components = _index_components(ssd_system)
+    endpoint_attributes: dict[tuple[str, str], dict[str, str]] = {}
+    endpoint_directions: dict[tuple[str, str], str] = {}
+
+    for component in components.values():
+        for connector in component.connectors:
+            if "." not in connector.name:
+                continue
+            port_name, attribute_name = _split_connector(connector.name)
+            endpoint = (component.name, port_name)
+            endpoint_attributes.setdefault(endpoint, {})[attribute_name] = _type_name_from_connector(
+                connector
+            )
+            if connector.kind == "output":
+                endpoint_directions.setdefault(endpoint, "out")
+            elif connector.kind == "input":
+                endpoint_directions.setdefault(endpoint, "in")
+            else:
+                endpoint_directions.setdefault(endpoint, "in")
+
+    for connection in ssd_system.connections:
+        src_port, src_attr = _split_connector(connection.start_connector)
+        dst_port, dst_attr = _split_connector(connection.end_connector)
+        endpoint_attributes.setdefault((connection.start_element, src_port), {}).setdefault(
+            src_attr, "Real"
+        )
+        endpoint_attributes.setdefault((connection.end_element, dst_port), {}).setdefault(
+            dst_attr, "Real"
+        )
+        endpoint_directions.setdefault((connection.start_element, src_port), "out")
+        endpoint_directions.setdefault((connection.end_element, dst_port), "in")
+
+    architecture = SysMLArchitecture(name="RecoveredFromSSD", package="RecoveredFromSSD")
+    part_defs_by_name: dict[str, object] = {}
+    component_part_defs: dict[str, object] = {}
+    port_defs_by_signature: dict[tuple[tuple[str, str], ...], object] = {}
+
+    for component_name in sorted(components):
+        component = components[component_name]
+        part_name = _part_name_from_component(component)
+        part_def = part_defs_by_name.get(part_name)
+        if part_def is None:
+            part_def = SysMLPartDefinition(name=part_name, source_file="architecture.sysml")
+            architecture.add_part(part_def)
+            part_defs_by_name[part_name] = part_def
+        component_part_defs[component_name] = part_def
+
+        for endpoint in sorted(key for key in endpoint_attributes if key[0] == component_name):
+            _, port_name = endpoint
+            attrs = endpoint_attributes[endpoint]
+            signature = tuple(sorted(attrs.items()))
+            port_def = port_defs_by_signature.get(signature)
+            if port_def is None:
+                port_def_name = f"Port_{len(port_defs_by_signature) + 1}"
+                port_def = SysMLPortDefinition(name=port_def_name, source_file="architecture.sysml")
+                for attr_name, attr_type in signature:
+                    port_def.attributes[attr_name] = SysMLAttribute(
+                        name=attr_name,
+                        type=SysMLType.from_string(attr_type),
+                        value=None,
+                    )
+                architecture.add_port(port_def)
+                port_defs_by_signature[signature] = port_def
+
+            if port_name not in part_def.ports:
+                part_def.add_port(
+                    name=port_name,
+                    direction=endpoint_directions.get(endpoint, "in"),
+                    port_name=port_def.name,
+                    port_def=port_def,
+                )
+
+    system = SysMLPartDefinition(name=composition, source_file="architecture.sysml")
+    architecture.add_part(system)
+    for component_name in sorted(components):
+        part_def = component_part_defs[component_name]
+        system.add_part(
+            name=component_name,
+            part_name=part_def.name,
+            part_def=part_def,
+        )
+
+    grouped: Dict[Tuple[str, str, str, str], set[str]] = {}
+    for connection in ssd_system.connections:
+        src_port, src_attr = _split_connector(connection.start_connector)
+        dst_port, _ = _split_connector(connection.end_connector)
+        key = (connection.start_element, src_port, connection.end_element, dst_port)
+        grouped.setdefault(key, set()).add(src_attr)
+
+    for src_component, src_port, dst_component, dst_port in sorted(grouped):
+        src_part_def = component_part_defs[src_component]
+        dst_part_def = component_part_defs[dst_component]
+        system.add_connection(
+            src_component=src_component,
+            src_port=src_port,
+            dst_component=dst_component,
+            dst_port=dst_port,
+            src_part_def=src_part_def,
+            dst_part_def=dst_part_def,
+            src_port_def=src_part_def.ports[src_port].port_def,
+            dst_port_def=dst_part_def.ports[dst_port].port_def,
+        )
+
+    return architecture, system
+
+
 def _split_connector(name: str) -> tuple[str, str]:
     if "." not in name:
         raise ValueError(f"Connector '{name}' is not in 'port.attribute' form")
@@ -206,9 +336,13 @@ def sync_sysml_from_ssd(
     output_architecture_dir: Path | None = None,
 ) -> list[Path]:
     """Apply SSD composition edits to a SysML architecture and write updated .sysml files."""
-    architecture = _load_architecture(architecture_path)
     ssd_system = _load_ssd_system(ssd_path)
-    system = architecture.get_part(composition)
+    try:
+        architecture = _load_architecture(architecture_path)
+        system = architecture.get_part(composition)
+    except FileNotFoundError:
+        architecture, system = _build_architecture_from_ssd(ssd_system, composition)
+
     target_parts = _derive_target_parts(architecture, system, ssd_system)
     target_connections = _derive_port_connections_from_ssd(target_parts, ssd_system)
     _replace_system_parts(system, target_parts)
