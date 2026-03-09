@@ -13,9 +13,10 @@ authors = [
   { name = "pyssp contributors" }
 ]
 dependencies = [
-  "pycps_sysmlv2",
-  "pyssp_standard"
-]
+    "pycps_sysmlv2 @ git+https://github.com/pyssporg/pysysml2_cps.git",
+    "pyssp_standard"
+  ]
+
 
 [project.optional-dependencies]
 dev = [
