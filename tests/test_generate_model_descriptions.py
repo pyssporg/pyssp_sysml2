@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 from pyssp_sysml2.fmi import generate_model_descriptions
-from tests.sysml_test_models import COMPOSITION_NAME, write_fmi_list_type_architecture
+from tests.test_utils import COMPOSITION_NAME, write_model
+
 
 
 def _model_description_summary(path) -> list[str]:
@@ -34,7 +36,37 @@ def _model_description_summary(path) -> list[str]:
 
 
 def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
-    architecture_dir = write_fmi_list_type_architecture(tmp_path / "arch")
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        architecture_dir / "ports.sysml",
+        """
+        package Example {
+          port def Status {
+            attribute ok: Boolean;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        architecture_dir / "parts.sysml",
+        f"""
+        package Example {{
+          part def Comp {{
+            attribute int_list = [1, 2];
+            attribute bool_list = [True, False];
+            out port status : Status;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part c : Comp;
+          }}
+        }}
+        """,
+    )
+
     output_dir = tmp_path / "model_descriptions"
 
     written = generate_model_descriptions(

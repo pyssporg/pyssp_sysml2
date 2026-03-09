@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from pycps_sysmlv2 import SysMLParser
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
-from tests.sysml_test_models import COMPOSITION_NAME, write_connected_triplet_architecture
+from tests.test_utils import COMPOSITION_NAME, write_model
+
 
 
 def _ssd_summary(ssd_path) -> list[str]:
@@ -39,7 +42,51 @@ def _ssd_summary(ssd_path) -> list[str]:
 
 
 def test_generate_ssd_from_small_snippet(tmp_path) -> None:
-    architecture_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        architecture_dir / "ports.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute mode: Integer;
+            attribute x: Real;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        architecture_dir / "parts.sysml",
+        """
+        package Example {
+          part def Source {
+            attribute gains = [1.0, 2.0];
+            out port sig : Signal;
+          }
+
+          part def Sink {
+            in port sigIn : Signal;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        architecture_dir / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part src : Source;
+            part dst : Sink;
+
+            connect src.sig to dst.sigIn;
+          }}
+        }}
+        """,
+    )
+
     output_path = tmp_path / "SystemStructure.ssd"
     system = SysMLParser(architecture_dir).parse().get_part(COMPOSITION_NAME)
 
@@ -47,24 +94,14 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
         build_ssd(ssd, system)
 
     assert _ssd_summary(output_path) == [
-        "component a",
-        "  output:cmd.mode:Integer",
-        "  output:cmd.pitch:Real",
+        "component dst",
+        "  input:sigIn.mode:Integer",
+        "  input:sigIn.x:Real",
+        "component src",
+        "  output:sig.mode:Integer",
+        "  output:sig.x:Real",
         "  parameter:gains[0]:Real",
         "  parameter:gains[1]:Real",
-        "  parameter:gains[2]:Real",
-        "component b",
-        "  input:cmdIn.mode:Integer",
-        "  input:cmdIn.pitch:Real",
-        "  output:pos.x:Real",
-        "  output:pos.y:Real",
-        "component c",
-        "  input:cmdIn.mode:Integer",
-        "  input:cmdIn.pitch:Real",
-        "  input:posIn.x:Real",
-        "  input:posIn.y:Real",
-        "connection a.cmd.mode -> b.cmdIn.mode",
-        "connection a.cmd.pitch -> b.cmdIn.pitch",
-        "connection b.pos.x -> c.posIn.x",
-        "connection b.pos.y -> c.posIn.y",
+        "connection src.sig.mode -> dst.sigIn.mode",
+        "connection src.sig.x -> dst.sigIn.x",
     ]

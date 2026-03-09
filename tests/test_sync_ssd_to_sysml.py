@@ -9,11 +9,164 @@ from pyssp_standard.ssd import Component, Connection, SSD
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
-from tests.sysml_test_models import (
-    COMPOSITION_NAME,
-    write_connected_triplet_architecture,
-    write_sync_pair_architecture,
-)
+from tests.test_utils import COMPOSITION_NAME, write_model
+
+
+def write_connected_triplet_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "ports.sysml",
+        """
+        package Example {
+          port def Cmd {
+            attribute pitch: Real;
+            attribute mode: Integer;
+          }
+
+          port def Pos {
+            attribute x: Real;
+            attribute y: Real;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "parts.sysml",
+        """
+        package Example {
+          part def A {
+            out port cmd : Cmd;
+          }
+
+          part def B {
+            in port cmdIn : Cmd;
+            out port pos : Pos;
+          }
+
+          part def C {
+            in port posIn : Pos;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part a : A;
+            part b : B;
+            part c : C;
+
+            connect a.cmd to b.cmdIn;
+            connect b.pos to c.posIn;
+          }}
+        }}
+        """,
+    )
+
+    return root
+
+
+def write_sync_pair_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "ports.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x: Real;
+            attribute y: Real;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "parts.sysml",
+        """
+        package Example {
+          part def Producer {
+            out port outSig : Signal;
+          }
+
+          part def Consumer {
+            in port inSig : Signal;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part src : Producer;
+            part dst : Consumer;
+            connect src.outSig to dst.inSig;
+          }}
+        }}
+        """,
+    )
+
+    return root
+
+
+def write_incompatible_port_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        root / "ports.sysml",
+        """
+        package Example {
+          port def Cmd {
+            attribute pitch: Real;
+            attribute mode: Integer;
+          }
+
+          port def Pos {
+            attribute x: Real;
+            attribute y: Real;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "parts.sysml",
+        """
+        package Example {
+          part def Source {
+            out port pos : Pos;
+          }
+
+          part def Sink {
+            in port posIn : Pos;
+            in port cmdIn : Cmd;
+          }
+        }
+        """,
+    )
+
+    write_model(
+        root / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part src : Source;
+            part dst : Sink;
+            connect src.pos to dst.posIn;
+          }}
+        }}
+        """,
+    )
+
+    return root
 
 
 def _edit_ssd(ssd_path: Path, editor) -> None:
@@ -262,14 +415,14 @@ def test_sync_ssd_rejects_unknown_port(tmp_path: Path) -> None:
 
 
 def test_sync_ssd_rejects_incompatible_ports(tmp_path: Path) -> None:
-    arch_dir = write_connected_triplet_architecture(tmp_path / "arch")
+    arch_dir = write_incompatible_port_architecture(tmp_path / "arch")
     ssd_path = tmp_path / "SystemStructure.ssd"
     generate_ssd(arch_dir, ssd_path, COMPOSITION_NAME)
 
     def rewrite(connection: Connection) -> None:
-        if connection.end_element == "c" and connection.end_connector == "posIn.x":
+        if connection.end_element == "dst" and connection.end_connector == "posIn.x":
             connection.end_connector = "cmdIn.x"
-        if connection.end_element == "c" and connection.end_connector == "posIn.y":
+        if connection.end_element == "dst" and connection.end_connector == "posIn.y":
             connection.end_connector = "cmdIn.y"
 
     _rewrite_connections(ssd_path, rewrite)
