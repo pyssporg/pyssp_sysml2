@@ -97,10 +97,11 @@ pyssp sync ssd \
 
 ### Sync Capabilities and Limits
 
-`pyssp sync ssd` currently syncs **composition connection wiring** from SSD back to SysML.
+`pyssp sync ssd` currently syncs **composition parts and connection wiring** from SSD back to SysML.
 
 Supported:
 
+- Adding/removing component instances through SSD component edits when the component `source` resolves to a known SysML part definition.
 - Adding/removing/changing port-to-port composition connections through SSD connection edits.
 - Writing updates in-place or to a separate output architecture directory.
 

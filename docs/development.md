@@ -46,6 +46,14 @@ Behavior:
 - Follows a one-model-per-behavior style where practical, to keep test intent explicit
 - Keeps generated artifacts inside pytest temporary directories
 
+Test strategy:
+
+- Prefer standalone test-local model setup over shared external fixtures or reference files.
+- Make each test generic and behavior-focused: one small architecture, one behavior under test.
+- When checking generated artifacts, prefer concise text summaries over structural XML traversal when possible.
+- If comparing two file formats, convert both to small text views first so the assertion reads as a format-agnostic behavior check.
+- Keep assertions close to the behavior being validated; avoid large golden files unless the full artifact text is itself the contract.
+
 ## CLI Contract
 
 Entry point (`pyproject.toml`):

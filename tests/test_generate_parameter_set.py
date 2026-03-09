@@ -1,28 +1,17 @@
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
+from pyssp_standard.ssv import SSV
 
 from pyssp_sysml2.ssv import generate_parameter_set
 from tests.sysml_test_models import COMPOSITION_NAME, write_ssv_type_coverage_architecture
 
 
-def _parameter_names(root: ET.Element) -> set[str]:
-    return {
-        elem.get("name")
-        for elem in root.findall(".//{*}Parameter")
-        if elem.get("name")
-    }
-
-
-def _parameter_values(root: ET.Element) -> dict[str, tuple[str, str]]:
-    result = {}
-    for param in root.findall(".//{*}Parameter"):
-        name = param.get("name")
-        type_elem = next(iter(param), None)
-        if name and type_elem is not None:
-            type_name = type_elem.tag.split("}", 1)[-1]
-            result[name] = (type_name, type_elem.get("value"))
-    return result
+def _parameter_summary(ssv_path) -> list[str]:
+    with SSV(ssv_path, mode="r") as ssv:
+        return sorted(
+            f"{parameter['name']}:{parameter['type_name']}:{parameter['type_value'].parameter.get('value')}"
+            for parameter in ssv.parameters
+        )
 
 
 def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
@@ -33,19 +22,13 @@ def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
     assert written == output_path
     assert output_path.exists()
 
-    root = ET.parse(output_path).getroot()
-    names = _parameter_names(root)
-
-    assert "p.i_list[0]" in names
-    assert "p.i_list[1]" in names
-    assert "p.b_list[0]" in names
-    assert "p.b_list[1]" in names
-    assert "p.i_list[2]" not in names
-
-    values = _parameter_values(root)
-    assert values["p.r"] == ("Real", "1.5")
-    assert values["p.i"] == ("Integer", "7")
-    assert values["p.b"] == ("Boolean", "true")
-    assert values["p.s"] == ("String", "abc")
-    assert values["p.i_list[0]"] == ("Integer", "1")
-    assert values["p.b_list[0]"] == ("Boolean", "true")
+    assert _parameter_summary(output_path) == [
+        "p.b:Boolean:true",
+        "p.b_list[0]:Boolean:true",
+        "p.b_list[1]:Boolean:false",
+        "p.i:Integer:7",
+        "p.i_list[0]:Integer:1",
+        "p.i_list[1]:Integer:2",
+        "p.r:Real:1.5",
+        "p.s:String:abc",
+    ]
