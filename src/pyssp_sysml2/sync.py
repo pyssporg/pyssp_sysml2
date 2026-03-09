@@ -90,7 +90,7 @@ def _connection_key(src_component: str, src_port: str, dst_component: str, dst_p
 def _replace_system_connections(system, target_connections: Iterable[Tuple[str, str, str, str]]) -> None:
     from pycps_sysmlv2 import SysMLConnection
 
-    previous = system.items.setdefault("connections", {})
+    previous = system.references.setdefault("connections", {})
     updated = {}
     for src_component, src_port, dst_component, dst_port in sorted(target_connections):
         key = _connection_key(src_component, src_port, dst_component, dst_port)
@@ -109,7 +109,7 @@ def _replace_system_connections(system, target_connections: Iterable[Tuple[str, 
             dst_port_def=system.parts[dst_component].part_def.ports[dst_port].port_def,
         )
 
-    system.items["connections"] = updated
+    system.references["connections"] = updated
     if hasattr(system, "declared_items"):
         system.declared_items["connections"] = dict(updated)
 
