@@ -16,7 +16,7 @@ Core modules:
 
 Dependencies:
 
-- `pycps_sysmlv2` for SysML parsing (`SysMLParser(...).parse().get_part(...)`)
+- `pycps_sysmlv2` for SysML parsing (`SysMLParser(...).parse().get_def(NodeType.Part, ...)`)
 - `pyssp_standard` for SSP/FMI XML object handling
 
 ## Local Setup

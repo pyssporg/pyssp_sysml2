@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pycps_sysmlv2 import SysMLParser
+from pycps_sysmlv2 import NodeType, SysMLParser
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
@@ -89,7 +89,7 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
-    system = SysMLParser(architecture_dir).parse().get_part(COMPOSITION_NAME)
+    system = SysMLParser(architecture_dir).parse().get_def(NodeType.Part, COMPOSITION_NAME)
 
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)

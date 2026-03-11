@@ -8,7 +8,7 @@ from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
-from pycps_sysmlv2 import SysMLPartDefinition, SysMLParser
+from pycps_sysmlv2 import NodeType, SysMLPartDefinition, SysMLParser
 
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
@@ -37,11 +37,11 @@ def _port_attribute_variables(
     value_ref = starting_ref
     value_index = starting_index
 
-    for port in part.ports.values():
-        port_def = port.port_def
+    for port in part.refs(NodeType.Port).values():
+        port_def = port.ref_node
         if port_def is None:
             raise ValueError(f"Unresolved port definition for {part.name}.{port.name}")
-        for attr in port_def.attributes.values():
+        for attr in port_def.defs(NodeType.Attribute).values():
             spec = VariableSpec(
                 name=f"{port.name}.{attr.name}",
                 causality="input" if port.direction == "in" else "output",
@@ -64,7 +64,7 @@ def _parameter_variables(
     value_ref = starting_ref
     value_index = starting_index
 
-    for _attr_name, attr in part.attributes.items():
+    for _attr_name, attr in part.defs(NodeType.Attribute).items():
         if attr.is_list():
             list_item_type = map_fmi_type(attr.type.as_string())
             for idx, item in enumerate(attr.value, start=0):
@@ -187,15 +187,16 @@ def generate_model_descriptions(
     ensure_directory(output_dir)
     ensure_directory(BUILD_DIR / "fmu_pre")
 
-    system = SysMLParser(architecture_path).parse().get_part(composition)
+    system = SysMLParser(architecture_path).parse().get_def(NodeType.Part, composition)
 
     written: list[Path] = []
-    for _part_inst_name, part_ref in system.parts.items():
-        component_dir = output_dir / part_ref.part_name
+    for _part_inst_name, part_ref in system.refs(NodeType.Part).items():
+        part_def = part_ref.ref_node
+        component_dir = output_dir / part_ref.type
         output_path = component_dir / "modelDescription.xml"
         ensure_directory(component_dir)
 
-        tree = _build_model_description_tree(part_ref.part_def, system.name)
+        tree = _build_model_description_tree(part_def, system.name)
         tree.write(output_path, encoding="utf-8", xml_declaration=True)
         written.append(output_path)
 

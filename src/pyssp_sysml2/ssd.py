@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pycps_sysmlv2 import SysMLPartDefinition, SysMLParser
+from pycps_sysmlv2 import NodeType, SysMLPartDefinition, SysMLParser
 from pyssp_standard.common_content_ssc import TypeBoolean, TypeInteger, TypeReal, TypeString
 from pyssp_standard.ssd import Component, Connection, Connector, DefaultExperiment, SSD, System
 
@@ -28,18 +28,18 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
     ssd.version = "1.0"
     ssd.system = System(name=system.name)
 
-    for part_name, part_ref in system.parts.items():
-        part = part_ref.part_def
+    for part_name, part_ref in system.refs(NodeType.Part).items():
+        part = part_ref.ref_node
         component = Component()
         component.name = part_name
         component.component_type = "application/x-fmu-sharedlibrary"
         component.source = fmu_resource_path(part.name)
 
-        for port_ref in part.ports.values():
-            port_def = port_ref.port_def
+        for port_ref in part.refs(NodeType.Port).values():
+            port_def = port_ref.ref_node
             if port_def is None:
                 raise ValueError(f"Unresolved port definition for {part.name}.{port_ref.name}")
-            for attribute in port_def.attributes.values():
+            for attribute in port_def.defs(NodeType.Attribute).values():
                 component.connectors.append(
                     Connector(
                         name=f"{port_ref.name}.{attribute.name}",
@@ -48,7 +48,7 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
                     )
                 )
 
-        for attrib_name, attribute in part.attributes.items():
+        for attrib_name, attribute in part.defs(NodeType.Attribute).items():
             for idx, _ in attribute.enumerator():
                 name = f"{attrib_name}[{idx}]" if attribute.is_list() else attrib_name
                 component.connectors.append(
@@ -61,20 +61,24 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
 
         ssd.system.elements.append(component)
 
-    for conn in system.connections:
-        if conn.src_port_def is not conn.dst_port_def:
+    for conn in system.defs(NodeType.Connection).values():
+        src_port_def = None if conn.src_port_node is None else conn.src_port_node.ref_node
+        dst_port_def = None if conn.dst_port_node is None else conn.dst_port_node.ref_node
+        if src_port_def is not dst_port_def:
             raise ValueError(
-                f"Src {conn.src_port_def.name} and dest port {conn.dst_port_def.name} must be same type"
+                f"Src {conn.src_port_node.name} and dest port {conn.dst_port_node.name} must be same type"
             )
-        if conn.src_port_def is None:
+        if conn.src_port_node is None:
+            raise ValueError("Port definition not connected")
+        if src_port_def is None:
             raise ValueError("Port definition not connected")
 
-        for attribute_name in conn.src_port_def.attributes.keys():
+        for attribute_name in src_port_def.defs(NodeType.Attribute).keys():
             ssd.add_connection(
                 Connection(
-                    start_element=conn.src_component,
+                    start_element=conn.src_part,
                     start_connector=f"{conn.src_port}.{attribute_name}",
-                    end_element=conn.dst_component,
+                    end_element=conn.dst_part,
                     end_connector=f"{conn.dst_port}.{attribute_name}",
                 )
             )
@@ -86,7 +90,7 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
 
 
 def generate_ssd(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    system = SysMLParser(architecture_path).parse().get_part(composition)
+    system = SysMLParser(architecture_path).parse().get_def(NodeType.Part, composition)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
         build_ssd(ssd, system)
