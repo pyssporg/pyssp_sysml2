@@ -106,3 +106,52 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
         "connection src.sig.mode -> dst.sigIn.mode",
         "connection src.sig.x -> dst.sigIn.x",
     ]
+
+
+def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
+    """Generated SSD sets the expected top-level metadata and component fields."""
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        architecture_dir / "model.sysml",
+        f"""
+        package Example {{
+          port def Signal {{
+            attribute x: Real;
+          }}
+
+          part def Source {{
+            out port outSig : Signal;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part src : Source;
+          }}
+        }}
+        """,
+    )
+
+    output_path = tmp_path / "SystemStructure.ssd"
+    system = SysMLParser(architecture_dir).parse().get_def(NodeType.Part, COMPOSITION_NAME)
+
+    with SSD(output_path, mode="w") as ssd:
+        build_ssd(ssd, system)
+
+    assert _ssd_summary(output_path) == [
+        "component src",
+        "  output:outSig.x:Real",
+    ]
+
+    with SSD(output_path, mode="r") as ssd:
+        assert ssd.name == COMPOSITION_NAME
+        assert ssd.version == "1.0"
+        assert ssd.default_experiment is not None
+        assert ssd.default_experiment.start_time == 0
+        assert ssd.default_experiment.stop_time == 3600
+        assert ssd.system is not None
+        assert len(ssd.system.elements) == 1
+        component = ssd.system.elements[0]
+        assert component.name == "src"
+        assert component.component_type == "application/x-fmu-sharedlibrary"
+        assert component.source == "resources/Source.fmu"

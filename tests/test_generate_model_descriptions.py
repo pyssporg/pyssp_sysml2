@@ -89,3 +89,79 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
         "bool_list[1]|parameter|fixed|Boolean|false|3|nonoutput",
         "status.ok|output|None|Boolean|None|4|output",
     ]
+
+
+def test_generate_model_descriptions_writes_expected_root_metadata(tmp_path: Path) -> None:
+    """Generated FMI metadata includes stable identifiers and output model structure."""
+    write_model(
+        tmp_path / "arch" / "model.sysml",
+        f"""
+        package Example {{
+          port def Status {{
+            attribute ok: Boolean;
+          }}
+
+          part def Comp {{
+            out port status : Status;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part c : Comp;
+          }}
+        }}
+        """,
+    )
+
+    output_dir = tmp_path / "model_descriptions"
+    [written] = generate_model_descriptions(tmp_path / "arch", output_dir, COMPOSITION_NAME)
+
+    root = ET.parse(written).getroot()
+    assert root.tag == "fmiModelDescription"
+    assert root.get("modelName") == f"{COMPOSITION_NAME}.Comp"
+    assert root.get("guid", "").startswith("{")
+    assert root.get("guid", "").endswith("}")
+    assert root.get("variableNamingConvention") == "structured"
+
+    co_sim = root.find("./CoSimulation")
+    assert co_sim is not None
+    assert co_sim.get("modelIdentifier") == "Comp"
+
+    outputs = root.findall("./ModelStructure/Outputs/Unknown")
+    initial_unknowns = root.findall("./ModelStructure/InitialUnknowns/Unknown")
+    assert [elem.get("index") for elem in outputs] == ["1"]
+    assert [elem.get("index") for elem in initial_unknowns] == ["1"]
+
+
+def test_generate_model_descriptions_writes_one_file_per_component_type(tmp_path: Path) -> None:
+    """Each referenced part definition gets its own model description output."""
+    write_model(
+        tmp_path / "arch" / "model.sysml",
+        f"""
+        package Example {{
+          port def Status {{
+            attribute ok: Boolean;
+          }}
+
+          part def Sensor {{
+            out port status : Status;
+          }}
+
+          part def Controller {{
+            in port status : Status;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part sensor : Sensor;
+            part controller : Controller;
+          }}
+        }}
+        """,
+    )
+
+    output_dir = tmp_path / "model_descriptions"
+    written = generate_model_descriptions(tmp_path / "arch", output_dir, COMPOSITION_NAME)
+
+    assert sorted(path.relative_to(output_dir).as_posix() for path in written) == [
+        "Controller/modelDescription.xml",
+        "Sensor/modelDescription.xml",
+    ]

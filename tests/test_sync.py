@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from textwrap import dedent
+
 from pycps_sysmlv2 import NodeType, SysMLParser
 from pyssp_standard.common_content_ssc import TypeReal
 from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
@@ -67,6 +69,11 @@ def _composition_summary(architecture_path: Path) -> list[str]:
     return lines
 
 
+def _architecture_text(architecture_path: Path) -> str:
+    architecture = SysMLParser(architecture_path).parse()
+    return str(architecture)
+
+
 def test_sync_sysml_from_ssd_removes_connection_deleted_in_ssd(tmp_path: Path) -> None:
     """Sync removes composition connections that were removed from the SSD."""
     architecture_dir = _write_sync_architecture(tmp_path / "arch")
@@ -111,11 +118,24 @@ def test_sync_sysml_from_ssd_updates_part_type_from_component_source(tmp_path: P
         output_architecture_dir=output_dir,
     )
 
-    assert _composition_summary(output_dir) == [
-        "part dst:AltSink",
-        "part src:Source",
-        "connect src.outSig->dst.inSig",
-    ]
+    assert _architecture_text(output_dir) == dedent(
+        f"""
+        package Example
+        part AltSink
+          port in inSig:Signal -> Signal
+        part Sink
+          port in inSig:Signal -> Signal
+        part Source
+          port out outSig:Signal -> Signal
+        part SystemComposition
+          part dst:AltSink -> AltSink
+          part src:Source -> Source
+          connect src.outSig -> dst.inSig
+        port Signal
+          attr x:Real=None
+          attr y:Real=None
+        """
+    ).strip() + "\n"
 
 
 def test_sync_sysml_from_ssd_rejects_partial_attribute_mapping(tmp_path: Path) -> None:
@@ -177,13 +197,26 @@ def test_sync_sysml_from_ssd_adds_part_from_ssd_component(tmp_path: Path) -> Non
         output_architecture_dir=output_dir,
     )
 
-    assert _composition_summary(output_dir) == [
-        "part alt:AltSink",
-        "part dst:Sink",
-        "part src:Source",
-        "connect src.outSig->alt.inSig",
-        "connect src.outSig->dst.inSig",
-    ]
+    assert _architecture_text(output_dir) == dedent(
+        f"""
+        package Example
+        part AltSink
+          port in inSig:Signal -> Signal
+        part Sink
+          port in inSig:Signal -> Signal
+        part Source
+          port out outSig:Signal -> Signal
+        part SystemComposition
+          part alt:AltSink -> AltSink
+          part dst:Sink -> Sink
+          part src:Source -> Source
+          connect src.outSig -> alt.inSig
+          connect src.outSig -> dst.inSig
+        port Signal
+          attr x:Real=None
+          attr y:Real=None
+        """
+    ).strip() + "\n"
 
 
 def test_sync_sysml_from_ssd_removes_part_missing_from_ssd_components(tmp_path: Path) -> None:
@@ -267,8 +300,107 @@ def test_sync_sysml_from_ssd_bootstraps_architecture_when_sysml_is_missing(tmp_p
     )
 
     assert written == [architecture_dir / "architecture.sysml"]
-    assert _composition_summary(architecture_dir) == [
-        "part dst:Sink",
-        "part src:Source",
-        "connect src.outSig->dst.inSig",
-    ]
+    assert _architecture_text(architecture_dir) == dedent(
+        """
+        package RecoveredFromSSD
+        part Sink
+          port in inSig:Port_1 -> Port_1
+        part Source
+          port out outSig:Port_1 -> Port_1
+        part SystemComposition
+          part dst:Sink -> Sink
+          part src:Source -> Source
+          connect src.outSig -> dst.inSig
+        port Port_1
+          attr x:Real=None
+          attr y:Real=None
+        """
+    ).strip() + "\n"
+
+
+def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp_path: Path) -> None:
+    """Sync updates composition content without dropping unrelated definitions in the same file set."""
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir(parents=True, exist_ok=True)
+
+    write_model(
+        architecture_dir / "ports.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x: Real;
+            attribute y: Real;
+          }
+
+          port def DebugSignal {
+            attribute level: Integer;
+          }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "parts.sysml",
+        """
+        package Example {
+          part def Source {
+            out port outSig : Signal;
+          }
+
+          part def Sink {
+            in port inSig : Signal;
+          }
+
+          part def Utility {
+            out port debug : DebugSignal;
+          }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "composition.sysml",
+        f"""
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part src : Source;
+            part dst : Sink;
+            connect src.outSig to dst.inSig;
+          }}
+        }}
+        """,
+    )
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
+
+    with SSD(ssd_path, mode="a") as ssd:
+        assert ssd.system is not None
+        ssd.system.connections = []
+
+    output_dir = tmp_path / "synced"
+    written = sync_sysml_from_ssd(
+        architecture_path=architecture_dir,
+        ssd_path=ssd_path,
+        composition=COMPOSITION_NAME,
+        output_architecture_dir=output_dir,
+    )
+
+    assert sorted(path.name for path in written) == ["composition.sysml", "parts.sysml", "ports.sysml"]
+    assert _architecture_text(output_dir) == dedent(
+        f"""
+        package Example
+        part Sink
+          port in inSig:Signal -> Signal
+        part Source
+          port out outSig:Signal -> Signal
+        part SystemComposition
+          part dst:Sink -> Sink
+          part src:Source -> Source
+        part Utility
+          port out debug:DebugSignal -> DebugSignal
+        port DebugSignal
+          attr level:Integer=None
+        port Signal
+          attr x:Real=None
+          attr y:Real=None
+        """
+    ).strip() + "\n"
