@@ -4,6 +4,7 @@ from pathlib import Path
 
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
+from tests.test_generate_ssd import _ssd_summary
 from tests.test_utils import COMPOSITION_NAME, write_model
 
 
@@ -56,6 +57,13 @@ def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
     )
     assert code == 0
     assert output.exists()
+    assert _ssd_summary(output) == [
+        "component dst",
+        "  input:inSig.x:Real",
+        "component src",
+        "  output:outSig.x:Real",
+        "connection src.outSig.x -> dst.inSig.x",
+    ]
 
 
 def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
@@ -77,6 +85,8 @@ def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
         ]
     )
     assert code == 0
+    model_text = (arch_dir / "model.sysml").read_text(encoding="utf-8")
+    assert "connect src.outSig to dst.inSig;" in model_text
 
 
 def test_pyssp_generate_ssd_cli_fails_for_unknown_composition(tmp_path: Path) -> None:
