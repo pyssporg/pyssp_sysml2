@@ -5,7 +5,7 @@ from pathlib import Path
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
 from tests.test_generate_ssd import _ssd_summary
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
 def write_cli_architecture(root: Path) -> Path:
@@ -87,6 +87,29 @@ def test_pyssp_sync_ssd_cli(tmp_path: Path) -> None:
     assert code == 0
     model_text = (arch_dir / "model.sysml").read_text(encoding="utf-8")
     assert "connect src.outSig to dst.inSig;" in model_text
+
+
+def test_pyssp_generate_sysml_cli(tmp_path: Path) -> None:
+    """CLI generate sysml writes a minimal SysML file from an SSD."""
+    ssd_path = write_bootstrap_ssd(tmp_path / "SystemStructure.ssd")
+    output = tmp_path / "generated" / "architecture.sysml"
+
+    code = main(
+        [
+            "generate",
+            "sysml",
+            "--ssd",
+            str(ssd_path),
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert code == 0
+    assert output.exists()
+    model_text = output.read_text(encoding="utf-8")
+    assert "package RecoveredFromSSD" in model_text
+    assert "part def SystemComposition" in model_text
 
 
 def test_pyssp_generate_ssd_cli_fails_for_unknown_composition(tmp_path: Path) -> None:

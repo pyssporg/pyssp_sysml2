@@ -26,6 +26,7 @@ from pathlib import Path
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
 
@@ -52,7 +53,7 @@ def parse_args() -> argparse.Namespace:
         "--bootstrap-architecture-dir",
         type=Path,
         default=None,
-        help="Optional empty directory to bootstrap a minimal SysML architecture from SSD.",
+        help="Optional output directory for a minimal SysML architecture generated from SSD.",
     )
     return parser.parse_args()
 
@@ -68,20 +69,21 @@ def main() -> None:
     generate_ssd(args.architecture, ssd_path, args.composition)
     generate_parameter_set(args.architecture, ssv_path, args.composition)
     written = generate_model_descriptions(args.architecture, fmi_dir, args.composition)
+    bootstrapped = []
+    if args.bootstrap_architecture_dir is not None:
+        bootstrapped = [
+            generate_sysml_from_ssd(
+                ssd_path,
+                args.bootstrap_architecture_dir / "architecture.sysml",
+                args.composition,
+            )
+        ]
     synced = sync_sysml_from_ssd(
         args.architecture,
         ssd_path,
         args.composition,
         output_architecture_dir=sync_dir,
     )
-    bootstrapped = []
-    if args.bootstrap_architecture_dir is not None:
-        args.bootstrap_architecture_dir.mkdir(parents=True, exist_ok=True)
-        bootstrapped = sync_sysml_from_ssd(
-            args.bootstrap_architecture_dir,
-            ssd_path,
-            args.composition,
-        )
 
     print(f"SSD: {ssd_path}")
     print(f"SSV: {ssv_path}")

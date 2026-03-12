@@ -45,21 +45,21 @@ printf "Command      : %s\n" "${RUNNER[*]}"
   --composition "$COMP" \
   --output-dir "$OUT_DIR/model_descriptions"
 
+mkdir -p "$BOOTSTRAP_DIR"
+"${RUNNER[@]}" generate sysml \
+  --ssd "$OUT_DIR/SystemStructure.ssd" \
+  --composition "$COMP" \
+  --output "$BOOTSTRAP_DIR/architecture.sysml"
+
 "${RUNNER[@]}" sync ssd \
   --architecture "$ARCH" \
   --composition "$COMP" \
   --ssd "$OUT_DIR/SystemStructure.ssd" \
   --output-architecture-dir "$OUT_DIR/synced_sysml"
 
-mkdir -p "$BOOTSTRAP_DIR"
-"${RUNNER[@]}" sync ssd \
-  --architecture "$BOOTSTRAP_DIR" \
-  --composition "$COMP" \
-  --ssd "$OUT_DIR/SystemStructure.ssd"
-
 printf "\nGenerated artifacts:\n"
 printf "- %s\n" "$OUT_DIR/SystemStructure.ssd"
 printf "- %s\n" "$OUT_DIR/parameters.ssv"
 printf "- %s\n" "$OUT_DIR/model_descriptions"
-printf "- %s\n" "$OUT_DIR/synced_sysml"
 printf "- %s\n" "$BOOTSTRAP_DIR/architecture.sysml"
+printf "- %s\n" "$OUT_DIR/synced_sysml"

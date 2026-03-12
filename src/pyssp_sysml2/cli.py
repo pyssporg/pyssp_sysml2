@@ -9,6 +9,7 @@ from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.paths import TEST_ARCHITECTURE_DIR, TEST_COMPOSITION_NAME, GENERATED_DIR
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
 
@@ -30,7 +31,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="pyssp", description=__doc__)
     root_subparsers = parser.add_subparsers(dest="command", required=True)
 
-    generate_parser = root_subparsers.add_parser("generate", help="Generate SSP/FMI artifacts")
+    generate_parser = root_subparsers.add_parser("generate", help="Generate SSP/FMI/SysML artifacts")
     generate_subparsers = generate_parser.add_subparsers(dest="artifact", required=True)
     sync_parser = root_subparsers.add_parser(
         "sync", help="Sync external artifacts back into SysML"
@@ -62,6 +63,25 @@ def main(argv: Optional[list[str]] = None) -> int:
         type=Path,
         default=GENERATED_DIR / "model_descriptions",
         help="Output directory for modelDescription.xml files.",
+    )
+
+    sysml_parser = generate_subparsers.add_parser("sysml", help="Generate a SysML file from an SSD")
+    sysml_parser.add_argument(
+        "--ssd",
+        type=Path,
+        required=True,
+        help="Path to source SystemStructure.ssd used to build the SysML model.",
+    )
+    sysml_parser.add_argument(
+        "--composition",
+        default=None,
+        help="Optional top-level composition part definition name (defaults to the SSD system name).",
+    )
+    sysml_parser.add_argument(
+        "--output",
+        type=Path,
+        default=GENERATED_DIR / "architecture.sysml",
+        help="Output SysML file path.",
     )
 
     sync_ssd_parser = sync_subparsers.add_parser(
@@ -103,6 +123,11 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 1
             for path in written:
                 print(f"Wrote {path}")
+            return 0
+
+        if args.command == "generate" and args.artifact == "sysml":
+            output = generate_sysml_from_ssd(args.ssd, args.output, args.composition)
+            print(f"Wrote {output}")
             return 0
 
         if args.command == "sync" and args.artifact == "ssd":
