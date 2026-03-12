@@ -9,6 +9,8 @@ from pyssp_standard.ssd import Component, SSD
 
 from pyssp_sysml2.paths import ensure_parent_dir
 
+SCALAR_ATTRIBUTE_NAME = "value"
+
 
 def load_ssd_system(ssd_path: Path):
     with SSD(ssd_path, mode="r") as ssd:
@@ -20,6 +22,12 @@ def load_ssd_system(ssd_path: Path):
 def split_connector(name: str) -> tuple[str, str]:
     if "." not in name:
         raise ValueError(f"Connector '{name}' is not in 'port.attribute' form")
+    return name.split(".", 1)
+
+
+def split_connector_or_scalar(name: str) -> tuple[str, str]:
+    if "." not in name:
+        return name, SCALAR_ATTRIBUTE_NAME
     return name.split(".", 1)
 
 
@@ -69,9 +77,7 @@ def build_architecture_from_ssd(ssd_system, composition: str):
 
     for component in components.values():
         for connector in component.connectors:
-            if "." not in connector.name:
-                continue
-            port_name, attribute_name = split_connector(connector.name)
+            port_name, attribute_name = split_connector_or_scalar(connector.name)
             endpoint = (component.name, port_name)
             endpoint_attributes.setdefault(endpoint, {})[attribute_name] = _type_name_from_connector(
                 connector
@@ -84,8 +90,8 @@ def build_architecture_from_ssd(ssd_system, composition: str):
                 endpoint_directions.setdefault(endpoint, "in")
 
     for connection in ssd_system.connections:
-        src_port, src_attr = split_connector(connection.start_connector)
-        dst_port, dst_attr = split_connector(connection.end_connector)
+        src_port, src_attr = split_connector_or_scalar(connection.start_connector)
+        dst_port, dst_attr = split_connector_or_scalar(connection.end_connector)
         endpoint_attributes.setdefault((connection.start_element, src_port), {}).setdefault(
             src_attr, "Real"
         )
@@ -158,8 +164,8 @@ def build_architecture_from_ssd(ssd_system, composition: str):
 
     grouped: Dict[tuple[str, str, str, str], set[str]] = {}
     for connection in ssd_system.connections:
-        src_port, src_attr = split_connector(connection.start_connector)
-        dst_port, _ = split_connector(connection.end_connector)
+        src_port, src_attr = split_connector_or_scalar(connection.start_connector)
+        dst_port, _ = split_connector_or_scalar(connection.end_connector)
         key = (connection.start_element, src_port, connection.end_element, dst_port)
         grouped.setdefault(key, set()).add(src_attr)
 
