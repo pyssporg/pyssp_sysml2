@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Iterable
 
 from pycps_sysmlv2 import NodeType
 from pyssp_standard.ssd import Component, SSD
@@ -47,8 +47,85 @@ def index_components(ssd_system) -> dict[str, Component]:
 def _type_name_from_connector(connector) -> str:
     type_name = connector.type_.__class__.__name__
     if type_name.startswith("Type"):
-        return type_name[4:]
+        type_name = type_name[4:]
+    if type_name == "Enumeration":
+        return "Integer"
+    if type_name in {"Real", "Integer", "Boolean", "String"}:
+        return type_name
     return "Real"
+
+
+def _merge_type_names(type_names: Iterable[str]) -> str:
+    known_type_names = [name for name in type_names if name != "Unknown"]
+    if not known_type_names:
+        return "Real"
+    if "Real" in known_type_names:
+        return "Real"
+    if "Integer" in known_type_names:
+        return "Integer"
+    if "Boolean" in known_type_names:
+        return "Boolean"
+    if "String" in known_type_names:
+        return "String"
+    return known_type_names[0]
+
+
+def _find(parent: dict[tuple[str, str], tuple[str, str]], item: tuple[str, str]) -> tuple[str, str]:
+    root = parent.setdefault(item, item)
+    if root != item:
+        parent[item] = _find(parent, root)
+    return parent[item]
+
+
+def _union(
+    parent: dict[tuple[str, str], tuple[str, str]],
+    left: tuple[str, str],
+    right: tuple[str, str],
+) -> None:
+    left_root = _find(parent, left)
+    right_root = _find(parent, right)
+    if left_root != right_root:
+        parent[right_root] = left_root
+
+
+def _group_endpoints(
+    endpoint_attributes: dict[tuple[str, str], dict[str, str]],
+    ssd_system,
+) -> dict[tuple[str, str], tuple[str, str]]:
+    parent: dict[tuple[str, str], tuple[str, str]] = {
+        endpoint: endpoint for endpoint in endpoint_attributes
+    }
+    for connection in ssd_system.connections:
+        src_port, _ = split_connector_or_scalar(connection.start_connector)
+        dst_port, _ = split_connector_or_scalar(connection.end_connector)
+        _union(parent, (connection.start_element, src_port), (connection.end_element, dst_port))
+    return {endpoint: _find(parent, endpoint) for endpoint in endpoint_attributes}
+
+
+def _canonicalize_group_signatures(
+    endpoint_attributes: dict[tuple[str, str], dict[str, str]],
+    endpoint_groups: dict[tuple[str, str], tuple[str, str]],
+) -> dict[tuple[str, str], tuple[tuple[str, str], ...]]:
+    grouped_endpoints: dict[tuple[str, str], list[tuple[str, str]]] = {}
+    for endpoint, group in endpoint_groups.items():
+        grouped_endpoints.setdefault(group, []).append(endpoint)
+
+    group_signatures: dict[tuple[str, str], tuple[tuple[str, str], ...]] = {}
+    for group, endpoints in grouped_endpoints.items():
+        raw_attributes = [endpoint_attributes[endpoint] for endpoint in endpoints]
+        is_scalar_group = all(len(attrs) <= 1 for attrs in raw_attributes)
+        merged_types: dict[str, list[str]] = {}
+        for attrs in raw_attributes:
+            for attr_name, attr_type in attrs.items():
+                canonical_name = SCALAR_ATTRIBUTE_NAME if is_scalar_group else attr_name
+                merged_types.setdefault(canonical_name, []).append(attr_type)
+        group_signatures[group] = tuple(
+            sorted(
+                (attr_name, _merge_type_names(attr_types))
+                for attr_name, attr_types in merged_types.items()
+            )
+        )
+    return group_signatures
 
 
 def _part_name_from_component(component: Component) -> str:
@@ -101,6 +178,9 @@ def build_architecture_from_ssd(ssd_system, composition: str):
         endpoint_directions.setdefault((connection.start_element, src_port), "out")
         endpoint_directions.setdefault((connection.end_element, dst_port), "in")
 
+    endpoint_groups = _group_endpoints(endpoint_attributes, ssd_system)
+    group_signatures = _canonicalize_group_signatures(endpoint_attributes, endpoint_groups)
+
     architecture = SysMLPackage(name=DEFAULT_PACKAGE_NAME, package=DEFAULT_PACKAGE_NAME)
     part_defs_by_name: dict[str, object] = {}
     component_part_defs: dict[str, object] = {}
@@ -119,8 +199,7 @@ def build_architecture_from_ssd(ssd_system, composition: str):
 
         for endpoint in sorted(key for key in endpoint_attributes if key[0] == component_name):
             _, port_name = endpoint
-            attrs = endpoint_attributes[endpoint]
-            signature = tuple(sorted(attrs.items()))
+            signature = group_signatures[endpoint_groups[endpoint]]
             port_def = port_defs_by_signature.get(signature)
             if port_def is None:
                 port_def_name = f"Port_{len(port_defs_by_signature) + 1}"

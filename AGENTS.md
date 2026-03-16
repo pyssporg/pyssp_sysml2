@@ -15,3 +15,8 @@
 - Prefer test-local model setup over large shared fixtures unless the fixture itself is the contract under test.
 - When asserting generated artifacts, use concise summaries or normalized text where possible so failures stay readable.
 - Avoid small shims or wrappers when adopting legacy code if inlining is reasonable 
+
+
+# Tests
+
+Prefer to use a local env to run tests, this enable manual retests with identical environments

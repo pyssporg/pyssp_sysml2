@@ -11,5 +11,10 @@ pyssp generate sysml \
   pyssp generate ssd \
   --architecture build/generated/architecture_v1.sysml \
   --composition root \
-  --output build/generated/SystemStructure_export.ssd \
-  --skip_type_check
+  --output build/generated/SystemStructure_v1_export.ssd \
+
+  pyssp generate ssd \
+  --architecture build/generated/architecture_v2.sysml \
+  --composition root \
+  --output build/generated/SystemStructure_v2_export.ssd \
+  # --skip_type_check
