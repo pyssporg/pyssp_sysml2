@@ -8,9 +8,12 @@ SRC_DIR = PACKAGE_DIR.parent
 REPO_ROOT = SRC_DIR.parent
 
 BUILD_DIR = REPO_ROOT / "build"
+
 GENERATED_DIR = BUILD_DIR / "generated"
-TEST_ARCHITECTURE_DIR = REPO_ROOT / "tests" / "fixtures" / "aircraft_subset"
-TEST_COMPOSITION_NAME = "AircraftComposition"
+DEFAULT_ARCH_PATH = BUILD_DIR / "arch"
+DEFAULT_PACKAGE_NAME = "RecoveredFromSSD"
+DEFAULT_COMPOSITION_NAME = "CompositePart"
+
 
 
 def ensure_directory(path: Path) -> Path:

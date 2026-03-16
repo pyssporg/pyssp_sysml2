@@ -7,7 +7,7 @@ from typing import Dict
 from pycps_sysmlv2 import NodeType
 from pyssp_standard.ssd import Component, SSD
 
-from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
 
 SCALAR_ATTRIBUTE_NAME = "value"
 
@@ -101,7 +101,7 @@ def build_architecture_from_ssd(ssd_system, composition: str):
         endpoint_directions.setdefault((connection.start_element, src_port), "out")
         endpoint_directions.setdefault((connection.end_element, dst_port), "in")
 
-    architecture = SysMLPackage(name="RecoveredFromSSD", package="RecoveredFromSSD")
+    architecture = SysMLPackage(name=DEFAULT_PACKAGE_NAME, package=DEFAULT_PACKAGE_NAME)
     part_defs_by_name: dict[str, object] = {}
     component_part_defs: dict[str, object] = {}
     port_defs_by_signature: dict[tuple[tuple[str, str], ...], object] = {}

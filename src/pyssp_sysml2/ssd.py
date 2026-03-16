@@ -1,11 +1,24 @@
 """Generic SSD generation helpers."""
+
 from __future__ import annotations
 
 from pathlib import Path
 
 from pycps_sysmlv2 import NodeType, SysMLPartDefinition, SysMLParser
-from pyssp_standard.common_content_ssc import TypeBoolean, TypeInteger, TypeReal, TypeString
-from pyssp_standard.ssd import Component, Connection, Connector, DefaultExperiment, SSD, System
+from pyssp_standard.common_content_ssc import (
+    TypeBoolean,
+    TypeInteger,
+    TypeReal,
+    TypeString,
+)
+from pyssp_standard.ssd import (
+    Component,
+    Connection,
+    Connector,
+    DefaultExperiment,
+    SSD,
+    System,
+)
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
 from pyssp_sysml2.paths import ensure_parent_dir
@@ -23,7 +36,7 @@ def _type_from_primitive(type_name: str):
     return TypeReal(unit=None)
 
 
-def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
+def build_ssd(ssd: SSD, system: SysMLPartDefinition, type_check=True) -> None:
     ssd.name = system.name
     ssd.version = "1.0"
     ssd.system = System(name=system.name)
@@ -38,7 +51,9 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
         for port_ref in part.refs(NodeType.Port).values():
             port_def = port_ref.ref_node
             if port_def is None:
-                raise ValueError(f"Unresolved port definition for {part.name}.{port_ref.name}")
+                raise ValueError(
+                    f"Unresolved port definition for {part.name}.{port_ref.name}"
+                )
             for attribute in port_def.defs(NodeType.Attribute).values():
                 component.connectors.append(
                     Connector(
@@ -62,9 +77,13 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
         ssd.system.elements.append(component)
 
     for conn in system.defs(NodeType.Connection).values():
-        src_port_def = None if conn.src_port_node is None else conn.src_port_node.ref_node
-        dst_port_def = None if conn.dst_port_node is None else conn.dst_port_node.ref_node
-        if src_port_def is not dst_port_def:
+        src_port_def = (
+            None if conn.src_port_node is None else conn.src_port_node.ref_node
+        )
+        dst_port_def = (
+            None if conn.dst_port_node is None else conn.dst_port_node.ref_node
+        )
+        if type_check and src_port_def is not dst_port_def:
             raise ValueError(
                 f"Src {conn.src_port_node.name} and dest port {conn.dst_port_node.name} must be same type"
             )
@@ -89,9 +108,13 @@ def build_ssd(ssd: SSD, system: SysMLPartDefinition) -> None:
     ssd.default_experiment = default_experiment
 
 
-def generate_ssd(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    system = SysMLParser(architecture_path).parse().get_def(NodeType.Part, composition)
+def generate_ssd(
+    architecture_path: Path, output_path: Path, composition: str, type_check=True
+) -> Path:
+
+    arch = SysMLParser(architecture_path).parse()
+    system = arch.get_def(NodeType.Part, composition)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
-        build_ssd(ssd, system)
+        build_ssd(ssd, system, type_check)
     return output_path

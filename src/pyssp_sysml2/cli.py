@@ -1,4 +1,5 @@
 """Main CLI entrypoint for pyssp_sysml2."""
+
 from __future__ import annotations
 
 import argparse
@@ -6,7 +7,11 @@ from pathlib import Path
 from typing import Optional
 
 from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.paths import TEST_ARCHITECTURE_DIR, TEST_COMPOSITION_NAME, GENERATED_DIR
+from pyssp_sysml2.paths import (
+    DEFAULT_ARCH_PATH,
+    DEFAULT_COMPOSITION_NAME,
+    GENERATED_DIR,
+)
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_set
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
@@ -17,12 +22,12 @@ def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--architecture",
         type=Path,
-        default=TEST_ARCHITECTURE_DIR,
+        default=DEFAULT_ARCH_PATH,
         help="Path to SysML architecture directory or a file inside it.",
     )
     parser.add_argument(
         "--composition",
-        default=TEST_COMPOSITION_NAME,
+        default=DEFAULT_COMPOSITION_NAME,
         help="Top-level composition part definition name.",
     )
 
@@ -31,20 +36,29 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="pyssp", description=__doc__)
     root_subparsers = parser.add_subparsers(dest="command", required=True)
 
-    generate_parser = root_subparsers.add_parser("generate", help="Generate SSP/FMI/SysML artifacts")
+    generate_parser = root_subparsers.add_parser(
+        "generate", help="Generate SSP/FMI/SysML artifacts"
+    )
     generate_subparsers = generate_parser.add_subparsers(dest="artifact", required=True)
     sync_parser = root_subparsers.add_parser(
         "sync", help="Sync external artifacts back into SysML"
     )
     sync_subparsers = sync_parser.add_subparsers(dest="artifact", required=True)
 
-    ssd_parser = generate_subparsers.add_parser("ssd", help="Generate SystemStructure.ssd")
+    ssd_parser = generate_subparsers.add_parser(
+        "ssd", help="Generate SystemStructure.ssd"
+    )
     _add_common_architecture_args(ssd_parser)
     ssd_parser.add_argument(
         "--output",
         type=Path,
         default=GENERATED_DIR / "SystemStructure.ssd",
         help="Output SSD file path.",
+    )
+    ssd_parser.add_argument(
+        "--skip_type_check",
+        action="store_false",
+        help="avoid typecheck during connection link",
     )
 
     ssv_parser = generate_subparsers.add_parser("ssv", help="Generate parameter .ssv")
@@ -56,7 +70,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Output SSV file path.",
     )
 
-    fmi_parser = generate_subparsers.add_parser("fmi", help="Generate FMI model descriptions")
+    fmi_parser = generate_subparsers.add_parser(
+        "fmi", help="Generate FMI model descriptions"
+    )
     _add_common_architecture_args(fmi_parser)
     fmi_parser.add_argument(
         "--output-dir",
@@ -65,7 +81,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Output directory for modelDescription.xml files.",
     )
 
-    sysml_parser = generate_subparsers.add_parser("sysml", help="Generate a SysML file from an SSD")
+    sysml_parser = generate_subparsers.add_parser(
+        "sysml", help="Generate a SysML file from an SSD"
+    )
     sysml_parser.add_argument(
         "--ssd",
         type=Path,
@@ -105,12 +123,16 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     try:
         if args.command == "generate" and args.artifact == "ssd":
-            output = generate_ssd(args.architecture, args.output, args.composition)
+            output = generate_ssd(
+                args.architecture, args.output, args.composition, args.skip_type_check
+            )
             print(f"SSD written to {output}")
             return 0
 
         if args.command == "generate" and args.artifact == "ssv":
-            output = generate_parameter_set(args.architecture, args.output, args.composition)
+            output = generate_parameter_set(
+                args.architecture, args.output, args.composition
+            )
             print(f"Wrote {output}")
             return 0
 
