@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "pyssp_sysml2"
+abstract: >-
+  Generate SSP, FMI, and SysML artifacts from a SysML v2 architecture or SSD.
+authors:
+  - name: "Erik Rosenlund"
+    orcid: "https://orcid.org/0009-0000-4238-3271"
+  - name: "pyssp contributors"
+date-released: "2026-08-10"
+version: "0.1.0"
+license: "MIT"
+repository-code: "https://github.com/pyssporg/pyssp_sysml2"
+keywords:
+  - SysML v2
+  - SSP
+  - FMI
+  - model-based systems engineering
