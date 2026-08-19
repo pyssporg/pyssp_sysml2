@@ -10,11 +10,18 @@ from pyssp_standard.ssd import Component
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
+    SCALAR_ATTRIBUTE_NAME,
+    _merge_type_names,
+    _part_name_from_component,
+    _type_name_from_connector,
     build_architecture_from_ssd,
     index_components,
     load_ssd_system,
     split_connector,
+    split_connector_or_scalar,
 )
+
+INFERRED_PARTS_FILENAME = "inferred_external_parts.sysml"
 
 
 def _load_architecture(architecture_path: Path):
@@ -25,7 +32,109 @@ def _load_architecture(architecture_path: Path):
     return SysMLParser(architecture_path).parse()
 
 
-def _resolve_component_part_definition(architecture, system, component: Component):
+def _collect_component_ports(component: Component) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
+    """Group a component's connectors into per-port attributes and directions."""
+    port_attributes: dict[str, dict[str, str]] = {}
+    port_directions: dict[str, str] = {}
+    for connector in component.connectors:
+        port_name, attr_name = split_connector_or_scalar(connector.name)
+        port_attributes.setdefault(port_name, {})[attr_name] = _type_name_from_connector(connector)
+        if connector.kind == "output":
+            port_directions.setdefault(port_name, "out")
+        else:
+            port_directions.setdefault(port_name, "in")
+    return port_attributes, port_directions
+
+
+def _port_signature(port_attributes: dict[str, str]) -> tuple[tuple[str, str], ...]:
+    """Canonical (attribute, type) signature for a port, mirroring build_architecture_from_ssd."""
+    is_scalar = len(port_attributes) <= 1
+    canonical = {
+        SCALAR_ATTRIBUTE_NAME if is_scalar else attr_name: _merge_type_names([attr_type])
+        for attr_name, attr_type in port_attributes.items()
+    }
+    return tuple(sorted(canonical.items()))
+
+
+def _port_def_signature(port_def) -> tuple[tuple[str, str], ...]:
+    attributes = port_def.defs(NodeType.Attribute)
+    return tuple(sorted((attr.name, attr.type.as_string()) for attr in attributes.values()))
+
+
+def _find_port_def_by_signature(architecture, signature):
+    for port_def in architecture.defs(NodeType.Port).values():
+        if _port_def_signature(port_def) == signature:
+            return port_def
+    return None
+
+
+def _synthesize_component_part_def(architecture, component: Component) -> tuple[str, object]:
+    """Create a part definition from an SSD component that references an unknown FMU source.
+
+    The part definition name is taken from the component's FMU source stem. Ports are
+    collected from the component's connectors and matched by signature against existing
+    port definitions in the architecture; unmatched signatures get a new port definition.
+    Synthesized definitions are exported into ``inferred_external_parts.sysml``.
+    """
+    from pycps_sysmlv2 import (
+        SysMLAttribute,
+        SysMLPartDefinition,
+        SysMLPortDefinition,
+        SysMLPortReference,
+        SysMLType,
+    )
+
+    part_name = _part_name_from_component(component)
+    existing_part_def = architecture.defs(NodeType.Part).get(part_name)
+    if existing_part_def is not None:
+        return existing_part_def.name, existing_part_def
+
+    part_def = SysMLPartDefinition(name=part_name, source_file=INFERRED_PARTS_FILENAME)
+    part_def.parent = architecture
+    architecture.add_def(NodeType.Part, part_name, part_def)
+
+    port_attributes, port_directions = _collect_component_ports(component)
+    for port_name in sorted(port_attributes):
+        signature = _port_signature(port_attributes[port_name])
+        port_def = _find_port_def_by_signature(architecture, signature)
+        if port_def is None:
+            port_def_name = f"Port_{len(architecture.defs(NodeType.Port)) + 1}"
+            port_def = SysMLPortDefinition(
+                name=port_def_name,
+                source_file=INFERRED_PARTS_FILENAME,
+            )
+            for attr_name, attr_type in signature:
+                port_def.add_def(
+                    NodeType.Attribute,
+                    attr_name,
+                    SysMLAttribute(
+                        name=attr_name,
+                        type=SysMLType.from_string(attr_type),
+                        value=None,
+                    ),
+                )
+            port_def.parent = architecture
+            architecture.add_def(NodeType.Port, port_def_name, port_def)
+
+        port_ref = SysMLPortReference(
+            name=port_name,
+            direction=port_directions.get(port_name, "in"),
+            type=port_def.name,
+            ref_node=port_def,
+        )
+        port_ref.parent = part_def
+        part_def.add_ref(NodeType.Port, port_name, port_ref)
+
+    return part_name, part_def
+
+
+def _resolve_component_part_definition(
+    architecture,
+    system,
+    component: Component,
+    *,
+    synthesize_external_parts: bool = True,
+):
     existing = system.refs(NodeType.Part).get(component.name)
     existing_part_def = None if existing is None else existing.ref_node
     if existing is not None and existing_part_def is not None:
@@ -42,6 +151,9 @@ def _resolve_component_part_definition(architecture, system, component: Componen
         for part_def in architecture.defs(NodeType.Part).values()
         if fmu_resource_path(part_def.name) == component.source
     ]
+    if not matches and synthesize_external_parts:
+        _, part_def = _synthesize_component_part_def(architecture, component)
+        matches = [part_def]
     if not matches:
         raise ValueError(
             f"SSD component '{component.name}' references unknown part source '{component.source}'"
@@ -54,14 +166,25 @@ def _resolve_component_part_definition(architecture, system, component: Componen
     return part_def.name, part_def
 
 
-def _derive_target_parts(architecture, system, ssd_system) -> dict[str, object]:
+def _derive_target_parts(
+    architecture,
+    system,
+    ssd_system,
+    *,
+    synthesize_external_parts: bool = True,
+) -> dict[str, object]:
     from pycps_sysmlv2 import SysMLPartReference
 
     components = index_components(ssd_system)
     target_parts = {}
     for component_name in sorted(components):
         component = components[component_name]
-        part_name, part_def = _resolve_component_part_definition(architecture, system, component)
+        part_name, part_def = _resolve_component_part_definition(
+            architecture,
+            system,
+            component,
+            synthesize_external_parts=synthesize_external_parts,
+        )
         existing = system.refs(NodeType.Part).get(component_name)
         if (
             existing is not None
@@ -188,6 +311,7 @@ def sync_sysml_from_ssd(
     ssd_path: Path,
     composition: str,
     output_architecture_dir: Path | None = None,
+    synthesize_external_parts: bool = True,
 ) -> list[Path]:
     """Apply SSD composition edits to a SysML architecture and write updated .sysml files."""
     ssd_system = load_ssd_system(ssd_path)
@@ -197,7 +321,12 @@ def sync_sysml_from_ssd(
     except FileNotFoundError:
         architecture, system = build_architecture_from_ssd(ssd_system, composition)
 
-    target_parts = _derive_target_parts(architecture, system, ssd_system)
+    target_parts = _derive_target_parts(
+        architecture,
+        system,
+        ssd_system,
+        synthesize_external_parts=synthesize_external_parts,
+    )
     target_connections = _derive_port_connections_from_ssd(target_parts, ssd_system)
     _replace_system_parts(system, target_parts)
     _replace_system_connections(system, target_parts, target_connections)

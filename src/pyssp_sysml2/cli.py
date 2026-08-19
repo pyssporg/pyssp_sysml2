@@ -118,6 +118,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=None,
         help="Optional output directory for updated .sysml files (defaults to architecture source).",
     )
+    sync_ssd_parser.add_argument(
+        "--no-synthesize",
+        action="store_false",
+        dest="synthesize_external_parts",
+        help="Disable synthesis of part definitions for SSD components that reference unknown FMU sources.",
+    )
 
     args = parser.parse_args(argv)
 
@@ -158,6 +164,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 ssd_path=args.ssd,
                 composition=args.composition,
                 output_architecture_dir=args.output_architecture_dir,
+                synthesize_external_parts=args.synthesize_external_parts,
             )
             for path in written:
                 print(f"Wrote {path}")

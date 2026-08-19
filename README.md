@@ -129,6 +129,7 @@ Supported:
 - Adding/removing component instances through SSD component edits when the component `source` resolves to a known SysML part definition.
 - Adding/removing/changing port-to-port composition connections through SSD connection edits.
 - Writing updates in-place or to a separate output architecture directory.
+- Synthesizing part definitions for new SSD components whose `source` has no matching SysML part definition. The synthesized part definition is derived from the component's FMU source stem, its ports are built from the SSD connector attribute signatures (reusing an existing port definition when the signature matches), and the new definitions are written to `inferred_external_parts.sysml`. Pass `--no-synthesize` to disable this and fail on unknown sources instead.
 
 Not supported (command will fail with a validation error):
 
@@ -136,7 +137,7 @@ Not supported (command will fail with a validation error):
 - Attribute remapping between different names (`port.a -> port.b`).
 - Connectors that are not expressed in `port.attribute` form.
 - Connections between incompatible port definitions.
-- Unknown components/ports that do not exist in the SysML composition.
+- Unknown components/ports that do not exist in the SysML composition when `--no-synthesize` is used.
 - Nested SSD systems (only flat SSD systems with components are supported).
 
 Notes for `generate sysml`:
@@ -172,6 +173,7 @@ sync_sysml_from_ssd(
     Path("build/generated/SystemStructure.ssd"),
     composition,
     output_architecture_dir=Path("build/synced_sysml"),
+    synthesize_external_parts=True,
 )
 ```
 

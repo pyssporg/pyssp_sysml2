@@ -6,7 +6,8 @@ import pytest
 from textwrap import dedent
 
 from pycps_sysmlv2 import NodeType, SysMLParser
-from pyssp_standard.ssd import Component, Connection, SSD
+from pyssp_standard.common_content_ssc import TypeBoolean, TypeReal
+from pyssp_standard.ssd import Component, Connection, Connector, SSD
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
@@ -359,3 +360,155 @@ def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp
           attr y:Real=None
         """
     ).strip() + "\n"
+
+
+def test_sync_sysml_from_ssd_synthesizes_part_def_for_unknown_component_source(
+    tmp_path: Path,
+) -> None:
+    """Sync synthesizes a part definition for a new SSD component with an unknown FMU source."""
+    architecture_dir = _write_sync_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
+
+    with SSD(ssd_path, mode="a") as ssd:
+        assert ssd.system is not None
+        ext = Component()
+        ext.name = "ext"
+        ext.source = "resources/ExternalSink.fmu"
+        ext.connectors.extend(
+            [
+                Connector(name="inSig.x", kind="input", type_=TypeReal(unit=None)),
+                Connector(name="inSig.y", kind="input", type_=TypeReal(unit=None)),
+            ]
+        )
+        ssd.system.elements.append(ext)
+        ssd.system.connections.extend(
+            [
+                Connection(
+                    start_element="src",
+                    start_connector="outSig.x",
+                    end_element="ext",
+                    end_connector="inSig.x",
+                ),
+                Connection(
+                    start_element="src",
+                    start_connector="outSig.y",
+                    end_element="ext",
+                    end_connector="inSig.y",
+                ),
+            ]
+        )
+
+    output_dir = tmp_path / "synced"
+    written = sync_sysml_from_ssd(
+        architecture_path=architecture_dir,
+        ssd_path=ssd_path,
+        composition=COMPOSITION_NAME,
+        output_architecture_dir=output_dir,
+    )
+
+    assert sorted(path.name for path in written) == [
+        "inferred_external_parts.sysml",
+        "model.sysml",
+    ]
+    inferred = (output_dir / "inferred_external_parts.sysml").read_text(encoding="utf-8")
+    assert "part def ExternalSink" in inferred
+    assert "in port inSig : Signal;" in inferred
+
+
+def test_sync_sysml_from_ssd_synthesizes_new_port_def_for_unmatched_signature(
+    tmp_path: Path,
+) -> None:
+    """Sync creates a port definition when a synthesized component port has no existing match."""
+    architecture_dir = _write_sync_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
+
+    with SSD(ssd_path, mode="a") as ssd:
+        assert ssd.system is not None
+        ext_src = Component()
+        ext_src.name = "ext_src"
+        ext_src.source = "resources/ExternalSource.fmu"
+        ext_src.connectors.extend(
+            [
+                Connector(name="sig.value", kind="output", type_=TypeBoolean()),
+            ]
+        )
+        ext_dst = Component()
+        ext_dst.name = "ext_dst"
+        ext_dst.source = "resources/ExternalSink.fmu"
+        ext_dst.connectors.extend(
+            [
+                Connector(name="sig.value", kind="input", type_=TypeBoolean()),
+            ]
+        )
+        ssd.system.elements.append(ext_src)
+        ssd.system.elements.append(ext_dst)
+        ssd.system.connections.extend(
+            [
+                Connection(
+                    start_element="ext_src",
+                    start_connector="sig.value",
+                    end_element="ext_dst",
+                    end_connector="sig.value",
+                ),
+            ]
+        )
+
+    output_dir = tmp_path / "synced"
+    written = sync_sysml_from_ssd(
+        architecture_path=architecture_dir,
+        ssd_path=ssd_path,
+        composition=COMPOSITION_NAME,
+        output_architecture_dir=output_dir,
+    )
+
+    assert sorted(path.name for path in written) == [
+        "inferred_external_parts.sysml",
+        "model.sysml",
+    ]
+    inferred = (output_dir / "inferred_external_parts.sysml").read_text(encoding="utf-8")
+    assert "part def ExternalSource" in inferred
+    assert "part def ExternalSink" in inferred
+    assert "port def Port_" in inferred
+
+
+def test_sync_sysml_from_ssd_rejects_unknown_source_without_synthesis(
+    tmp_path: Path,
+) -> None:
+    """Sync can be told to fail instead of synthesizing unknown FMU sources."""
+    architecture_dir = _write_sync_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
+
+    with SSD(ssd_path, mode="a") as ssd:
+        assert ssd.system is not None
+        ext = Component()
+        ext.name = "ext"
+        ext.source = "resources/ExternalSink.fmu"
+        ext.connectors.extend(
+            [
+                Connector(name="inSig.x", kind="input", type_=TypeReal(unit=None)),
+            ]
+        )
+        ssd.system.elements.append(ext)
+        ssd.system.connections.extend(
+            [
+                Connection(
+                    start_element="src",
+                    start_connector="outSig.x",
+                    end_element="ext",
+                    end_connector="inSig.x",
+                ),
+            ]
+        )
+
+    output_dir = tmp_path / "synced"
+    with pytest.raises(ValueError, match="references unknown part source 'resources/ExternalSink.fmu'"):
+        sync_sysml_from_ssd(
+            architecture_path=architecture_dir,
+            ssd_path=ssd_path,
+            composition=COMPOSITION_NAME,
+            output_architecture_dir=output_dir,
+            synthesize_external_parts=False,
+        )
