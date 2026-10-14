@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 from textwrap import dedent
 
-from pycps_sysmlv2 import NodeType, SysMLParser
 from pyssp_standard.common_content_ssc import TypeBoolean, TypeReal
 from pyssp_standard.ssd import Component, Connection, Connector, SSD
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.sysml_model import load
 from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
@@ -50,28 +50,33 @@ def _write_sync_architecture(root: Path) -> Path:
 
 
 def _composition_summary(architecture_path: Path) -> list[str]:
-    composition = SysMLParser(architecture_path).parse().get_def(NodeType.Part, COMPOSITION_NAME)
+    composition = load(architecture_path).get_part_def(COMPOSITION_NAME)
 
     lines = []
-    for part_name in sorted(composition.refs(NodeType.Part)):
-        part_ref = composition.refs(NodeType.Part)[part_name]
-        lines.append(f"part {part_name}:{part_ref.type}")
+    for part_name in sorted(composition.parts):
+        part_usage = composition.parts[part_name]
+        lines.append(f"part {part_name}:{part_usage.type_name}")
 
     for connection in sorted(
-        composition.defs(NodeType.Connection).values(),
-        key=lambda conn: (conn.src_part, conn.src_port, conn.dst_part, conn.dst_port),
+        composition.connections.values(),
+        key=lambda conn: (
+            conn.source_part,
+            conn.source_port,
+            conn.destination_part,
+            conn.destination_port,
+        ),
     ):
         lines.append(
             "connect "
-            f"{connection.src_part}.{connection.src_port}"
-            f"->{connection.dst_part}.{connection.dst_port}"
+            f"{connection.source_part}.{connection.source_port}"
+            f"->{connection.destination_part}.{connection.destination_port}"
         )
     return lines
 
 
 def _architecture_text(architecture_path: Path) -> str:
-    architecture = SysMLParser(architecture_path).parse()
-    return str(architecture)
+    files = load(architecture_path).export_declared()
+    return "\n".join(files[name] for name in sorted(files))
 
 
 def test_sync_sysml_from_ssd_removes_connection_deleted_in_ssd(tmp_path: Path) -> None:
@@ -120,20 +125,30 @@ def test_sync_sysml_from_ssd_updates_part_type_from_component_source(tmp_path: P
 
     assert _architecture_text(output_dir) == dedent(
         f"""
-        package Example
-        part AltSink
-          port in inSig:Signal -> Signal
-        part Sink
-          port in inSig:Signal -> Signal
-        part Source
-          port out outSig:Signal -> Signal
-        part SystemComposition
-          part dst:AltSink -> AltSink
-          part src:Source -> Source
-          connect src.outSig -> dst.inSig
-        port Signal
-          attr x:Real=None
-          attr y:Real=None
+        package Example {{
+          port def Signal {{
+            attribute x : Real;
+            attribute y : Real;
+          }}
+
+          part def AltSink {{
+            in port inSig : Signal;
+          }}
+
+          part def Sink {{
+            in port inSig : Signal;
+          }}
+
+          part def Source {{
+            out port outSig : Signal;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part dst : AltSink;
+            part src : Source;
+            connect src.outSig to dst.inSig;
+          }}
+        }}
         """
     ).strip() + "\n"
 
@@ -199,22 +214,32 @@ def test_sync_sysml_from_ssd_adds_part_from_ssd_component(tmp_path: Path) -> Non
 
     assert _architecture_text(output_dir) == dedent(
         f"""
-        package Example
-        part AltSink
-          port in inSig:Signal -> Signal
-        part Sink
-          port in inSig:Signal -> Signal
-        part Source
-          port out outSig:Signal -> Signal
-        part SystemComposition
-          part alt:AltSink -> AltSink
-          part dst:Sink -> Sink
-          part src:Source -> Source
-          connect src.outSig -> alt.inSig
-          connect src.outSig -> dst.inSig
-        port Signal
-          attr x:Real=None
-          attr y:Real=None
+        package Example {{
+          port def Signal {{
+            attribute x : Real;
+            attribute y : Real;
+          }}
+
+          part def AltSink {{
+            in port inSig : Signal;
+          }}
+
+          part def Sink {{
+            in port inSig : Signal;
+          }}
+
+          part def Source {{
+            out port outSig : Signal;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part alt : AltSink;
+            part dst : Sink;
+            part src : Source;
+            connect src.outSig to alt.inSig;
+            connect src.outSig to dst.inSig;
+          }}
+        }}
         """
     ).strip() + "\n"
 
@@ -258,18 +283,26 @@ def test_sync_sysml_from_ssd_bootstraps_architecture_when_sysml_is_missing(tmp_p
     assert written == [architecture_dir / "architecture.sysml"]
     assert _architecture_text(architecture_dir) == dedent(
         """
-        package RecoveredFromSSD
-        part Sink
-          port in inSig:Port_1 -> Port_1
-        part Source
-          port out outSig:Port_1 -> Port_1
-        part SystemComposition
-          part dst:Sink -> Sink
-          part src:Source -> Source
-          connect src.outSig -> dst.inSig
-        port Port_1
-          attr x:Real=None
-          attr y:Real=None
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute x : Real;
+            attribute y : Real;
+          }
+
+          part def Sink {
+            in port inSig : Port_1;
+          }
+
+          part def Source {
+            out port outSig : Port_1;
+          }
+
+          part def SystemComposition {
+            part dst : Sink;
+            part src : Source;
+            connect src.outSig to dst.inSig;
+          }
+        }
         """
     ).strip() + "\n"
 
@@ -343,21 +376,37 @@ def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp
     assert sorted(path.name for path in written) == ["composition.sysml", "parts.sysml", "ports.sysml"]
     assert _architecture_text(output_dir) == dedent(
         f"""
-        package Example
-        part Sink
-          port in inSig:Signal -> Signal
-        part Source
-          port out outSig:Signal -> Signal
-        part SystemComposition
-          part dst:Sink -> Sink
-          part src:Source -> Source
-        part Utility
-          port out debug:DebugSignal -> DebugSignal
-        port DebugSignal
-          attr level:Integer=None
-        port Signal
-          attr x:Real=None
-          attr y:Real=None
+        package Example {{
+          part def {COMPOSITION_NAME} {{
+            part dst : Sink;
+            part src : Source;
+          }}
+        }}
+
+        package Example {{
+          part def Sink {{
+            in port inSig : Signal;
+          }}
+
+          part def Source {{
+            out port outSig : Signal;
+          }}
+
+          part def Utility {{
+            out port debug : DebugSignal;
+          }}
+        }}
+
+        package Example {{
+          port def DebugSignal {{
+            attribute level : Integer;
+          }}
+
+          port def Signal {{
+            attribute x : Real;
+            attribute y : Real;
+          }}
+        }}
         """
     ).strip() + "\n"
 

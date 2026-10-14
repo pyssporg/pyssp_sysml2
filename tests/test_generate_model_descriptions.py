@@ -56,8 +56,8 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
         f"""
         package Example {{
           part def Comp {{
-            attribute int_list = [1, 2];
-            attribute bool_list = [True, False];
+            attribute int_list = (1, 2);
+            attribute bool_list = (true, false);
             out port status : Status;
           }}
 

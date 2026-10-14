@@ -1,0 +1,441 @@
+"""sysmlpy-backed loader: builds the repo-owned model from ``.sysml`` files.
+
+This is the ONLY module in the repo that imports `sysmlpy` (0.96.4). It
+converts parsed files into the dataclasses of
+:mod:`pyssp_sysml2.sysml_model.model` and merges them into one
+:class:`~pyssp_sysml2.sysml_model.model.Architecture`; every other module
+works against that repo-owned model, never against sysmlpy objects.
+
+sysmlpy quirks compensated here (verified in the migration notes,
+``sysmlpy_api.md`` §§4-6, 9-10):
+
+- port directions and connection endpoints exist only in the grammar
+  layer, so both are extracted by dedicated walks (see the
+  "Grammar-layer walks" section at the bottom — swap these first when a
+  future sysmlpy release exposes the data publicly);
+- ``attribute b = true;`` yields the *string* ``'true'`` and tuples yield
+  raw ``'(1.0,2.0)'`` text, so values are normalized back to Python
+  literals (legacy ``pycps_sysmlv2`` §5.5 semantics);
+- ``get_value()`` raises ``AttributeError`` for value-less attributes and
+  drops the sign of negative number literals (``-1.5`` reads as ``1.5``);
+- unnamed ``connect`` statements get a UUID as their name, so the legacy
+  ``"{src}.{src_port}_to_{dst}.{dst_port}"`` name is rebuilt for them.
+
+Loading stays non-validating: ``resolve_types()``/``analyze()`` are never
+called, so unresolved references simply surface as ``resolve_part``/
+``resolve_port`` returning ``None`` in consumers.
+"""
+
+from __future__ import annotations
+
+import re
+import warnings
+from pathlib import Path
+
+import sysmlpy
+
+from pyssp_sysml2.sysml_model.model import (
+    Architecture,
+    Attribute,
+    Connection,
+    PartDefinition,
+    PartUsage,
+    PortDefinition,
+    PortUsage,
+    RequirementDefinition,
+)
+
+__all__ = ["load"]
+
+# sysmlpy tries to persist its ANTLR DFA cache on the first parse of a
+# process; on this machine (Python 3.10) that pickling hits a RecursionError,
+# so sysmlpy emits a one-time, benign "DFA cache save failed" UserWarning and
+# continues without the cache. Suppress it here once instead of letting it
+# leak into every caller's stderr (sysmlpy_api.md §9).
+warnings.filterwarnings("ignore", message="DFA cache", category=UserWarning)
+
+# sysmlpy names unnamed `connect` statements with a UUID string.
+_UUID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
+
+
+def load(path: Path | str) -> Architecture:
+    """Load a ``.sysml`` file or a directory of them into an Architecture.
+
+    A file loads exactly that file; a directory loads its ``*.sysml`` files
+    non-recursively in sorted name order, and every file must declare the
+    same package. Each file is parsed by sysmlpy separately (never as one
+    merged multi-file load) so definitions keep per-file ``source_file``
+    tracking and cross-file duplicates can be reported precisely.
+    """
+    files = _resolve_files(Path(path))
+    architecture = _architecture_from(files[0])
+    for file in files[1:]:
+        _merge_file(architecture, file)
+    return architecture
+
+
+# -- file resolution (legacy parity) --------------------------------------
+
+
+def _resolve_files(path: Path) -> list[Path]:
+    """Resolve a load target to the files to parse, matching legacy semantics.
+
+    File → ``[path]``; directory → non-recursive ``sorted(glob("*.sysml"))``;
+    a missing path or an empty directory raise ``FileNotFoundError`` (the
+    missing-path message is what ``sync.py`` catches to bootstrap from SSD).
+    """
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        files = sorted(path.glob("*.sysml"))
+        if not files:
+            raise FileNotFoundError(f"No .sysml files found under {path}")
+        return files
+    raise FileNotFoundError(f"No .sysml file found under {path}")
+
+
+# -- per-file loading and merging ------------------------------------------
+
+
+def _architecture_from(file: Path) -> Architecture:
+    """Build a fresh Architecture from the first file of a load."""
+    packages = _file_packages(file)
+    architecture = Architecture(package_name=packages[0].name)
+    _merge_packages(architecture, packages, file)
+    return architecture
+
+
+def _merge_file(architecture: Architecture, file: Path) -> None:
+    """Merge one more file into ``architecture`` (package names must match)."""
+    packages = _file_packages(file)
+    name = packages[0].name
+    if name != architecture.package_name:
+        raise ValueError(
+            f"Mismatched package names: {architecture.package_name} vs {name} in {file}"
+        )
+    _merge_packages(architecture, packages, file)
+
+
+def _file_packages(file: Path) -> list:
+    """Parse one file and return its package(s), enforcing one package name.
+
+    sysmlpy's ``load_files`` parses a single file into a Model whose direct
+    children are the file's top-level ``package`` declarations; everything
+    the repo supports lives in exactly one same-named package per file.
+    """
+    model = sysmlpy.load_files([str(file)])
+    names = sorted({package.name for package in model.packages})
+    if not names:
+        raise ValueError(f"No package declaration found in {file}")
+    if len(names) > 1:
+        raise ValueError(f"Expected one package per file, found {', '.join(names)} in {file}")
+    return list(model.packages)
+
+
+def _merge_packages(architecture: Architecture, packages: list, file: Path) -> None:
+    """Add every definition of one file's package(s) to the architecture.
+
+    Top-level usages and other non-definition children are skipped silently
+    (legacy parity). Definitions are added parts first, then ports, then
+    requirements — the retired parser's assembly order.
+    """
+    for package in packages:
+        for element in package.parts:
+            if element.is_definition:
+                part_def = _part_definition(element, file)
+                _add_definition(architecture, architecture.add_part_def, part_def, file)
+        for element in package.ports:
+            if element.is_definition:
+                port_def = _port_definition(element, file)
+                _add_definition(architecture, architecture.add_port_def, port_def, file)
+        for element in package.requirements:
+            if element.is_definition:
+                requirement_def = _requirement_definition(element, file)
+                _add_definition(
+                    architecture, architecture.add_requirement_def, requirement_def, file
+                )
+
+
+def _add_definition(architecture: Architecture, add, definition, file: Path) -> None:
+    """Add a definition, re-raising duplicates with file context (legacy parity)."""
+    try:
+        add(definition)
+    except ValueError:
+        kind = type(definition).__name__.removesuffix("Definition").lower()
+        raise ValueError(f"Duplicate {kind} definition for {definition.name} in {file}") from None
+
+
+# -- definition builders ----------------------------------------------------
+
+
+def _part_definition(element, file: Path) -> PartDefinition:
+    """Repo PartDefinition from a sysmlpy part definition.
+
+    Member docs are not captured: sysmlpy attaches a ``doc /* ... */``
+    written above a member to the owning definition, so per-member docs are
+    not recoverable from a parsed model (sysmlpy_api.md §3).
+    """
+    part_def = PartDefinition(name=element.name, doc=element.doc, source_file=file.name)
+    for attribute in element.attributes:
+        part_def.attributes[attribute.name] = _attribute(attribute)
+    for port in element.ports:
+        part_def.ports[port.name] = PortUsage(
+            name=port.name,
+            direction=_port_direction(port),
+            type_name=port.typed_by_name,
+        )
+    for part in element.parts:
+        part_def.parts[part.name] = PartUsage(name=part.name, type_name=part.typed_by_name)
+    for connect in element.connections:
+        connection = _connection(connect, file)
+        # Keyed by endpoint pair: a later connect with identical endpoints
+        # overwrites the earlier one (legacy parity).
+        part_def.connections[connection.key] = connection
+    return part_def
+
+
+def _port_definition(element, file: Path) -> PortDefinition:
+    """Repo PortDefinition from a sysmlpy port definition."""
+    port_def = PortDefinition(name=element.name, doc=element.doc, source_file=file.name)
+    for attribute in element.attributes:
+        port_def.attributes[attribute.name] = _attribute(attribute)
+    return port_def
+
+
+def _requirement_definition(element, file: Path) -> RequirementDefinition:
+    """Repo RequirementDefinition; the doc comment is the requirement text."""
+    return RequirementDefinition(name=element.name, text=element.doc, source_file=file.name)
+
+
+def _connection(connect, file: Path) -> Connection:
+    """Repo Connection from a sysmlpy connect statement.
+
+    Only binary, part-qualified connects (``connect a.p to b.q;``) are
+    supported — the only form the legacy grammar accepted. A parsed name of
+    ``None`` or a UUID means sysmlpy generated it for an unnamed connect, so
+    the legacy endpoint-derived name is rebuilt instead.
+    """
+    ends = _connection_endpoints(connect)
+    if len(ends) != 2:
+        raise ValueError(
+            f"Only binary connections are supported ('connect a.p to b.q;'), "
+            f"got {len(ends)} ends in {file}"
+        )
+    source, destination = ends
+    if len(source) < 2 or len(destination) < 2:
+        raise ValueError(
+            f"Connection ends must be part-qualified ('connect a.p to b.q;'), "
+            f"got {source} to {destination} in {file}"
+        )
+    source_part, source_port = source[0], source[-1]
+    destination_part, destination_port = destination[0], destination[-1]
+    name = connect.name
+    if name is None or _UUID_PATTERN.match(name):
+        name = f"{source_part}.{source_port}_to_{destination_part}.{destination_port}"
+    return Connection(
+        name=name,
+        source_part=source_part,
+        source_port=source_port,
+        destination_part=destination_part,
+        destination_port=destination_port,
+    )
+
+
+# -- attribute values (legacy §5.5 semantics) -------------------------------
+
+
+def _attribute(element) -> Attribute:
+    """Repo Attribute from a sysmlpy attribute usage."""
+    return Attribute(
+        name=element.name,
+        type_name=element.typed_by_name,
+        value=_normalize_value(element),
+    )
+
+
+def _normalize_value(element) -> object:
+    """sysmlpy value → Python-native value, bool check first (legacy §5.5).
+
+    ``get_value()`` raises ``AttributeError`` for value-less attributes
+    (``attribute x;``), returns strings for ``true``/tuples, and pint
+    ``Quantity`` objects for unit literals — all normalized here.
+    """
+    try:
+        value = element.get_value()
+    except AttributeError:
+        return None  # value-less attribute
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return _with_literal_sign(element, value)
+    if isinstance(value, str):
+        return _normalize_string(value)
+    if hasattr(value, "magnitude"):  # pint Quantity, e.g. `1000 [kilogram]`
+        return _with_literal_sign(element, value.magnitude)
+    return value
+
+
+def _with_literal_sign(element, value):
+    """Negate ``value`` when its source literal had a leading minus.
+
+    sysmlpy 0.96.4's ``get_value()`` ignores the unary minus of negative
+    number literals (``-1.5`` comes back as ``1.5``), so the sign is
+    re-attached from the grammar layer.
+    """
+    return -value if _literal_is_negative(element) else value
+
+
+def _normalize_string(text: str):
+    """String value from sysmlpy → Python value.
+
+    ``'true'``/``'false'`` → bool (case-insensitive, as in the legacy
+    parser); text wrapped in parentheses → tuple of parsed scalars;
+    anything else → the string itself with escape sequences decoded.
+    """
+    lowered = text.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    if text.startswith("(") and text.endswith(")"):
+        return _parse_tuple(text[1:-1])
+    return _decode_escapes(text)
+
+
+def _parse_tuple(inner: str):
+    """Comma-separated tuple body → tuple of scalars.
+
+    A single element without a comma is a plain parenthesized scalar
+    (``(1.0)`` → ``1.0``), matching the legacy ``ast.literal_eval`` behavior.
+    """
+    items = _split_top_level(inner)
+    if len(items) == 1:
+        return _parse_scalar(items[0])
+    return tuple(_parse_scalar(item) for item in items)
+
+
+def _split_top_level(text: str) -> list[str]:
+    """Split tuple body on commas, ignoring commas inside quoted strings."""
+    items: list[str] = []
+    current: list[str] = []
+    quoted = False
+    escaped = False
+    for char in text:
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif quoted and char == "\\":
+            current.append(char)
+            escaped = True
+        elif char == '"':
+            quoted = not quoted
+            current.append(char)
+        elif char == "," and not quoted:
+            items.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    items.append("".join(current).strip())
+    return items
+
+
+def _parse_scalar(text: str):
+    """One tuple element → bool/int/float/str (quoted strings unquoted)."""
+    if len(text) >= 2 and text.startswith('"') and text.endswith('"'):
+        return _decode_escapes(text[1:-1])
+    lowered = text.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    for cast in (int, float):
+        try:
+            return cast(text)
+        except ValueError:
+            continue
+    return text
+
+
+def _decode_escapes(text: str) -> str:
+    r"""Decode the two escapes the exporter emits: ``\\`` → ``\``, ``\"`` → ``"``.
+
+    sysmlpy keeps string escape sequences raw, so without this the exporter
+    would re-escape them on every round trip.
+    """
+    return re.sub(r'\\([\\"])', r"\1", text)
+
+
+# -- grammar-layer walks (sysmlpy internals; swap here on a future release) --
+
+
+def _port_direction(port) -> str | None:
+    """'in' | 'out' | 'inout' | None for a parsed port usage.
+
+    sysmlpy 0.96.4 exposes no public direction attribute; it is preserved in
+    the grammar as ``PortUsage.prefix`` → ``OccurrenceUsagePrefix`` →
+    ``BasicUsagePrefix`` → ``RefPrefix`` → ``FeatureDirection``. ``None``
+    means an undirected port (``port p : S;``) and stays ``None``.
+    """
+    prefix = getattr(port.grammar, "prefix", None)  # OccurrenceUsagePrefix
+    prefix = getattr(prefix, "prefix", None) if prefix else None  # BasicUsagePrefix
+    prefix = getattr(prefix, "prefix", None) if prefix else None  # RefPrefix
+    direction = getattr(prefix, "direction", None) if prefix else None  # FeatureDirection
+    if direction is None:
+        return None
+    if getattr(direction, "isInOut", False):
+        return "inout"
+    if getattr(direction, "isIn", False):
+        return "in"
+    if getattr(direction, "isOut", False):
+        return "out"
+    return None
+
+
+def _connection_endpoints(connect) -> list[list[str]]:
+    """Per-end feature chains of a connect, e.g. ``[['src', 'sig'], ['dst', 'sigIn']]``.
+
+    sysmlpy 0.96.4 exposes no public endpoint accessors; the ends live in
+    the grammar as ``ConnectionUsage.part`` (``ConnectorPart``) → ``.part``
+    (``BinaryConnectorPart``) → ``.children`` (``ConnectorEndMember``) →
+    ``.children`` (``ConnectorEnd``) → ``.children``
+    (``OwnedReferenceSubsetting``) → ``referencedFeature`` /
+    ``elements`` (``OwnedFeatureChain`` → ``OwnedFeatureChaining``). For a
+    dotted end like ``src.sig`` both names come from the feature-chaining
+    list.
+    """
+    grammar = connect.grammar  # ConnectionUsage
+    connector_part = getattr(grammar, "part", None)  # ConnectorPart
+    binary = getattr(connector_part, "part", None) if connector_part else None
+    if binary is None:
+        return []
+    ends: list[list[str]] = []
+    for end_member in binary.children:  # ConnectorEndMember
+        for connector_end in end_member.children:  # ConnectorEnd
+            names: list[str] = []
+            for subsetting in connector_end.children:
+                if type(subsetting).__name__ != "OwnedReferenceSubsetting":
+                    continue  # OwnedMultiplicity etc.
+                if subsetting.referencedFeature is not None:
+                    names.extend(subsetting.referencedFeature.names)
+                for chain in subsetting.elements:  # OwnedFeatureChain
+                    for chaining in chain.feature.children:  # OwnedFeatureChaining
+                        names.extend(chaining.chainingFeature.names)
+            ends.append(names)
+    return ends
+
+
+def _literal_is_negative(element) -> bool:
+    """True when the attribute's number literal has a leading minus.
+
+    The sign survives only in the grammar's ``UnaryExpression.operator``
+    (``get_value()`` ignores it), reached through the same expression chain
+    ``get_value()`` itself walks.
+    """
+    try:
+        unary = (
+            element.grammar.usage.completion.valuepart.relationships[0]
+            .element.expression.operands[0]
+            .implies.orexpression.xor.andexpression.equality.classification.relational.range
+            .additive.left_hand.exponential.unary
+        )
+    except (AttributeError, IndexError, TypeError):
+        return False
+    return getattr(unary, "operator", None) == "-"

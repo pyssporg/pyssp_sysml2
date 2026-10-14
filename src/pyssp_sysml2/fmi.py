@@ -8,10 +8,9 @@ from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
-from pycps_sysmlv2 import NodeType, SysMLPartDefinition, SysMLParser
-
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
+from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
 CO_SIMULATION_ATTRS = {
     "modelIdentifier": "",
@@ -31,23 +30,26 @@ class VariableSpec:
 
 
 def _port_attribute_variables(
-    part: SysMLPartDefinition, starting_ref: int, starting_index: int
+    part: PartDefinition,
+    architecture: Architecture,
+    starting_ref: int,
+    starting_index: int,
 ) -> tuple[list[VariableSpec], int, int]:
     variables: list[VariableSpec] = []
     value_ref = starting_ref
     value_index = starting_index
 
-    for port in part.refs(NodeType.Port).values():
-        port_def = port.ref_node
+    for port_usage in part.ports.values():
+        port_def = architecture.resolve_port(port_usage)
         if port_def is None:
-            raise ValueError(f"Unresolved port definition for {part.name}.{port.name}")
-        for attr in port_def.defs(NodeType.Attribute).values():
+            raise ValueError(f"Unresolved port definition for {part.name}.{port_usage.name}")
+        for attr in port_def.attributes.values():
             spec = VariableSpec(
-                name=f"{port.name}.{attr.name}",
-                causality="input" if port.direction == "in" else "output",
+                name=f"{port_usage.name}.{attr.name}",
+                causality="input" if port_usage.direction == "in" else "output",
                 value_reference=value_ref,
-                fmi_type=map_fmi_type(attr.type.as_string()),
-                description=attr.doc or port.doc or port_def.doc,
+                fmi_type=map_fmi_type(attr.effective_type_name),
+                description=attr.doc or port_usage.doc or port_def.doc,
                 index=value_index,
             )
             variables.append(spec)
@@ -58,15 +60,15 @@ def _port_attribute_variables(
 
 
 def _parameter_variables(
-    part: SysMLPartDefinition, starting_ref: int, starting_index: int
+    part: PartDefinition, starting_ref: int, starting_index: int
 ) -> tuple[list[VariableSpec], int, int]:
     variables: list[VariableSpec] = []
     value_ref = starting_ref
     value_index = starting_index
 
-    for _attr_name, attr in part.defs(NodeType.Attribute).items():
-        if attr.is_list():
-            list_item_type = map_fmi_type(attr.type.as_string())
+    for _attr_name, attr in part.attributes.items():
+        if attr.is_list:
+            list_item_type = map_fmi_type(attr.effective_type_name)
             for idx, item in enumerate(attr.value, start=0):
                 variables.append(
                     VariableSpec(
@@ -84,7 +86,7 @@ def _parameter_variables(
                 value_index += 1
             continue
 
-        fmi_type = map_fmi_type(attr.type.as_string())
+        fmi_type = map_fmi_type(attr.effective_type_name)
         variables.append(
             VariableSpec(
                 name=attr.name,
@@ -103,12 +105,16 @@ def _parameter_variables(
     return variables, value_ref, value_index
 
 
-def _get_variables(part: SysMLPartDefinition) -> list[VariableSpec]:
+def _get_variables(
+    part: PartDefinition, architecture: Architecture
+) -> list[VariableSpec]:
     value_ref = 0
     index = 1
 
     parameter_vars, value_ref, index = _parameter_variables(part, value_ref, index)
-    port_vars, value_ref, index = _port_attribute_variables(part, value_ref, index)
+    port_vars, value_ref, index = _port_attribute_variables(
+        part, architecture, value_ref, index
+    )
 
     return parameter_vars + port_vars
 
@@ -132,7 +138,7 @@ def _write_scalar_variable(parent: ET.Element, spec: VariableSpec) -> None:
 
 
 def _build_model_description_tree(
-    part: SysMLPartDefinition, package_name: str
+    part: PartDefinition, package_name: str, architecture: Architecture
 ) -> ET.ElementTree:
     timestamp = (
         datetime.now(timezone.utc)
@@ -162,7 +168,7 @@ def _build_model_description_tree(
     ET.SubElement(root, "CoSimulation", attrib=co_sim_attrs)
 
     model_vars = ET.SubElement(root, "ModelVariables")
-    variables = _get_variables(part)
+    variables = _get_variables(part, architecture)
     for spec in variables:
         _write_scalar_variable(model_vars, spec)
 
@@ -187,16 +193,19 @@ def generate_model_descriptions(
     ensure_directory(output_dir)
     ensure_directory(BUILD_DIR / "fmu_pre")
 
-    system = SysMLParser(architecture_path).parse().get_def(NodeType.Part, composition)
+    architecture = load(architecture_path)
+    system = architecture.get_part_def(composition)
 
     written: list[Path] = []
-    for _part_inst_name, part_ref in system.refs(NodeType.Part).items():
-        part_def = part_ref.ref_node
-        component_dir = output_dir / part_ref.type
+    for part_inst_name, part_usage in system.parts.items():
+        part_def = architecture.resolve_part(part_usage)
+        if part_def is None:
+            raise ValueError(f"Unresolved part definition for {part_usage.name}")
+        component_dir = output_dir / part_usage.type_name
         output_path = component_dir / "modelDescription.xml"
         ensure_directory(component_dir)
 
-        tree = _build_model_description_tree(part_def, system.name)
+        tree = _build_model_description_tree(part_def, system.name, architecture)
         tree.write(output_path, encoding="utf-8", xml_declaration=True)
         written.append(output_path)
 

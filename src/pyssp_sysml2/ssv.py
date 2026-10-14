@@ -4,16 +4,16 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pycps_sysmlv2 import NodeType, SysMLAttribute, SysMLParser
 from pyssp_standard.ssv import SSV
 
 from pyssp_sysml2.fmi_helpers import format_value
 from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.sysml_model import Attribute, load
 
 
-def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, SysMLAttribute]]) -> None:
+def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attribute]]) -> None:
     for name, attr in parameter_pairs:
-        data_type = attr.type.primitive_type_str()
+        data_type = attr.primitive_type_str()
         if attr.value is None:
             continue
 
@@ -39,11 +39,15 @@ def _strip_none_parameter_attrs(ssv: SSV) -> None:
 
 
 def generate_parameter_set(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    system = SysMLParser(architecture_path).parse().get_def(NodeType.Part, composition)
+    architecture = load(architecture_path)
+    system = architecture.get_part_def(composition)
 
     pairs = []
-    for part_name, part in system.refs(NodeType.Part).items():
-        for attr_name, attr in part.ref_node.defs(NodeType.Attribute).items():
+    for part_name, part_usage in system.parts.items():
+        part_def = architecture.resolve_part(part_usage)
+        if part_def is None:
+            raise ValueError(f"Unresolved part definition for {part_usage.name}")
+        for attr_name, attr in part_def.attributes.items():
             pairs.append((f"{part_name}.{attr_name}", attr))
 
     ensure_parent_dir(output_path)

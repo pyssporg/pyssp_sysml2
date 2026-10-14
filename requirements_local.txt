@@ -1,4 +1,4 @@
 pytest
 coverage
--e ./3rd_party/pysysml2_cps
+sysmlpy==0.96.4
 -e ./3rd_party/pyssp_standard

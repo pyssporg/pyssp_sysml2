@@ -1,5 +1,11 @@
 # SysML v2 Parser Alternatives — Evaluation
 
+> **Status: adopted.** The recommendation below was executed — `sysmlpy==0.96.4`
+> is now the parsing base behind the `pyssp_sysml2.sysml_model` adapter
+> (see `docs/development.md`), and the `pycps_sysmlv2` submodule has been
+> removed. The dialect fixes (rename `comment` attributes, tuple lists) were
+> applied to `examples/aircraft_subset`.
+
 **Date:** 2026-10-14
 **Question:** Can the custom `pycps_sysmlv2` parser (regex/line-based subset parser in `3rd_party/pysysml2_cps`) be replaced by a more established open-source alternative?
 

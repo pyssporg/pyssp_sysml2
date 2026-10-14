@@ -4,10 +4,18 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Iterable
 
-from pycps_sysmlv2 import NodeType
 from pyssp_standard.ssd import Component, SSD
 
 from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
+from pyssp_sysml2.sysml_model import (
+    Architecture,
+    Attribute,
+    Connection,
+    PartDefinition,
+    PartUsage,
+    PortDefinition,
+    PortUsage,
+)
 
 SCALAR_ATTRIBUTE_NAME = "value"
 
@@ -137,17 +145,6 @@ def _part_name_from_component(component: Component) -> str:
 
 
 def build_architecture_from_ssd(ssd_system, composition: str):
-    from pycps_sysmlv2 import (
-        SysMLAttribute,
-        SysMLConnection,
-        SysMLPackage,
-        SysMLPartDefinition,
-        SysMLPartReference,
-        SysMLPortDefinition,
-        SysMLPortReference,
-        SysMLType,
-    )
-
     components = index_components(ssd_system)
     endpoint_attributes: dict[tuple[str, str], dict[str, str]] = {}
     endpoint_directions: dict[tuple[str, str], str] = {}
@@ -181,19 +178,18 @@ def build_architecture_from_ssd(ssd_system, composition: str):
     endpoint_groups = _group_endpoints(endpoint_attributes, ssd_system)
     group_signatures = _canonicalize_group_signatures(endpoint_attributes, endpoint_groups)
 
-    architecture = SysMLPackage(name=DEFAULT_PACKAGE_NAME, package=DEFAULT_PACKAGE_NAME)
-    part_defs_by_name: dict[str, object] = {}
-    component_part_defs: dict[str, object] = {}
-    port_defs_by_signature: dict[tuple[tuple[str, str], ...], object] = {}
+    architecture = Architecture(package_name=DEFAULT_PACKAGE_NAME)
+    part_defs_by_name: dict[str, PartDefinition] = {}
+    component_part_defs: dict[str, PartDefinition] = {}
+    port_defs_by_signature: dict[tuple[tuple[str, str], ...], PortDefinition] = {}
 
     for component_name in sorted(components):
         component = components[component_name]
         part_name = _part_name_from_component(component)
         part_def = part_defs_by_name.get(part_name)
         if part_def is None:
-            part_def = SysMLPartDefinition(name=part_name, source_file="architecture.sysml")
-            part_def.parent = architecture
-            architecture.add_def(NodeType.Part, part_def.name, part_def)
+            part_def = PartDefinition(name=part_name, source_file="architecture.sysml")
+            architecture.add_part_def(part_def)
             part_defs_by_name[part_name] = part_def
         component_part_defs[component_name] = part_def
 
@@ -203,43 +199,31 @@ def build_architecture_from_ssd(ssd_system, composition: str):
             port_def = port_defs_by_signature.get(signature)
             if port_def is None:
                 port_def_name = f"Port_{len(port_defs_by_signature) + 1}"
-                port_def = SysMLPortDefinition(name=port_def_name, source_file="architecture.sysml")
+                port_def = PortDefinition(name=port_def_name, source_file="architecture.sysml")
                 for attr_name, attr_type in signature:
-                    port_def.add_def(
-                        NodeType.Attribute,
-                        attr_name,
-                        SysMLAttribute(
-                            name=attr_name,
-                            type=SysMLType.from_string(attr_type),
-                            value=None,
-                        ),
+                    port_def.attributes[attr_name] = Attribute(
+                        name=attr_name,
+                        type_name=attr_type,
+                        value=None,
                     )
-                port_def.parent = architecture
-                architecture.add_def(NodeType.Port, port_def.name, port_def)
+                architecture.add_port_def(port_def)
                 port_defs_by_signature[signature] = port_def
 
-            if port_name not in part_def.refs(NodeType.Port):
-                port_ref = SysMLPortReference(
+            if port_name not in part_def.ports:
+                part_def.ports[port_name] = PortUsage(
                     name=port_name,
                     direction=endpoint_directions.get(endpoint, "in"),
-                    type=port_def.name,
-                    ref_node=port_def,
+                    type_name=port_def.name,
                 )
-                port_ref.parent = part_def
-                part_def.add_ref(NodeType.Port, port_name, port_ref)
 
-    system = SysMLPartDefinition(name=composition, source_file="architecture.sysml")
-    system.parent = architecture
-    architecture.add_def(NodeType.Part, system.name, system)
+    system = PartDefinition(name=composition, source_file="architecture.sysml")
+    architecture.add_part_def(system)
     for component_name in sorted(components):
         part_def = component_part_defs[component_name]
-        part_ref = SysMLPartReference(
+        system.parts[component_name] = PartUsage(
             name=component_name,
-            type=part_def.name,
-            ref_node=part_def,
+            type_name=part_def.name,
         )
-        part_ref.parent = system
-        system.add_ref(NodeType.Part, component_name, part_ref)
 
     grouped: Dict[tuple[str, str, str, str], set[str]] = {}
     for connection in ssd_system.connections:
@@ -249,22 +233,14 @@ def build_architecture_from_ssd(ssd_system, composition: str):
         grouped.setdefault(key, set()).add(src_attr)
 
     for src_component, src_port, dst_component, dst_port in sorted(grouped):
-        src_part_ref = system.refs(NodeType.Part)[src_component]
-        dst_part_ref = system.refs(NodeType.Part)[dst_component]
-        src_part_def = src_part_ref.ref_node
-        dst_part_def = dst_part_ref.ref_node
-        connection = SysMLConnection(
+        connection = Connection(
             name=f"{src_component}.{src_port}_to_{dst_component}.{dst_port}",
-            src_part=src_component,
-            src_port=src_port,
-            dst_part=dst_component,
-            dst_port=dst_port,
-            src_part_node=src_part_ref,
-            dst_part_node=dst_part_ref,
-            src_port_node=src_part_def.refs(NodeType.Port)[src_port],
-            dst_port_node=dst_part_def.refs(NodeType.Port)[dst_port],
+            source_part=src_component,
+            source_port=src_port,
+            destination_part=dst_component,
+            destination_port=dst_port,
         )
-        system.add_def(NodeType.Connection, connection.key, connection)
+        system.connections[connection.key] = connection
 
     return architecture, system
 

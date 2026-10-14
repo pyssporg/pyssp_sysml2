@@ -8,6 +8,8 @@ If you are using the package (not developing it), start with `README.md`.
 
 Core modules:
 
+- `src/pyssp_sysml2/sysml_model/`: SysML v2 model adapter (loader over `sysmlpy`,
+  repo-owned dataclasses, conformant text exporter)
 - `src/pyssp_sysml2/ssd.py`: generates `SystemStructure.ssd`
 - `src/pyssp_sysml2/ssv.py`: generates `parameters.ssv`
 - `src/pyssp_sysml2/fmi.py`: generates `modelDescription.xml` files
@@ -18,8 +20,17 @@ Core modules:
 
 Dependencies:
 
-- `pycps_sysmlv2` for SysML parsing (`SysMLParser(...).parse().get_def(NodeType.Part, ...)`)
+- `sysmlpy` (pinned to an exact version) for SysML v2 parsing, wrapped by the
+  `pyssp_sysml2.sysml_model` adapter (`load(...).get_part_def(...)`) — see
+  `docs/sysml_model_adapter.md` for the adapter's design and its sysmlpy
+  version-upgrade notes
 - `pyssp_standard` for SSP/FMI XML object handling
+
+The `sysml_model` package is the anti-corruption layer between the generators
+and the parser: only `sysml_model/loader.py` imports `sysmlpy`, `sysml_model/model.py`
+defines the repo-owned dataclasses the generators work against, and
+`sysml_model/exporter.py` emits the conformant SysML v2 text format (a repo
+contract, independent of sysmlpy's serializer).
 
 ## Local Setup
 

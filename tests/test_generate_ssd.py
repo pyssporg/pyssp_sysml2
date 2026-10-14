@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pycps_sysmlv2 import NodeType, SysMLParser
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd
+from pyssp_sysml2.sysml_model import load
 from tests.test_utils import COMPOSITION_NAME, write_model
 
 
@@ -63,7 +63,7 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
         """
         package Example {
           part def Source {
-            attribute gains = [1.0, 2.0];
+            attribute gains = (1.0, 2.0);
             out port sig : Signal;
           }
 
@@ -89,10 +89,11 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
-    system = SysMLParser(architecture_dir).parse().get_def(NodeType.Part, COMPOSITION_NAME)
+    architecture = load(architecture_dir)
+    system = architecture.get_part_def(COMPOSITION_NAME)
 
     with SSD(output_path, mode="w") as ssd:
-        build_ssd(ssd, system)
+        build_ssd(ssd, system, architecture)
 
     assert _ssd_summary(output_path) == [
         "component dst",
@@ -133,10 +134,11 @@ def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
-    system = SysMLParser(architecture_dir).parse().get_def(NodeType.Part, COMPOSITION_NAME)
+    architecture = load(architecture_dir)
+    system = architecture.get_part_def(COMPOSITION_NAME)
 
     with SSD(output_path, mode="w") as ssd:
-        build_ssd(ssd, system)
+        build_ssd(ssd, system, architecture)
 
     assert _ssd_summary(output_path) == [
         "component src",

@@ -3,16 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-from pycps_sysmlv2 import SysMLParser
 from pyssp_standard.common_content_ssc import TypeEnumeration, TypeInteger, TypeReal
 from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
+from pyssp_sysml2.sysml_model import load
 from tests.test_utils import write_bootstrap_ssd
 
 
 def _architecture_text(path: Path) -> str:
-    return str(SysMLParser(path).parse())
+    files = load(path).export_declared()
+    return "\n".join(files[name] for name in sorted(files))
 
 
 def test_generate_sysml_from_ssd_uses_ssd_system_name_by_default(tmp_path: Path) -> None:
@@ -25,18 +26,26 @@ def test_generate_sysml_from_ssd_uses_ssd_system_name_by_default(tmp_path: Path)
     assert written == output
     assert _architecture_text(output) == dedent(
         """
-        package RecoveredFromSSD
-        part Sink
-          port in inSig:Port_1 -> Port_1
-        part Source
-          port out outSig:Port_1 -> Port_1
-        part SystemComposition
-          part dst:Sink -> Sink
-          part src:Source -> Source
-          connect src.outSig -> dst.inSig
-        port Port_1
-          attr x:Real=None
-          attr y:Real=None
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute x : Real;
+            attribute y : Real;
+          }
+
+          part def Sink {
+            in port inSig : Port_1;
+          }
+
+          part def Source {
+            out port outSig : Port_1;
+          }
+
+          part def SystemComposition {
+            part dst : Sink;
+            part src : Source;
+            connect src.outSig to dst.inSig;
+          }
+        }
         """
     ).strip() + "\n"
 
@@ -48,7 +57,7 @@ def test_generate_sysml_from_ssd_allows_overriding_composition_name(tmp_path: Pa
 
     generate_sysml_from_ssd(ssd_path, output, composition="RecoveredComposition")
 
-    assert "part RecoveredComposition" in _architecture_text(output)
+    assert "part def RecoveredComposition" in _architecture_text(output)
 
 
 def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> None:
@@ -85,17 +94,25 @@ def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> N
 
     assert _architecture_text(output) == dedent(
         """
-        package RecoveredFromSSD
-        part ScalarExample
-          part dst:Sink -> Sink
-          part src:Source -> Source
-          connect src.signal -> dst.signal
-        part Sink
-          port in signal:Port_1 -> Port_1
-        part Source
-          port out signal:Port_1 -> Port_1
-        port Port_1
-          attr value:Real=None
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute value : Real;
+          }
+
+          part def ScalarExample {
+            part dst : Sink;
+            part src : Source;
+            connect src.signal to dst.signal;
+          }
+
+          part def Sink {
+            in port signal : Port_1;
+          }
+
+          part def Source {
+            out port signal : Port_1;
+          }
+        }
         """
     ).strip() + "\n"
 
@@ -156,11 +173,11 @@ def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text.count("Port_1") == 5
-    assert "port Port_2" not in text
-    assert "attr Aircraft_State:Integer=None" in text
-    assert "port in signal:Port_1 -> Port_1" in text
-    assert "port out signal:Port_1 -> Port_1" in text
+    assert text.count("Port_1") == 3
+    assert "Port_2" not in text
+    assert "attribute Aircraft_State : Integer;" in text
+    assert "in port signal : Port_1;" in text
+    assert "out port signal : Port_1;" in text
 
 
 def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_path: Path) -> None:
@@ -195,6 +212,6 @@ def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_pat
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text.count("Port_1") == 5
-    assert "port Port_2" not in text
-    assert "attr value:Real=None" in text
+    assert text.count("Port_1") == 3
+    assert "Port_2" not in text
+    assert "attribute value : Real;" in text

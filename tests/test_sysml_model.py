@@ -1,0 +1,615 @@
+"""Loader tests: sysmlpy → repo-owned model, and the export round trip.
+
+Everything here goes through the public ``pyssp_sysml2.sysml_model`` surface
+(``load`` + dataclasses) so the tests stay insulated from sysmlpy, exactly
+like the rest of the repo.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+import pytest
+
+from pyssp_sysml2.sysml_model import Architecture, load
+from tests.test_utils import write_model
+
+
+# -- single-file and directory loading --------------------------------------
+
+
+def test_load_single_file(tmp_path) -> None:
+    """A file path loads exactly that file; definitions track their source."""
+    model_file = tmp_path / "model.sysml"
+    write_model(
+        model_file,
+        """
+        package Single {
+          port def Signal { attribute level : Real; }
+
+          part def Source { out port sig : Signal; }
+        }
+        """,
+    )
+
+    architecture = load(model_file)
+
+    assert isinstance(architecture, Architecture)
+    assert architecture.package_name == "Single"
+    assert list(architecture.port_definitions) == ["Signal"]
+    assert list(architecture.part_definitions) == ["Source"]
+    assert architecture.part_definitions["Source"].source_file == "model.sysml"
+
+
+def test_load_directory_merges_sorted_files(tmp_path) -> None:
+    """A directory loads its *.sysml files sorted, non-recursively, merged."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "a.sysml",
+        """
+        package Merged {
+          part def Zed { attribute z : Real; }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "b.sysml",
+        """
+        package Merged {
+          part def Alpha { attribute a : Real; }
+        }
+        """,
+    )
+    # Nested files must be ignored (the glob is non-recursive) ...
+    write_model(
+        architecture_dir / "nested" / "c.sysml",
+        """
+        package Merged {
+          part def Nested { attribute n : Real; }
+        }
+        """,
+    )
+    # ... and non-.sysml files too.
+    (architecture_dir / "notes.txt").write_text("not a model\n", encoding="utf-8")
+
+    architecture = load(architecture_dir)
+
+    # Sorted file order (a.sysml before b.sysml), not definition-name order.
+    assert list(architecture.part_definitions) == ["Zed", "Alpha"]
+    assert "Nested" not in architecture.part_definitions
+    assert architecture.part_definitions["Zed"].source_file == "a.sysml"
+    assert architecture.part_definitions["Alpha"].source_file == "b.sysml"
+
+    # export_declared groups by the tracked source files.
+    exported = architecture.export_declared()
+    assert sorted(exported) == ["a.sysml", "b.sysml"]
+    assert "part def Zed" in exported["a.sysml"]
+    assert "part def Alpha" in exported["b.sysml"]
+
+
+def test_missing_path_raises_file_not_found(tmp_path) -> None:
+    """A missing path raises the FileNotFoundError sync.py bootstraps from."""
+    missing = tmp_path / "missing.sysml"
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        load(missing)
+
+    assert str(excinfo.value) == f"No .sysml file found under {missing}"
+
+
+def test_empty_directory_raises_file_not_found(tmp_path) -> None:
+    """A directory without .sysml files raises FileNotFoundError."""
+    empty_dir = tmp_path / "empty"
+    empty_dir.mkdir()
+
+    with pytest.raises(FileNotFoundError) as excinfo:
+        load(empty_dir)
+
+    assert str(excinfo.value) == f"No .sysml files found under {empty_dir}"
+
+
+def test_package_mismatch_across_files_raises(tmp_path) -> None:
+    """All files must declare the same package; the first file's name wins."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "a.sysml",
+        """
+        package One {
+          part def A { attribute a : Real; }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "b.sysml",
+        """
+        package Two {
+          part def B { attribute b : Real; }
+        }
+        """,
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        load(architecture_dir)
+
+    assert str(excinfo.value) == (
+        f"Mismatched package names: One vs Two in {architecture_dir / 'b.sysml'}"
+    )
+
+
+def test_duplicate_part_definition_across_files_raises(tmp_path) -> None:
+    """A part def name reused across files is an error, naming the file."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "a.sysml",
+        """
+        package Same {
+          part def Dup { attribute a : Real; }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "b.sysml",
+        """
+        package Same {
+          part def Dup { attribute b : Real; }
+        }
+        """,
+    )
+
+    with pytest.raises(ValueError) as excinfo:
+        load(architecture_dir)
+
+    assert str(excinfo.value) == (
+        f"Duplicate part definition for Dup in {architecture_dir / 'b.sysml'}"
+    )
+
+
+# -- attribute values ---------------------------------------------------------
+
+
+def test_value_normalization(tmp_path) -> None:
+    """Attribute values come back Python-native (legacy §5.5 semantics)."""
+    model_file = tmp_path / "values.sysml"
+    write_model(
+        model_file,
+        """
+        package Values {
+          part def Values {
+            attribute f : Real = 1.0;
+            attribute i = 42;
+            attribute s = "hi";
+            attribute t = true;
+            attribute f2 = false;
+            attribute taps = (1.0, 2.0);
+            attribute declared : Real;
+          }
+        }
+        """,
+    )
+
+    attributes = load(model_file).part_definitions["Values"].attributes
+
+    assert attributes["f"].value == 1.0
+    assert isinstance(attributes["f"].value, float)
+    assert attributes["f"].type_name == "Real"
+
+    assert attributes["i"].value == 42
+    assert isinstance(attributes["i"].value, int)
+    assert attributes["i"].effective_type_name == "Integer"
+
+    assert attributes["s"].value == "hi"
+
+    assert attributes["t"].value is True
+    assert attributes["f2"].value is False
+
+    assert attributes["taps"].value == (1.0, 2.0)
+    assert attributes["taps"].is_list
+    # An untyped tuple infers its element type from the first element.
+    assert attributes["taps"].effective_type_name == "Real"
+
+    assert attributes["declared"].value is None
+    assert attributes["declared"].type_name == "Real"
+
+
+def test_negative_scalar_value_keeps_sign(tmp_path) -> None:
+    """Negative number literals keep their sign.
+
+    sysmlpy 0.96.4's get_value() drops a leading unary minus (-1.5 reads as
+    1.5); the loader re-attaches it from the grammar layer.
+    """
+    model_file = tmp_path / "negative.sysml"
+    write_model(
+        model_file,
+        """
+        package Negative {
+          part def Offsets {
+            attribute real = -1.5;
+            attribute integer = -7;
+          }
+        }
+        """,
+    )
+
+    attributes = load(model_file).part_definitions["Offsets"].attributes
+
+    assert attributes["real"].value == -1.5
+    assert attributes["integer"].value == -7
+
+
+def test_pint_quantity_value_uses_magnitude(tmp_path) -> None:
+    """Unit literals (pint Quantities) load as their bare magnitude."""
+    model_file = tmp_path / "units.sysml"
+    write_model(
+        model_file,
+        """
+        package Units {
+          part def Physical {
+            attribute mass : Real = 1000 [kilogram];
+          }
+        }
+        """,
+    )
+
+    attribute = load(model_file).part_definitions["Physical"].attributes["mass"]
+
+    assert attribute.value == 1000
+    assert attribute.type_name == "Real"
+
+
+# -- ports, docs, requirements ------------------------------------------------
+
+
+def test_port_directions(tmp_path) -> None:
+    """Port usages carry in/out/inout; undirected ports stay None."""
+    model_file = tmp_path / "directions.sysml"
+    write_model(
+        model_file,
+        """
+        package Directions {
+          port def Signal { attribute level : Real; }
+
+          part def Directions {
+            in port a : Signal;
+            out port b : Signal;
+            inout port c : Signal;
+            port plain : Signal;
+          }
+        }
+        """,
+    )
+
+    ports = load(model_file).part_definitions["Directions"].ports
+
+    assert ports["a"].direction == "in"
+    assert ports["b"].direction == "out"
+    assert ports["c"].direction == "inout"
+    assert ports["plain"].direction is None
+    assert ports["a"].type_name == "Signal"
+
+
+def test_part_definition_doc(tmp_path) -> None:
+    """A part def's doc comment becomes PartDefinition.doc."""
+    model_file = tmp_path / "doc.sysml"
+    write_model(
+        model_file,
+        """
+        package Docs {
+          part def Documented {
+            doc /* Part doc. */
+            attribute x : Real;
+          }
+        }
+        """,
+    )
+
+    part_def = load(model_file).part_definitions["Documented"]
+
+    assert part_def.doc == "Part doc."
+    assert part_def.attributes["x"].value is None
+
+
+def test_port_definition_attributes(tmp_path) -> None:
+    """A port def keeps its doc and its ordered attributes."""
+    model_file = tmp_path / "portdef.sysml"
+    write_model(
+        model_file,
+        """
+        package PortDefs {
+          port def Signal {
+            doc /* Signal doc. */
+            attribute level : Real;
+            attribute count : Integer;
+          }
+        }
+        """,
+    )
+
+    port_def = load(model_file).port_definitions["Signal"]
+
+    assert port_def.doc == "Signal doc."
+    assert list(port_def.attributes) == ["level", "count"]
+    assert port_def.attributes["level"].type_name == "Real"
+    assert port_def.attributes["count"].type_name == "Integer"
+
+
+def test_requirement_definition_text(tmp_path) -> None:
+    """A requirement def's doc comment becomes RequirementDefinition.text."""
+    model_file = tmp_path / "requirement.sysml"
+    write_model(
+        model_file,
+        """
+        package Requirements {
+          requirement def Connected {
+            doc /* src must connect to dst */
+          }
+        }
+        """,
+    )
+
+    requirement = load(model_file).requirement_definitions["Connected"]
+
+    assert requirement.text == "src must connect to dst"
+
+
+# -- connections ---------------------------------------------------------------
+
+
+def test_connections_stored_by_key_with_legacy_names(tmp_path) -> None:
+    """Connections are keyed by endpoint pair; names follow the legacy scheme."""
+    model_file = tmp_path / "connections.sysml"
+    write_model(
+        model_file,
+        """
+        package Connections {
+          part def Source {
+            out port outSig : Signal;
+            out port aux : Signal;
+          }
+
+          part def Sink { in port inSig : Signal; }
+
+          part def SystemComposition {
+            part src : Source;
+            part dst : Sink;
+            connect src.outSig to dst.inSig;
+            connection explicit : Link connect src.aux to dst.inSig;
+          }
+        }
+        """,
+    )
+
+    connections = load(model_file).part_definitions["SystemComposition"].connections
+
+    assert set(connections) == {"src.outSig->dst.inSig", "src.aux->dst.inSig"}
+
+    unnamed = connections["src.outSig->dst.inSig"]
+    assert unnamed.name == "src.outSig_to_dst.inSig"
+    assert (
+        unnamed.source_part,
+        unnamed.source_port,
+        unnamed.destination_part,
+        unnamed.destination_port,
+    ) == ("src", "outSig", "dst", "inSig")
+
+    # An explicitly named connection keeps its given name.
+    assert connections["src.aux->dst.inSig"].name == "explicit"
+
+
+def test_identical_connect_overwrites_earlier(tmp_path) -> None:
+    """Connects with identical endpoints collapse to one entry (legacy parity)."""
+    model_file = tmp_path / "overwrite.sysml"
+    write_model(
+        model_file,
+        """
+        package Overwrite {
+          part def SystemComposition {
+            part src : Source;
+            part dst : Sink;
+            connect src.outSig to dst.inSig;
+            connect src.outSig to dst.inSig;
+          }
+        }
+        """,
+    )
+
+    connections = load(model_file).part_definitions["SystemComposition"].connections
+
+    assert list(connections) == ["src.outSig->dst.inSig"]
+
+
+def test_connections_from_all_files(tmp_path) -> None:
+    """A directory merge keeps every file's connections, in file order."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "a.sysml",
+        """
+        package Multi {
+          part def CompA {
+            part a : A;
+            part b : B;
+            connect a.p to b.q;
+          }
+        }
+        """,
+    )
+    write_model(
+        architecture_dir / "b.sysml",
+        """
+        package Multi {
+          part def CompB {
+            part c : C;
+            part d : D;
+            connect c.r to d.s;
+          }
+        }
+        """,
+    )
+
+    architecture = load(architecture_dir)
+
+    assert list(architecture.part_definitions) == ["CompA", "CompB"]
+    assert list(architecture.part_definitions["CompA"].connections) == ["a.p->b.q"]
+    assert list(architecture.part_definitions["CompB"].connections) == ["c.r->d.s"]
+
+
+def test_part_less_connection_rejected(tmp_path) -> None:
+    """`connect x to y;` (no part qualifier) is rejected with a clear error."""
+    model_file = tmp_path / "bare.sysml"
+    write_model(
+        model_file,
+        """
+        package Bare {
+          part def Bad {
+            part x : X;
+            part y : Y;
+            connect x to y;
+          }
+        }
+        """,
+    )
+
+    with pytest.raises(ValueError, match="part-qualified"):
+        load(model_file)
+
+
+# -- syntax errors --------------------------------------------------------------
+
+
+def test_syntax_error_propagates(tmp_path) -> None:
+    """A syntax error surfaces as an exception from load (message not pinned)."""
+    model_file = tmp_path / "broken.sysml"
+    write_model(
+        model_file,
+        """
+        package Broken {
+          part def A {
+            attribute comment = "x";
+          }
+        }
+        """,
+    )
+
+    # sysmlpy raises SysMLSyntaxError, a plain Exception subclass; only the
+    # propagation is part of the loader contract, not the message.
+    with pytest.raises(Exception):  # noqa: B017, BLE001
+        load(model_file)
+
+
+# -- export round trip ------------------------------------------------------------
+
+
+def _architecture_summary(architecture: Architecture) -> dict:
+    """Flat comparable view of an architecture for round-trip assertions.
+
+    Deliberately excludes, with reasons:
+
+    - member-level docs (attribute/port/part/connection ``doc``): sysmlpy
+      attaches a ``doc /* ... */`` written above a member to the *owning
+      definition*, so member docs cannot survive a text round trip
+      (def-level docs and requirement text below prove docs do survive);
+    - raw ``attribute.type_name``: the exporter always writes
+      ``effective_type_name``, so inferred types materialize as declared
+      ones after export — comparing the effective type keeps that stable;
+    - connection ``name`` and ``source_file``: unnamed connects get an
+      endpoint-derived name and the exporter does not re-emit explicit
+      connection names; source files are covered by the directory tests.
+    """
+    return {
+        "package_name": architecture.package_name,
+        "port_definitions": {
+            port_def.name: {
+                "doc": port_def.doc,
+                "attributes": {
+                    attribute.name: (attribute.effective_type_name, attribute.value)
+                    for attribute in port_def.attributes.values()
+                },
+            }
+            for port_def in architecture.port_definitions.values()
+        },
+        "part_definitions": {
+            part_def.name: {
+                "doc": part_def.doc,
+                "attributes": {
+                    attribute.name: (attribute.effective_type_name, attribute.value)
+                    for attribute in part_def.attributes.values()
+                },
+                "ports": {
+                    port.name: (port.direction, port.type_name)
+                    for port in part_def.ports.values()
+                },
+                "parts": {part.name: part.type_name for part in part_def.parts.values()},
+                "connections": {
+                    connection.key: (
+                        connection.source_part,
+                        connection.source_port,
+                        connection.destination_part,
+                        connection.destination_port,
+                    )
+                    for connection in part_def.connections.values()
+                },
+            }
+            for part_def in architecture.part_definitions.values()
+        },
+        "requirement_definitions": {
+            requirement.name: requirement.text
+            for requirement in architecture.requirement_definitions.values()
+        },
+    }
+
+
+def test_export_round_trip(tmp_path) -> None:
+    """load → export_declared → load again yields the same architecture."""
+    source_dir = tmp_path / "source"
+    write_model(
+        source_dir / "model.sysml",
+        """
+        package RoundTrip {
+          port def Signal {
+            doc /* A signal. */
+            attribute level : Real;
+            attribute count : Integer;
+          }
+
+          part def Source {
+            doc /* Source doc. */
+            attribute gain : Real = 2.0;
+            attribute offset = -1.5;
+            attribute label = "hi";
+            attribute enabled = true;
+            attribute taps = (1.0, 2.0);
+            out port sig : Signal;
+          }
+
+          part def Sink {
+            in port sigIn : Signal;
+          }
+
+          part def SystemComposition {
+            part src : Source;
+            part dst : Sink;
+            connect src.sig to dst.sigIn;
+          }
+
+          requirement def Connected {
+            doc /* src must connect to dst */
+          }
+        }
+        """,
+    )
+
+    original = load(source_dir)
+    exported = original.export_declared()
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    for file_name, text in exported.items():
+        (output_dir / file_name).write_text(text, encoding="utf-8")
+
+    reloaded = load(output_dir)
+
+    assert _architecture_summary(reloaded) == _architecture_summary(original)
+
+    # Def-level docs survive the round trip.
+    assert reloaded.port_definitions["Signal"].doc == "A signal."
+    assert reloaded.part_definitions["Source"].doc == "Source doc."
+    assert reloaded.requirement_definitions["Connected"].text == "src must connect to dst"

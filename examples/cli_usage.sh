@@ -17,7 +17,7 @@ if command -v pyssp >/dev/null 2>&1; then
 else
   RUNNER=(python3 -m pyssp_sysml2.cli)
   export PYTHONPATH="${PYTHONPATH:-src}"
-  if ! python3 -c "import pycps_sysmlv2, pyssp_standard" >/dev/null 2>&1; then
+  if ! python3 -c "import sysmlpy, pyssp_standard" >/dev/null 2>&1; then
     echo "Missing runtime dependencies. Install first:"
     echo "  python3 -m venv venv && source venv/bin/activate"
     echo "  pip install -r requirements.txt && pip install -e ."
@@ -58,8 +58,8 @@ mkdir -p "$BOOTSTRAP_DIR"
   --output-architecture-dir "$OUT_DIR/synced_sysml"
 
 printf "\nGenerated artifacts:\n"
-printf "- %s\n" "$OUT_DIR/SystemStructure.ssd"
-printf "- %s\n" "$OUT_DIR/parameters.ssv"
-printf "- %s\n" "$OUT_DIR/model_descriptions"
-printf "- %s\n" "$BOOTSTRAP_DIR/architecture.sysml"
-printf "- %s\n" "$OUT_DIR/synced_sysml"
+printf "%s\n" "- $OUT_DIR/SystemStructure.ssd"
+printf "%s\n" "- $OUT_DIR/parameters.ssv"
+printf "%s\n" "- $OUT_DIR/model_descriptions"
+printf "%s\n" "- $BOOTSTRAP_DIR/architecture.sysml"
+printf "%s\n" "- $OUT_DIR/synced_sysml"

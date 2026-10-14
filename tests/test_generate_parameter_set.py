@@ -26,7 +26,7 @@ def test_generate_parameter_set_uses_zero_based_indexing(tmp_path) -> None:
         f"""
         package Example {{
           part def Params {{
-            attribute i_list = [1, 2];
+            attribute i_list = (1, 2);
           }}
 
           part def {COMPOSITION_NAME} {{
