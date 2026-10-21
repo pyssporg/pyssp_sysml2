@@ -11,8 +11,8 @@ from tests.test_utils import COMPOSITION_NAME, write_model
 def _parameter_summary(ssv_path) -> list[str]:
     with SSV(ssv_path, mode="r") as ssv:
         return sorted(
-            f"{parameter['name']}:{parameter['type_name']}:{parameter['type_value'].parameter.get('value')}"
-            for parameter in ssv.parameters
+            f"{parameter.name}:{parameter.type_name}:{parameter.attributes.get('value')}"
+            for parameter in ssv.xml.parameters
         )
 
 

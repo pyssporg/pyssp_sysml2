@@ -4,36 +4,27 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.common_content_ssc import (
-    TypeBoolean,
-    TypeInteger,
-    TypeReal,
-    TypeString,
-)
 from pyssp_standard.ssd import (
     Component,
     Connection,
     Connector,
     DefaultExperiment,
+    ParameterBinding,
     SSD,
     System,
 )
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
 from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.sysml import (
+    DEFAULT_START_ATTR,
+    DEFAULT_STOP_ATTR,
+    FLAT_CONNECTOR_ATTR,
+    IMPLEMENTATION_ATTR,
+    PARAMETER_SET_ATTR,
+    is_control_attribute,
+)
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
-
-
-def _type_from_primitive(type_name: str):
-    if type_name == "Real":
-        return TypeReal(unit=None)
-    if type_name == "Integer":
-        return TypeInteger()
-    if type_name == "Boolean":
-        return TypeBoolean()
-    if type_name == "String":
-        return TypeString()
-    return TypeReal(unit=None)
 
 
 def _endpoint_port_def(
@@ -64,9 +55,9 @@ def build_ssd(
     architecture: Architecture,
     type_check=True,
 ) -> None:
-    ssd.name = system.name
-    ssd.version = "1.0"
-    ssd.system = System(name=system.name)
+    ssd.xml.name = system.name
+    ssd.xml.version = "1.0"
+    ssd.xml.system = System(name=system.name)
 
     for part_name, part_usage in system.parts.items():
         part = architecture.resolve_part(part_usage)
@@ -76,6 +67,9 @@ def build_ssd(
         component.name = part_name
         component.component_type = "application/x-fmu-sharedlibrary"
         component.source = fmu_resource_path(part.name)
+        implementation = part.attributes.get(IMPLEMENTATION_ATTR)
+        if implementation is not None and implementation.value is not None:
+            component.implementation = str(implementation.value)
 
         for port_usage in part.ports.values():
             port_def = architecture.resolve_port(port_usage)
@@ -83,27 +77,37 @@ def build_ssd(
                 raise ValueError(
                     f"Unresolved port definition for {part.name}.{port_usage.name}"
                 )
+            flat = bool(port_def.attributes.get(FLAT_CONNECTOR_ATTR))
             for attribute in port_def.attributes.values():
+                if is_control_attribute(attribute.name):
+                    continue
+                connector_name = (
+                    port_usage.name
+                    if flat
+                    else f"{port_usage.name}.{attribute.name}"
+                )
                 component.connectors.append(
                     Connector(
-                        name=f"{port_usage.name}.{attribute.name}",
+                        name=connector_name,
                         kind=to_fmi_direction_definition(port_usage.direction),
-                        type_=_type_from_primitive(attribute.effective_type_name),
+                        type_name=attribute.effective_type_name,
                     )
                 )
 
         for attrib_name, attribute in part.attributes.items():
+            if is_control_attribute(attrib_name):
+                continue
             for idx, _ in attribute.enumerator():
                 name = f"{attrib_name}[{idx}]" if attribute.is_list else attrib_name
                 component.connectors.append(
                     Connector(
                         name=name,
                         kind="parameter",
-                        type_=_type_from_primitive(attribute.effective_type_name),
+                        type_name=attribute.effective_type_name,
                     )
                 )
 
-        ssd.system.elements.append(component)
+        ssd.xml.system.elements.append(component)
 
     for conn in system.connections.values():
         src_port_def = _endpoint_port_def(
@@ -117,20 +121,38 @@ def build_ssd(
                 f"Src {conn.source_port} and dest port {conn.destination_port} must be same type"
             )
 
+        src_flat = bool(src_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
+        dst_flat = bool(dst_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
         for attribute_name in src_port_def.attributes.keys():
-            ssd.add_connection(
+            if is_control_attribute(attribute_name):
+                continue
+            ssd.xml.system.add_connection(
                 Connection(
                     start_element=conn.source_part,
-                    start_connector=f"{conn.source_port}.{attribute_name}",
+                    start_connector=(
+                        conn.source_port if src_flat else f"{conn.source_port}.{attribute_name}"
+                    ),
                     end_element=conn.destination_part,
-                    end_connector=f"{conn.destination_port}.{attribute_name}",
+                    end_connector=(
+                        conn.destination_port
+                        if dst_flat
+                        else f"{conn.destination_port}.{attribute_name}"
+                    ),
                 )
             )
 
-    default_experiment = DefaultExperiment()
-    default_experiment.start_time = 0
-    default_experiment.stop_time = 3600
-    ssd.default_experiment = default_experiment
+    start = system.attributes.get(DEFAULT_START_ATTR)
+    stop = system.attributes.get(DEFAULT_STOP_ATTR)
+    ssd.xml.default_experiment = DefaultExperiment(
+        start_time=float(start.value) if start is not None else 0,
+        stop_time=float(stop.value) if stop is not None else 3600,
+    )
+
+    parameter_set = system.attributes.get(PARAMETER_SET_ATTR)
+    if parameter_set is not None and parameter_set.value is not None:
+        ssd.xml.system.parameter_bindings = [
+            ParameterBinding(source=str(parameter_set.value))
+        ]
 
 
 def generate_ssd(

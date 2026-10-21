@@ -36,7 +36,12 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-If you are working from this repository and want to use the bundled third-party checkouts instead of resolving dependencies from package indexes:
+This version targets the refactored `pyssp_standard` model API
+(`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
+`common_content_ssc` type objects. Install the refactored
+`pyssp_standard` checkout before installing this package.
+
+If you are working in the `ssp_references` workspace and want to use its vendored `pyssp_standard` checkout instead of a package index:
 
 ```bash
 python3 -m venv venv
@@ -145,6 +150,23 @@ Notes for `generate sysml`:
 - Generated SysML is intentionally minimal and exported to `architecture.sysml`.
 - Part names are derived from SSD component `source` (FMU stem) when available, otherwise from component names.
 - Port definitions are inferred from SSD connector attribute signatures.
+
+## 3.5) Round-trip fidelity
+
+`pyssp generate sysml` records SSD metadata that has no first-class SysML
+equivalent as `pyssp_*` control attributes. They are preserved by
+`pyssp generate ssd` and skipped by the SSV/FMI generators:
+
+| SSD metadata | SysML representation |
+| --- | --- |
+| `Component/@implementation` | `attribute pyssp_implementation : String` |
+| `ParameterBinding/@source` | `attribute pyssp_parameter_set : String` |
+| `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
+| Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
+
+Parameter values are read from the bound SSV and written as part attributes,
+so a generated architecture shows the default values and a regenerated SSV
+keeps them.
 
 ## 4) Use as a Python Module
 

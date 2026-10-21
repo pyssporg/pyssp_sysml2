@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.common_content_ssc import TypeReal
 from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
 
 
@@ -16,33 +15,33 @@ def write_model(path: Path, content: str) -> None:
 
 def write_bootstrap_ssd(path: Path, composition_name: str = COMPOSITION_NAME) -> Path:
     with SSD(path, mode="w") as ssd:
-        ssd.name = composition_name
-        ssd.version = "1.0"
-        ssd.system = System(name=composition_name)
+        ssd.xml.name = composition_name
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name=composition_name)
 
         src = Component()
         src.name = "src"
         src.source = "resources/Source.fmu"
         src.connectors.extend(
             [
-                Connector(name="outSig.x", kind="output", type_=TypeReal(unit=None)),
-                Connector(name="outSig.y", kind="output", type_=TypeReal(unit=None)),
+                Connector(name="outSig.x", kind="output", type_name="Real"),
+                Connector(name="outSig.y", kind="output", type_name="Real"),
             ]
         )
-        ssd.system.elements.append(src)
+        ssd.xml.system.elements.append(src)
 
         dst = Component()
         dst.name = "dst"
         dst.source = "resources/Sink.fmu"
         dst.connectors.extend(
             [
-                Connector(name="inSig.x", kind="input", type_=TypeReal(unit=None)),
-                Connector(name="inSig.y", kind="input", type_=TypeReal(unit=None)),
+                Connector(name="inSig.x", kind="input", type_name="Real"),
+                Connector(name="inSig.y", kind="input", type_name="Real"),
             ]
         )
-        ssd.system.elements.append(dst)
+        ssd.xml.system.elements.append(dst)
 
-        ssd.system.connections.extend(
+        ssd.xml.system.connections.extend(
             [
                 Connection(
                     start_element="src",

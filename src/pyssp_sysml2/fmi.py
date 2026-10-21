@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
+from pyssp_sysml2.sysml import is_control_attribute
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
 CO_SIMULATION_ATTRS = {
@@ -44,6 +45,8 @@ def _port_attribute_variables(
         if port_def is None:
             raise ValueError(f"Unresolved port definition for {part.name}.{port_usage.name}")
         for attr in port_def.attributes.values():
+            if is_control_attribute(attr.name):
+                continue
             spec = VariableSpec(
                 name=f"{port_usage.name}.{attr.name}",
                 causality="input" if port_usage.direction == "in" else "output",
@@ -67,6 +70,8 @@ def _parameter_variables(
     value_index = starting_index
 
     for _attr_name, attr in part.attributes.items():
+        if is_control_attribute(attr.name):
+            continue
         if attr.is_list:
             list_item_type = map_fmi_type(attr.effective_type_name)
             for idx, item in enumerate(attr.value, start=0):

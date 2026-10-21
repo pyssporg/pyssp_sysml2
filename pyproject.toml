@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyssp_sysml2"
-version = "0.1.0"
+version = "0.1.1"
 description = "Generate SSP artifacts from a SysML v2 architecture model."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,7 +14,7 @@ authors = [
 ]
 dependencies = [
     "sysmlpy==0.96.4",
-    "pyssp_standard"
+    "pyssp_standard>=0.8.2"
   ]
 
 

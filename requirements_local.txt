@@ -1,4 +1,6 @@
 pytest
 coverage
 sysmlpy==0.96.4
--e ./3rd_party/pyssp_standard
+# Refactored pyssp_standard checkout (the vendored copy in ssp_references).
+# Adjust this path if your workspace layout differs.
+-e ../pyssp_standard

@@ -8,6 +8,7 @@ from pyssp_standard.ssv import SSV
 
 from pyssp_sysml2.fmi_helpers import format_value
 from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.sysml import is_control_attribute
 from pyssp_sysml2.sysml_model import Attribute, load
 
 
@@ -21,21 +22,11 @@ def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attrib
             for idx, item in enumerate(attr.value, start=0):
                 indexed_name = f"{name}[{idx}]"
                 formatted = format_value(data_type, item)
-                ssv.add_parameter(indexed_name, ptype=data_type, value=formatted)
+                ssv.xml.add_parameter(indexed_name, ptype=data_type, value=formatted)
             continue
 
         formatted = format_value(data_type, attr.value)
-        ssv.add_parameter(name, ptype=data_type, value=formatted)
-
-
-def _strip_none_parameter_attrs(ssv: SSV) -> None:
-    for parameter in ssv.parameters:
-        type_value = parameter["type_value"]
-        type_value.parameter = {
-            key: value
-            for key, value in type_value.parameter.items()
-            if value is not None
-        }
+        ssv.xml.add_parameter(name, ptype=data_type, value=formatted)
 
 
 def generate_parameter_set(architecture_path: Path, output_path: Path, composition: str) -> Path:
@@ -48,10 +39,12 @@ def generate_parameter_set(architecture_path: Path, output_path: Path, compositi
         if part_def is None:
             raise ValueError(f"Unresolved part definition for {part_usage.name}")
         for attr_name, attr in part_def.attributes.items():
+            if is_control_attribute(attr_name):
+                continue
             pairs.append((f"{part_name}.{attr_name}", attr))
 
     ensure_parent_dir(output_path)
-    with SSV(output_path, mode="w", name="ArchitecturalDefaults") as ssv:
+    with SSV(output_path, mode="w") as ssv:
+        ssv.xml.name = "ArchitecturalDefaults"
         populate_parameter_set(ssv, pairs)
-        _strip_none_parameter_attrs(ssv)
     return output_path
