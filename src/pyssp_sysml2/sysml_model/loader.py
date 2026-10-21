@@ -37,6 +37,8 @@ import sysmlpy
 from pyssp_sysml2.sysml_model.model import (
     Architecture,
     Attribute,
+    AttributeDefinition,
+    Binding,
     Connection,
     PartDefinition,
     PartUsage,
@@ -139,7 +141,8 @@ def _merge_packages(architecture: Architecture, packages: list, file: Path) -> N
 
     Top-level usages and other non-definition children are skipped silently
     (legacy parity). Definitions are added parts first, then ports, then
-    requirements — the retired parser's assembly order.
+    attribute definitions, then requirements — the retired parser's assembly
+    order extended with value types.
     """
     for package in packages:
         for element in package.parts:
@@ -150,6 +153,12 @@ def _merge_packages(architecture: Architecture, packages: list, file: Path) -> N
             if element.is_definition:
                 port_def = _port_definition(element, file)
                 _add_definition(architecture, architecture.add_port_def, port_def, file)
+        for element in package.attributes:
+            if element.is_definition:
+                attribute_def = _attribute_definition(element, file)
+                _add_definition(
+                    architecture, architecture.add_attribute_def, attribute_def, file
+                )
         for element in package.requirements:
             if element.is_definition:
                 requirement_def = _requirement_definition(element, file)
@@ -193,6 +202,9 @@ def _part_definition(element, file: Path) -> PartDefinition:
         # Keyed by endpoint pair: a later connect with identical endpoints
         # overwrites the earlier one (legacy parity).
         part_def.connections[connection.key] = connection
+    for child in element.children:
+        if type(child).__name__ == "Binding":
+            part_def.bindings.append(_binding(child, file))
     return part_def
 
 
@@ -202,6 +214,19 @@ def _port_definition(element, file: Path) -> PortDefinition:
     for attribute in element.attributes:
         port_def.attributes[attribute.name] = _attribute(attribute)
     return port_def
+
+
+def _attribute_definition(element, file: Path) -> AttributeDefinition:
+    """Repo AttributeDefinition from a sysmlpy attribute definition."""
+    attribute_def = AttributeDefinition(
+        name=element.name,
+        doc=element.doc,
+        source_file=file.name,
+        specializes=_specializes(element),
+    )
+    for attribute in element.attributes:
+        attribute_def.attributes[attribute.name] = _attribute(attribute)
+    return attribute_def
 
 
 def _requirement_definition(element, file: Path) -> RequirementDefinition:
@@ -243,6 +268,29 @@ def _connection(connect, file: Path) -> Connection:
     )
 
 
+def _binding(bind, file: Path) -> Binding:
+    """Repo Binding from a sysmlpy ``bind a.x = b.y;`` statement.
+
+    Both endpoints keep their full feature chain. Unnamed bindings receive a
+    UUID name from sysmlpy; those are normalized back to ``None``.
+    """
+    ends = _binding_endpoints(bind)
+    if len(ends) != 2:
+        raise ValueError(
+            f"Only binary bindings are supported ('bind a.x = b.y;'), "
+            f"got {len(ends)} ends in {file}"
+        )
+    source, target = ends
+    if not source or not target:
+        raise ValueError(
+            f"Binding ends must be feature references, got {source} = {target} in {file}"
+        )
+    name = bind.name
+    if name is None or _UUID_PATTERN.match(name):
+        name = None
+    return Binding(source=tuple(source), target=tuple(target), name=name)
+
+
 # -- attribute values (legacy §5.5 semantics) -------------------------------
 
 
@@ -252,6 +300,7 @@ def _attribute(element) -> Attribute:
         name=element.name,
         type_name=element.typed_by_name,
         value=_normalize_value(element),
+        multiplicity=_multiplicity(element),
     )
 
 
@@ -389,37 +438,98 @@ def _port_direction(port) -> str | None:
     return None
 
 
+def _end_names(end_member) -> list[str]:
+    """Feature-chain names of one ``ConnectorEndMember``.
+
+    Both ``connect`` and ``bind`` ends use the same shape:
+    ``ConnectorEndMember`` → ``.children`` (``ConnectorEnd``) → ``.children``
+    (``OwnedReferenceSubsetting``) → ``referencedFeature`` / ``elements``
+    (``OwnedFeatureChain`` → ``OwnedFeatureChaining``). A bare feature uses
+    ``referencedFeature``; a dotted chain uses the ``elements`` list.
+    """
+    names: list[str] = []
+    for connector_end in getattr(end_member, "children", []):  # ConnectorEnd
+        for subsetting in connector_end.children:
+            if type(subsetting).__name__ != "OwnedReferenceSubsetting":
+                continue  # OwnedMultiplicity etc.
+            if subsetting.referencedFeature is not None:
+                names.extend(subsetting.referencedFeature.names)
+            for chain in subsetting.elements:  # OwnedFeatureChain
+                for chaining in chain.feature.children:  # OwnedFeatureChaining
+                    names.extend(chaining.chainingFeature.names)
+    return names
+
+
 def _connection_endpoints(connect) -> list[list[str]]:
     """Per-end feature chains of a connect, e.g. ``[['src', 'sig'], ['dst', 'sigIn']]``.
 
     sysmlpy 0.96.4 exposes no public endpoint accessors; the ends live in
     the grammar as ``ConnectionUsage.part`` (``ConnectorPart``) → ``.part``
-    (``BinaryConnectorPart``) → ``.children`` (``ConnectorEndMember``) →
-    ``.children`` (``ConnectorEnd``) → ``.children``
-    (``OwnedReferenceSubsetting``) → ``referencedFeature`` /
-    ``elements`` (``OwnedFeatureChain`` → ``OwnedFeatureChaining``). For a
-    dotted end like ``src.sig`` both names come from the feature-chaining
-    list.
+    (``BinaryConnectorPart``) → ``.children`` (``ConnectorEndMember``).
     """
     grammar = connect.grammar  # ConnectionUsage
     connector_part = getattr(grammar, "part", None)  # ConnectorPart
     binary = getattr(connector_part, "part", None) if connector_part else None
     if binary is None:
         return []
-    ends: list[list[str]] = []
-    for end_member in binary.children:  # ConnectorEndMember
-        for connector_end in end_member.children:  # ConnectorEnd
-            names: list[str] = []
-            for subsetting in connector_end.children:
-                if type(subsetting).__name__ != "OwnedReferenceSubsetting":
-                    continue  # OwnedMultiplicity etc.
-                if subsetting.referencedFeature is not None:
-                    names.extend(subsetting.referencedFeature.names)
-                for chain in subsetting.elements:  # OwnedFeatureChain
-                    for chaining in chain.feature.children:  # OwnedFeatureChaining
-                        names.extend(chaining.chainingFeature.names)
-            ends.append(names)
-    return ends
+    return [_end_names(end_member) for end_member in binary.children]
+
+
+def _binding_endpoints(bind) -> list[list[str]]:
+    """Per-end feature chains of a ``bind`` statement (``BindingConnector``)."""
+    grammar = bind.grammar  # BindingConnector
+    return [_end_names(end_member) for end_member in grammar.children]
+
+
+def _specializes(element) -> tuple[str, ...]:
+    """Declared supertypes of a definition (``:> A, B``), in source order."""
+    try:
+        part = element.grammar.definition.declaration.subclassificationpart
+    except AttributeError:
+        return ()
+    if part is None:
+        return ()
+    names: list[str] = []
+    for subclassification in getattr(part, "children", []):
+        qualified = getattr(subclassification, "name", None)
+        if qualified is not None:
+            names.extend(qualified.names)
+    return tuple(names)
+
+
+def _multiplicity(element) -> str | None:
+    """Declared multiplicity range of an attribute, e.g. ``"3"`` or ``"0..*"``.
+
+    sysmlpy exposes the range only in the grammar:
+    ``FeatureSpecializationPart.multiplicity`` (``MultiplicityPart``) →
+    ``.children`` (``OwnedMultiplicity``) → ``.children``
+    (``MultiplicityRange``) → ``.children`` (``MultiplicityExpressionMember``)
+    → ``.children[0].element`` (``LiteralInteger`` / ``LiteralInfinity``).
+    """
+    try:
+        specialization = element.grammar.usage.declaration.declaration.specialization
+        multiplicity = specialization.multiplicity
+    except AttributeError:
+        return None
+    if multiplicity is None:
+        return None
+
+    bounds: list[str] = []
+    for owned in getattr(multiplicity, "children", []):
+        for range_ in getattr(owned, "children", []):
+            for member in getattr(range_, "children", []):
+                elements = getattr(member, "children", [])
+                if not elements:
+                    continue
+                literal = getattr(elements[0], "element", None)
+                value = getattr(literal, "element", None)
+                if value is not None:
+                    bounds.append(str(value))
+    if not bounds:
+        return None
+    if len(bounds) == 1:
+        return bounds[0]
+    return "..".join(bounds)
 
 
 def _literal_is_negative(element) -> bool:

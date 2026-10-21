@@ -9,6 +9,7 @@ from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
+from pyssp_sysml2.parameters import reject_parameter_model
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
 from pyssp_sysml2.sysml import is_control_attribute
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
@@ -200,6 +201,7 @@ def generate_model_descriptions(
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    reject_parameter_model(architecture, system, "generate fmi")
 
     written: list[Path] = []
     for part_inst_name, part_usage in system.parts.items():

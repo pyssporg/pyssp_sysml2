@@ -14,6 +14,8 @@ If sysmlpy's API changes, only ``loader.py`` needs fixes.
 from pyssp_sysml2.sysml_model.model import (
     Architecture,
     Attribute,
+    AttributeDefinition,
+    Binding,
     Connection,
     Definition,
     PartDefinition,
@@ -26,6 +28,8 @@ from pyssp_sysml2.sysml_model.model import (
 __all__ = [
     "Architecture",
     "Attribute",
+    "AttributeDefinition",
+    "Binding",
     "Connection",
     "Definition",
     "PartDefinition",

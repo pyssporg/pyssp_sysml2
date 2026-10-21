@@ -15,9 +15,11 @@ Typical workflow:
 2. Generate SSD (`SystemStructure.ssd`) for system wiring.
 3. Generate SSV (`parameters.ssv`) for default parameter values.
 4. Generate FMI `modelDescription.xml` per component.
-5. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
-6. Optionally edit SSD wiring in an external tool.
-7. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
+5. For parameter-set models, generate one SSV per set and SSM mapping files
+   (`pyssp generate ssv`, `pyssp generate ssm`); see “Parameter Sets” below.
+6. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
+7. Optionally edit SSD wiring in an external tool.
+8. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
 
 If no SysML files are available yet, `pyssp generate sysml` can bootstrap a minimal SysML architecture from an SSD.
 
@@ -75,12 +77,98 @@ pyssp generate ssd \
 
 ### SSV
 
+Legacy flat-attribute models produce one file:
+
 ```bash
 pyssp generate ssv \
   --architecture examples/aircraft_subset \
   --composition AircraftComposition \
   --output build/generated/parameters.ssv
 ```
+
+Parameter-set models produce one file per set (see “Parameter Sets” below):
+
+```bash
+pyssp generate ssv \
+  --architecture examples/parameter_sets \
+  --composition AircraftComposition \
+  --output-dir build/generated/parameter_sets
+```
+
+Options:
+
+- `--set NAME` (repeatable): emit only the named set(s).
+- `--all-sets`: emit every set in the architecture, applied or not.
+- `--output FILE`: write a single selected set to a specific file.
+
+### SSM
+
+Explicit `bind` mappings produce SSP parameter-mapping files:
+
+```bash
+pyssp generate ssm \
+  --architecture examples/parameter_sets \
+  --composition AircraftComposition \
+  --output-dir build/generated/parameter_mappings
+```
+
+Whole-object bindings are identity mappings and use an SSP `prefix` instead
+(SSD/FMI support for that is the next stage).
+
+### Parameter Sets
+
+Parameters can be separated from the component definition into an interface
+and reusable value sets:
+
+```sysml
+attribute def ParameterInterface;
+attribute def ParameterSet;
+
+attribute def AutopilotParameters :> ParameterInterface {
+  attribute waypointCount : Integer;
+  attribute waypointX_km : Real[3];
+}
+
+attribute def NominalSet :> ParameterSet {
+  attribute n_waypoints = 10;
+  attribute waypoints_x_km = (0.0, 10.0, 20.0);
+}
+
+part def AutopilotModule {
+  attribute parameters : AutopilotParameters;
+}
+
+part def AircraftComposition {
+  part autopilot : AutopilotModule;
+
+  attribute nominal : NominalSet;
+
+  bind nominal.n_waypoints = autopilot.parameters.waypointCount;
+  bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+}
+```
+
+Mapping to SSP artifacts:
+
+| SysML | SSP |
+| --- | --- |
+| `attribute def <X> :> ParameterInterface` | parameter names/types (`modelDescription.xml`, SSD connectors; consumption is the next stage) |
+| `attribute def <Set> :> ParameterSet` | one `<Set>.ssv` |
+| `bind set.member = part.parameters.member` | one `ssm:MappingEntry source="member" target="part.member"` |
+| `bind set = part.parameters` | identity mapping → `ParameterBinding prefix="part."` |
+| multiple applied sets on one part | rejected (only the effective set is supported) |
+
+Rules:
+
+- Mark interfaces with `:> ParameterInterface` and sets with `:> ParameterSet`.
+  The marker definitions must exist in the same package.
+- A component has exactly one `attribute parameters : <Interface>;` bag.
+- A set is applied per component usage with `bind`; only one set per usage.
+- Set member names are the SSV names; the bind target determines the SSP
+  hierarchical target name.
+- Fixed list lengths use declared multiplicity, e.g. `Real[3]`.
+- `generate ssd` and `generate fmi` do not consume the parameter-set dialect
+  yet; they fail fast with a message pointing to `generate ssv`/`generate ssm`.
 
 ### FMI model descriptions
 
@@ -144,6 +232,9 @@ Not supported (command will fail with a validation error):
 - Connections between incompatible port definitions.
 - Unknown components/ports that do not exist in the SysML composition when `--no-synthesize` is used.
 - Nested SSD systems (only flat SSD systems with components are supported).
+- Parameter interfaces/sets: `generate sysml` and `sync ssd` still use the
+  legacy flat-attribute layout; they do not synthesize interfaces, sets, or
+  `bind` mappings yet.
 
 Notes for `generate sysml`:
 
@@ -160,7 +251,7 @@ equivalent as `pyssp_*` control attributes. They are preserved by
 | SSD metadata | SysML representation |
 | --- | --- |
 | `Component/@implementation` | `attribute pyssp_implementation : String` |
-| `ParameterBinding/@source` | `attribute pyssp_parameter_set : String` |
+| `ParameterBinding/@source` (legacy) | `attribute pyssp_parameter_set : String` |
 | `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
 | Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
 
@@ -219,6 +310,7 @@ pyssp --help
 pyssp generate --help
 pyssp generate ssd --help
 pyssp generate ssv --help
+pyssp generate ssm --help
 pyssp generate fmi --help
 pyssp generate sysml --help
 pyssp sync --help
@@ -236,7 +328,9 @@ PYTHONPATH=src python3 -m pyssp_sysml2.cli --help
 Typical generated structure:
 
 - `build/generated/SystemStructure.ssd`
-- `build/generated/parameters.ssv`
+- `build/generated/parameters.ssv` (legacy flat-attribute models)
+- `build/generated/parameter_sets/*.ssv` (parameter-set models)
+- `build/generated/parameter_mappings/*.ssm` (parameter-set models with explicit binds)
 - `build/generated/model_descriptions/*/modelDescription.xml`
 - `build/generated/architecture.sysml` (when running `pyssp generate sysml`)
 - `build/synced_sysml/*.sysml` (when running `pyssp sync ssd --output-architecture-dir ...`)
@@ -244,7 +338,9 @@ Typical generated structure:
 Artifact purpose:
 
 - `SystemStructure.ssd`: component/connectors/connections structure for SSP workflows.
-- `parameters.ssv`: default parameter values for component attributes.
+- `parameters.ssv`: default parameter values for legacy flat-attribute models.
+- `parameter_sets/*.ssv`: one parameter set, keyed by the set’s own names.
+- `parameter_mappings/*.ssm`: source→target name mapping for explicit binds.
 - `modelDescription.xml`: FMI variable/interface declaration per component.
 - `architecture.sysml`: minimal SysML architecture generated from an SSD.
 - `synced_sysml/*.sysml`: SysML files exported after applying SSD wiring updates.

@@ -10,6 +10,10 @@ Format (2-space indent, one blank line between definitions, trailing newline):
 .. code-block:: text
 
     package Example {
+      attribute def Parameters :> ParameterInterface {
+        attribute gain : Real[3];
+      }
+
       port def Signal {
         doc /* Air vehicle orientation. */
         attribute x : Real;
@@ -17,15 +21,17 @@ Format (2-space indent, one blank line between definitions, trailing newline):
 
       part def SystemComposition {
         part src : Source;
+        attribute nominal : NominalSet;
         connect src.outSig to dst.inSig;
+        bind nominal.gain = src.parameters.gain;
       }
     }
 
 Grouping follows the retired ``export_declared`` semantics: definitions are
 grouped by ``source_file`` (default ``architecture.sysml````), file names are
-sorted, and within a file requirements, ports, and parts each appear sorted by
-name. Attributes, port usages, and part usages are sorted by name inside their
-definition; connections keep insertion order.
+sorted, and within a file requirements, ports, attribute defs, and parts each
+appear sorted by name. Attributes, port usages, and part usages are sorted by
+name inside their definition; connections and bindings keep insertion order.
 """
 
 from __future__ import annotations
@@ -35,6 +41,7 @@ from typing import Protocol
 from pyssp_sysml2.sysml_model.model import (
     Architecture,
     Attribute,
+    AttributeDefinition,
     Definition,
     PartDefinition,
     PortDefinition,
@@ -71,18 +78,25 @@ def _doc_line(doc: str | None, indent: str = _MEMBER_INDENT) -> list[str]:
     return [f"{indent}doc /* {doc} */"]
 
 
+def _multiplicity_suffix(attribute: Attribute) -> str:
+    return f"[{attribute.multiplicity}]" if attribute.multiplicity else ""
+
+
 def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list[str]:
     lines = _doc_line(attribute.doc, indent)
     type_name = attribute.effective_type_name
+    multiplicity = _multiplicity_suffix(attribute)
     if attribute.value is not None:
         value = _format_value(attribute.value)
         lines.append(
-            f"{indent}attribute {attribute.name} : {type_name} = {value};"
+            f"{indent}attribute {attribute.name} : {type_name}{multiplicity} = {value};"
         )
     elif type_name:
-        lines.append(f"{indent}attribute {attribute.name} : {type_name};")
+        lines.append(
+            f"{indent}attribute {attribute.name} : {type_name}{multiplicity};"
+        )
     else:
-        lines.append(f"{indent}attribute {attribute.name};")
+        lines.append(f"{indent}attribute {attribute.name}{multiplicity};")
     return lines
 
 
@@ -112,6 +126,11 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
                 f"{_MEMBER_INDENT}connect {connection.source_part}.{connection.source_port}"
                 f" to {connection.destination_part}.{connection.destination_port};"
             )
+        for binding in part_def.bindings:  # insertion order
+            yield (
+                f"{_MEMBER_INDENT}bind {'.'.join(binding.source)}"
+                f" = {'.'.join(binding.target)};"
+            )
 
     lines.extend(member_lines())
     lines.append(f"{_DEFINITION_INDENT}}}")
@@ -123,6 +142,22 @@ def _port_definition_lines(port_def: PortDefinition) -> list[str]:
     if port_def.doc:
         lines.extend(_doc_line(port_def.doc, _MEMBER_INDENT))
     for attribute in sorted(port_def.attributes.values(), key=lambda a: a.name):
+        lines.extend(_attribute_lines(attribute))
+    lines.append(f"{_DEFINITION_INDENT}}}")
+    return lines
+
+
+def _attribute_definition_lines(attribute_def: AttributeDefinition) -> list[str]:
+    suffix = ""
+    if attribute_def.specializes:
+        suffix = f" :> {', '.join(attribute_def.specializes)}"
+    if not attribute_def.doc and not attribute_def.attributes:
+        return [f"{_DEFINITION_INDENT}attribute def {attribute_def.name}{suffix};"]
+
+    lines = [f"{_DEFINITION_INDENT}attribute def {attribute_def.name}{suffix} {{"]
+    if attribute_def.doc:
+        lines.extend(_doc_line(attribute_def.doc, _MEMBER_INDENT))
+    for attribute in sorted(attribute_def.attributes.values(), key=lambda a: a.name):
         lines.extend(_attribute_lines(attribute))
     lines.append(f"{_DEFINITION_INDENT}}}")
     return lines
@@ -143,6 +178,8 @@ def _definition_lines(definition: Definition) -> list[str]:
         return _part_definition_lines(definition)
     if isinstance(definition, PortDefinition):
         return _port_definition_lines(definition)
+    if isinstance(definition, AttributeDefinition):
+        return _attribute_definition_lines(definition)
     if isinstance(definition, RequirementDefinition):
         return _requirement_definition_lines(definition)
     raise TypeError(f"Unsupported definition type for export: {type(definition)!r}")
@@ -157,10 +194,12 @@ def export_declared(architecture: Architecture) -> dict[str, str]:
             file_name = definition.source_file or DEFAULT_SOURCE_FILE
             groups.setdefault(file_name, []).append(definition)
 
-    # Collect in requirements → ports → parts order so each file's layout
-    # follows the retired exporter's layout.
+    # Collect in requirements → ports → attribute defs → parts order so each
+    # file's layout follows the retired exporter's layout extended with value
+    # types (interfaces and parameter sets appear before their consumers).
     collect(architecture.requirement_definitions.values())
     collect(architecture.port_definitions.values())
+    collect(architecture.attribute_definitions.values())
     collect(architecture.part_definitions.values())
 
     files: dict[str, str] = {}

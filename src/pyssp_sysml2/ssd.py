@@ -15,6 +15,7 @@ from pyssp_standard.ssd import (
 )
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
+from pyssp_sysml2.parameters import reject_parameter_model
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
     DEFAULT_START_ATTR,
@@ -58,6 +59,7 @@ def build_ssd(
     ssd.xml.name = system.name
     ssd.xml.version = "1.0"
     ssd.xml.system = System(name=system.name)
+    reject_parameter_model(architecture, system, "generate ssd")
 
     for part_name, part_usage in system.parts.items():
         part = architecture.resolve_part(part_usage)

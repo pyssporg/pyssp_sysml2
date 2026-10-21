@@ -7,13 +7,15 @@ from pathlib import Path
 from typing import Optional
 
 from pyssp_sysml2.fmi import generate_model_descriptions
+from pyssp_sysml2.parameters import uses_parameter_sets
 from pyssp_sysml2.paths import (
     DEFAULT_ARCH_PATH,
     DEFAULT_COMPOSITION_NAME,
     GENERATED_DIR,
 )
 from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.ssm import generate_parameter_mappings
+from pyssp_sysml2.ssv import generate_parameter_set, generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
@@ -66,8 +68,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     ssv_parser.add_argument(
         "--output",
         type=Path,
-        default=GENERATED_DIR / "parameters.ssv",
-        help="Output SSV file path.",
+        default=None,
+        help=(
+            "Output SSV file path. Legacy flat-attribute models default to "
+            f"{GENERATED_DIR / 'parameters.ssv'}; parameter-set models require "
+            "exactly one selected set."
+        ),
+    )
+    ssv_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=GENERATED_DIR / "parameter_sets",
+        help="Output directory for parameter-set SSV files.",
+    )
+    ssv_parser.add_argument(
+        "--set",
+        action="append",
+        default=None,
+        help="Generate only this parameter set (repeatable).",
+    )
+    ssv_parser.add_argument(
+        "--all-sets",
+        action="store_true",
+        help="Generate every parameter set in the architecture, applied or not.",
+    )
+
+    ssm_parser = generate_subparsers.add_parser(
+        "ssm", help="Generate SSP parameter mappings"
+    )
+    _add_common_architecture_args(ssm_parser)
+    ssm_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=GENERATED_DIR / "parameter_mappings",
+        help="Output directory for .ssm parameter mapping files.",
     )
 
     fmi_parser = generate_subparsers.add_parser(
@@ -136,10 +170,45 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
 
         if args.command == "generate" and args.artifact == "ssv":
+            use_parameter_sets = bool(
+                args.set
+                or args.all_sets
+                or uses_parameter_sets(args.architecture, args.composition)
+            )
+            if use_parameter_sets:
+                written = generate_parameter_sets(
+                    args.architecture,
+                    args.output_dir,
+                    args.composition,
+                    set_names=args.set,
+                    all_sets=args.all_sets,
+                    output_path=args.output,
+                )
+                if not written:
+                    print("No parameter sets matched.")
+                    return 1
+                for path in written:
+                    print(f"Wrote {path}")
+                return 0
+
+            output = args.output or (GENERATED_DIR / "parameters.ssv")
             output = generate_parameter_set(
-                args.architecture, args.output, args.composition
+                args.architecture, output, args.composition
             )
             print(f"Wrote {output}")
+            return 0
+
+        if args.command == "generate" and args.artifact == "ssm":
+            written = generate_parameter_mappings(
+                args.architecture, args.output_dir, args.composition
+            )
+            if not written:
+                print(
+                    "No parameter mappings (whole-object bindings use SSP prefixes)."
+                )
+                return 0
+            for path in written:
+                print(f"Wrote {path}")
             return 0
 
         if args.command == "generate" and args.artifact == "fmi":

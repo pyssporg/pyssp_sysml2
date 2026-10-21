@@ -25,6 +25,8 @@ from typing import Iterator
 __all__ = [
     "Architecture",
     "Attribute",
+    "AttributeDefinition",
+    "Binding",
     "Connection",
     "Definition",
     "PartDefinition",
@@ -69,12 +71,17 @@ def _primitive_from_value(value) -> str | None:
 
 @dataclass
 class Attribute:
-    """A valued or typed attribute on a part/port definition."""
+    """A valued or typed attribute on a part/port definition.
+
+    ``multiplicity`` is the declared range as written (``"3"``, ``"0..*"``,
+    ``"2..4"``) or ``None`` when the attribute is scalar/undeclared.
+    """
 
     name: str
     type_name: str | None = None
     value: object = None
     doc: str | None = None
+    multiplicity: str | None = None
 
     @property
     def is_list(self) -> bool:
@@ -151,6 +158,24 @@ class Connection:
 
 
 @dataclass
+class Binding:
+    """A ``bind source.feature = target.feature;`` inside a part def.
+
+    Endpoints are stored as feature-name chains so generators can resolve
+    parameter-set members (``("nominal", "n_waypoints")``) and component
+    parameter bags (``("autopilot", "parameters", "waypointCount")``).
+    """
+
+    source: tuple[str, ...]
+    target: tuple[str, ...]
+    name: str | None = None
+
+    @property
+    def key(self) -> str:
+        return f"{'.'.join(self.source)}={'.'.join(self.target)}"
+
+
+@dataclass
 class Definition:
     """Common base for top-level package definitions."""
 
@@ -167,6 +192,19 @@ class PortDefinition(Definition):
 
 
 @dataclass
+class AttributeDefinition(Definition):
+    """An ``attribute def`` with ordered members and optional supertypes.
+
+    Parameter interfaces and parameter sets are both ``attribute def``s;
+    their role is established by specialization (``:> ParameterInterface`` /
+    ``:> ParameterSet``) and by how they are used.
+    """
+
+    attributes: dict[str, Attribute] = field(default_factory=dict)
+    specializes: tuple[str, ...] = ()
+
+
+@dataclass
 class PartDefinition(Definition):
     """A ``part def`` with attributes, ports, subparts, and connections."""
 
@@ -174,6 +212,7 @@ class PartDefinition(Definition):
     ports: dict[str, PortUsage] = field(default_factory=dict)
     parts: dict[str, PartUsage] = field(default_factory=dict)
     connections: dict[str, Connection] = field(default_factory=dict)
+    bindings: list[Binding] = field(default_factory=list)
 
 
 @dataclass
@@ -194,6 +233,7 @@ class Architecture:
     package_name: str
     part_definitions: dict[str, PartDefinition] = field(default_factory=dict)
     port_definitions: dict[str, PortDefinition] = field(default_factory=dict)
+    attribute_definitions: dict[str, AttributeDefinition] = field(default_factory=dict)
     requirement_definitions: dict[str, RequirementDefinition] = field(
         default_factory=dict
     )
@@ -212,6 +252,12 @@ class Architecture:
         except KeyError:
             raise KeyError(f"Definition not found in namespace: Key:{name}") from None
 
+    def get_attribute_def(self, name: str) -> AttributeDefinition:
+        try:
+            return self.attribute_definitions[name]
+        except KeyError:
+            raise KeyError(f"Definition not found in namespace: Key:{name}") from None
+
     # -- construction ------------------------------------------------------
 
     def add_part_def(self, part_def: PartDefinition) -> PartDefinition:
@@ -225,6 +271,16 @@ class Architecture:
             raise ValueError(f"Duplicate port definition for {port_def.name}")
         self.port_definitions[port_def.name] = port_def
         return port_def
+
+    def add_attribute_def(
+        self, attribute_def: AttributeDefinition
+    ) -> AttributeDefinition:
+        if attribute_def.name in self.attribute_definitions:
+            raise ValueError(
+                f"Duplicate attribute definition for {attribute_def.name}"
+            )
+        self.attribute_definitions[attribute_def.name] = attribute_def
+        return attribute_def
 
     def add_requirement_def(
         self, requirement_def: RequirementDefinition
@@ -247,6 +303,17 @@ class Architecture:
         """The port definition a port usage refers to, or None if unknown."""
         name = usage.type_name if isinstance(usage, PortUsage) else usage
         return self.port_definitions.get(name)
+
+    def resolve_attribute_def(
+        self, usage: Attribute | str | None
+    ) -> AttributeDefinition | None:
+        """The attribute def an attribute usage refers to, or None if unknown."""
+        if usage is None:
+            return None
+        name = usage.type_name if isinstance(usage, Attribute) else usage
+        if not name:
+            return None
+        return self.attribute_definitions.get(name)
 
     def iter_part_usages(self, part_def: PartDefinition) -> Iterator[PartUsage]:
         return iter(part_def.parts.values())

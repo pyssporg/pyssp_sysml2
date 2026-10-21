@@ -39,6 +39,87 @@ def write_cli_architecture(root: Path) -> Path:
     return root
 
 
+def write_parameter_cli_architecture(root: Path) -> Path:
+    root.mkdir(parents=True, exist_ok=True)
+    write_model(
+        root / "model.sysml",
+        f"""
+        package Example {{
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def Parameters :> ParameterInterface {{
+            attribute gain : Real;
+          }}
+
+          attribute def NominalSet :> ParameterSet {{
+            attribute gain_value = 2.0;
+          }}
+
+          part def Source {{
+            attribute parameters : Parameters;
+            out port outSig : Signal;
+          }}
+
+          port def Signal {{
+            attribute x : Real;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part src : Source;
+            attribute nominal : NominalSet;
+            bind nominal.gain_value = src.parameters.gain;
+          }}
+        }}
+        """,
+    )
+    return root
+
+
+def test_pyssp_generate_ssv_cli_parameter_sets(tmp_path: Path) -> None:
+    """CLI generate ssv writes one file per applied parameter set."""
+    architecture_dir = write_parameter_cli_architecture(tmp_path / "arch")
+    output_dir = tmp_path / "sets"
+
+    code = main(
+        [
+            "generate",
+            "ssv",
+            "--architecture",
+            str(architecture_dir),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert code == 0
+    assert (output_dir / "NominalSet.ssv").exists()
+
+
+def test_pyssp_generate_ssm_cli(tmp_path: Path) -> None:
+    """CLI generate ssm writes the explicit bind mapping."""
+    architecture_dir = write_parameter_cli_architecture(tmp_path / "arch")
+    output_dir = tmp_path / "mappings"
+
+    code = main(
+        [
+            "generate",
+            "ssm",
+            "--architecture",
+            str(architecture_dir),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+
+    assert code == 0
+    assert (output_dir / "NominalSet_src.ssm").exists()
+
+
 def test_pyssp_generate_ssd_cli(tmp_path: Path) -> None:
     """CLI generate ssd succeeds and writes the requested SSD file."""
     architecture_dir = write_cli_architecture(tmp_path / "arch")

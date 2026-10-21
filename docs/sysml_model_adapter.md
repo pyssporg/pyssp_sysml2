@@ -33,10 +33,20 @@ when upgrading the pin — all isolated at the bottom of `loader.py`
 
 - **Port direction** lives at `port.grammar.prefix.prefix.prefix.direction`
   (`FeatureDirection.isIn/isOut/isInOut`); the public `Port` has no direction.
-- **Connection endpoints** live in
-  `ConnectionUsage.part.part.children[].children[].children[]`
+- **Connection and binding endpoints** live in
+  `ConnectionUsage.part.part.children[].children[].children[]` and
+  `BindingConnector.children[].children[].children[]`
   (`OwnedReferenceSubsetting` + `OwnedFeatureChaining`); for a dotted end like
   `src.sig` both names come from the feature-chaining list.
+- **Attribute multiplicity** lives in
+  `FeatureSpecializationPart.multiplicity` (`MultiplicityPart` →
+  `OwnedMultiplicity` → `MultiplicityRange` → `LiteralInteger` /
+  `LiteralInfinity`); `attribute x : Real[3]` reads as `"3"`, `[0..*]` as
+  `"0..*"`.
+- **Definition supertypes** live in
+  `DefinitionDeclaration.subclassificationpart` (`OwnedSubclassification` →
+  `QualifiedName.names`); this is how `attribute def X :> ParameterSet` is
+  recognized.
 - **Negative literals**: `get_value()` drops a leading unary minus (`-1.5`
   reads as `1.5`); the sign is re-attached from the grammar's
   `UnaryExpression.operator`.
@@ -56,6 +66,31 @@ were removed from this repo's models during the migration:
   (bracket lists `[...]` are a syntax error), and
 - `comment` is a reserved keyword — attributes may not be named `comment`.
 
+The adapter also loads the parameter-set dialect:
+
+- `attribute def` definitions; members keep type, value, doc, and multiplicity;
+- specialization with `:>` (used for the `ParameterInterface` /
+  `ParameterSet` markers);
+- `bind` statements with full feature chains, e.g.
+  `bind set.member = component.parameters.member;`.
+
+The parameter tooling treats an `attribute def` as a parameter interface or
+parameter set only when it specializes the matching marker definition:
+
+```sysml
+attribute def ParameterInterface;
+attribute def ParameterSet;
+
+attribute def AutopilotParameters :> ParameterInterface { ... }
+attribute def NominalSet :> ParameterSet { ... }
+```
+
+The marker definitions themselves must exist in the package (the loader does
+not resolve imports across packages yet). A component exposes its interface
+through the fixed bag `attribute parameters : <Interface>;`. Only one bag per
+part is supported, and mixing it with flat parameter attributes on the same
+part is rejected.
+
 ## Behavior notes
 
 - Loading is non-validating: unresolved references surface as
@@ -69,3 +104,9 @@ were removed from this repo's models during the migration:
   `architecture.sysml`), which is how `sync ssd` writes back
   `composition.sysml` / `part_definitions.sysml` / ... separately; synthesized
   definitions carry `inferred_external_parts.sysml`.
+- `bind` statements are stored in source order on their owning part def.
+  sysmlpy names unnamed bindings with UUIDs; those names are normalized to
+  `None` (the exporter emits unnamed `bind` lines, matching the connection
+  policy).
+- `attribute def` members keep declared multiplicity (`Real[3]`, `Real[0..*]`);
+  parameter tooling requires a fixed length for SSP output.

@@ -354,6 +354,112 @@ def test_requirement_definition_text(tmp_path) -> None:
 # -- connections ---------------------------------------------------------------
 
 
+def test_attribute_definitions_and_specialization(tmp_path) -> None:
+    """Package attribute defs keep members, markers, and source files."""
+    model_file = tmp_path / "values.sysml"
+    write_model(
+        model_file,
+        """
+        package Values {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def Interface :> ParameterInterface {
+            attribute gain : Real;
+            attribute count : Integer;
+          }
+
+          attribute def NominalSet :> ParameterSet {
+            attribute gain_value = 2.0;
+          }
+        }
+        """,
+    )
+
+    architecture = load(model_file)
+
+    assert list(architecture.attribute_definitions) == [
+        "ParameterInterface",
+        "ParameterSet",
+        "Interface",
+        "NominalSet",
+    ]
+    interface = architecture.attribute_definitions["Interface"]
+    assert interface.specializes == ("ParameterInterface",)
+    assert interface.source_file == "values.sysml"
+    assert list(interface.attributes) == ["gain", "count"]
+    assert interface.attributes["gain"].type_name == "Real"
+
+    nominal = architecture.attribute_definitions["NominalSet"]
+    assert nominal.specializes == ("ParameterSet",)
+    assert nominal.attributes["gain_value"].value == 2.0
+
+
+def test_attribute_multiplicity(tmp_path) -> None:
+    """Declared multiplicities survive loading (fixed, bounded, unbounded)."""
+    model_file = tmp_path / "values.sysml"
+    write_model(
+        model_file,
+        """
+        package Values {
+          part def Multi {
+            attribute fixed : Real[3];
+            attribute bounded : Integer[2..4];
+            attribute unbounded : Real[0..*];
+            attribute scalar : Real;
+          }
+        }
+        """,
+    )
+
+    attributes = load(model_file).part_definitions["Multi"].attributes
+
+    assert attributes["fixed"].multiplicity == "3"
+    assert attributes["bounded"].multiplicity == "2..4"
+    assert attributes["unbounded"].multiplicity == "0..*"
+    assert attributes["scalar"].multiplicity is None
+
+
+def test_bindings_loaded_with_feature_chains(tmp_path) -> None:
+    """Per-member and whole-object bindings keep both feature chains."""
+    model_file = tmp_path / "bindings.sysml"
+    write_model(
+        model_file,
+        """
+        package Bindings {
+          attribute def Interface {
+            attribute gain : Real;
+          }
+
+          attribute def Set {
+            attribute gain_value = 2.0;
+          }
+
+          part def Component {
+            attribute parameters : Interface;
+          }
+
+          part def SystemComposition {
+            part componentA : Component;
+            part componentB : Component;
+            attribute nominal : Set;
+
+            bind nominal.gain_value = componentA.parameters.gain;
+            bind nominal = componentB.parameters;
+          }
+        }
+        """,
+    )
+
+    bindings = load(model_file).part_definitions["SystemComposition"].bindings
+
+    assert [(binding.source, binding.target) for binding in bindings] == [
+        (("nominal", "gain_value"), ("componentA", "parameters", "gain")),
+        (("nominal",), ("componentB", "parameters")),
+    ]
+    assert all(binding.name is None for binding in bindings)
+
+
 def test_connections_stored_by_key_with_legacy_names(tmp_path) -> None:
     """Connections are keyed by endpoint pair; names follow the legacy scheme."""
     model_file = tmp_path / "connections.sysml"
@@ -510,9 +616,9 @@ def _architecture_summary(architecture: Architecture) -> dict:
     - raw ``attribute.type_name``: the exporter always writes
       ``effective_type_name``, so inferred types materialize as declared
       ones after export — comparing the effective type keeps that stable;
-    - connection ``name`` and ``source_file``: unnamed connects get an
-      endpoint-derived name and the exporter does not re-emit explicit
-      connection names; source files are covered by the directory tests.
+    - connection/binding ``name`` and ``source_file``: unnamed members get
+      endpoint-derived names (or None) and the exporter does not re-emit
+      explicit names; source files are covered by the directory tests.
     """
     return {
         "package_name": architecture.package_name,
@@ -520,17 +626,40 @@ def _architecture_summary(architecture: Architecture) -> dict:
             port_def.name: {
                 "doc": port_def.doc,
                 "attributes": {
-                    attribute.name: (attribute.effective_type_name, attribute.value)
+                    attribute.name: (
+                        attribute.effective_type_name,
+                        attribute.multiplicity,
+                        attribute.value,
+                    )
                     for attribute in port_def.attributes.values()
                 },
             }
             for port_def in architecture.port_definitions.values()
         },
+        "attribute_definitions": {
+            attribute_def.name: {
+                "doc": attribute_def.doc,
+                "specializes": attribute_def.specializes,
+                "attributes": {
+                    attribute.name: (
+                        attribute.effective_type_name,
+                        attribute.multiplicity,
+                        attribute.value,
+                    )
+                    for attribute in attribute_def.attributes.values()
+                },
+            }
+            for attribute_def in architecture.attribute_definitions.values()
+        },
         "part_definitions": {
             part_def.name: {
                 "doc": part_def.doc,
                 "attributes": {
-                    attribute.name: (attribute.effective_type_name, attribute.value)
+                    attribute.name: (
+                        attribute.effective_type_name,
+                        attribute.multiplicity,
+                        attribute.value,
+                    )
                     for attribute in part_def.attributes.values()
                 },
                 "ports": {
@@ -547,6 +676,9 @@ def _architecture_summary(architecture: Architecture) -> dict:
                     )
                     for connection in part_def.connections.values()
                 },
+                "bindings": [
+                    (binding.source, binding.target) for binding in part_def.bindings
+                ],
             }
             for part_def in architecture.part_definitions.values()
         },
@@ -564,6 +696,17 @@ def test_export_round_trip(tmp_path) -> None:
         source_dir / "model.sysml",
         """
         package RoundTrip {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def Measurements :> ParameterInterface {
+            attribute temperature : Real[2];
+          }
+
+          attribute def NominalMeasurements :> ParameterSet {
+            attribute temps = (1.0, 2.0);
+          }
+
           port def Signal {
             doc /* A signal. */
             attribute level : Real;
@@ -584,10 +727,18 @@ def test_export_round_trip(tmp_path) -> None:
             in port sigIn : Signal;
           }
 
+          part def Measured {
+            attribute parameters : Measurements;
+          }
+
           part def SystemComposition {
             part src : Source;
             part dst : Sink;
+            part measured : Measured;
+            attribute nominal : NominalMeasurements;
+
             connect src.sig to dst.sigIn;
+            bind nominal.temps = measured.parameters.temperature;
           }
 
           requirement def Connected {
