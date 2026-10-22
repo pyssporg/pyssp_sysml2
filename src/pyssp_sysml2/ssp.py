@@ -18,11 +18,9 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
-from pyssp_standard.common.archive import copy_resource_directory
-from pyssp_standard.fmu import FMU
-from pyssp_standard.ssd import SSD
+from pyssp_standard import FMU, copy_resource_directory
+from pyssp_standard.ssd import Component, SSD, System
 from pyssp_standard.ssp import SSP
-from pyssp_standard.standard.ssp1.model.ssd_model import Ssd1Component, Ssd1System
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
 from pyssp_sysml2.fmu_metadata import fmu_metadata
@@ -128,16 +126,16 @@ def _open_fmu(source: Path) -> tuple[set[str], set[str]]:
     return names, interfaces
 
 
-def _iter_components(system: Ssd1System):
+def _iter_components(system: System):
     for element in system.elements:
-        if isinstance(element, Ssd1System):
+        if isinstance(element, System):
             yield from _iter_components(element)
-        elif isinstance(element, Ssd1Component):
+        elif isinstance(element, Component):
             yield element
 
 
 def _validate_ssd_components(
-    system: Ssd1System,
+    system: System,
     resources: dict[str, Path],
 ) -> None:
     resources_by_source = {

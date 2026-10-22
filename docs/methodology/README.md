@@ -4,6 +4,13 @@
 > If this page and the implementation disagree, the implementation wins and
 > this page needs an update.
 
+## Library boundary
+
+`pyssp_sysml2` represents systems as SysML, produces standard SSD/SSV/SSM/SSP
+and FMI XML, and exposes a CLI. The artifact is the preferred cross-project
+contract. A Python consumer uses only documented public functions; internal
+parser, codec, and schema-binding types are not part of the public API.
+
 This knowledge base records **how this repository models simulation systems in
 SysML v2** and how those models are transferred to SSP and FMI. Many of the
 rules are implicit in the generator code and in the test suite; the goal here

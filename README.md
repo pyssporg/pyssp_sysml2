@@ -2,6 +2,11 @@
 
 Generate SSP, FMI, and SysML artifacts from a SysML v2 architecture or SSD.
 
+**Library boundary:** the interchange is the SSP/FMI artifact (SSP, SSD, SSV,
+SSM, FMI XML). The CLI is the public surface for other projects. When a Python
+consumer needs this package, it uses documented public functions only; parser
+internals and schema bindings do not cross.
+
 ## Who This Is For
 
 - `README.md` (this file): package users who want to generate/sync artifacts.

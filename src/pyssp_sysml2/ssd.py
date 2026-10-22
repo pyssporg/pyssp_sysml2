@@ -10,12 +10,10 @@ from pyssp_standard.ssd import (
     Connector,
     DefaultExperiment,
     ParameterBinding,
+    ParameterMapping,
+    ParameterMappingReference,
     SSD,
     System,
-)
-from pyssp_standard.standard.ssp1.model import (
-    Ssd1ParameterMappingReference,
-    Ssp1ParameterMapping,
 )
 
 from pyssp_sysml2.control import is_control_attribute
@@ -84,12 +82,12 @@ def _parameter_binding(
     if spec.identity:
         return ParameterBinding(source=source, prefix=f"{spec.component_name}.")
 
-    mapping = Ssp1ParameterMapping(version="1.0")
+    mapping = ParameterMapping(version="1.0")
     for source_name, target_name in spec.entries:
         mapping.add_mapping(source_name, target_name)
     return ParameterBinding(
         source=source,
-        parameter_mapping=Ssd1ParameterMappingReference(mapping=mapping),
+        parameter_mapping=ParameterMappingReference(mapping=mapping),
     )
 
 
