@@ -13,7 +13,9 @@ from pyssp_standard.ssd import (
     System,
 )
 
+from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssd import generate_ssd
+from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from tests.test_utils import write_model
@@ -162,3 +164,274 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
             return binding.source, binding.prefix, entries, connectors
 
     assert binding_summary(first_ssd) == binding_summary(second_ssd)
+
+
+def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
+    """A set applied to a nested part path survives SSD round-trips."""
+    architecture_dir = tmp_path / "source_arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def InnerParams :> ParameterInterface {
+            attribute k : Real = 1.0;
+          }
+
+          attribute def Nom :> ParameterSet {
+            attribute k = 3.0;
+          }
+
+          part def Inner {
+            attribute parameters : InnerParams;
+          }
+
+          part def Outer {
+            part inner : Inner;
+          }
+
+          part def SystemComposition {
+            part outer : Outer;
+            attribute nominal : Nom;
+            bind nominal.k = outer.inner.parameters.k;
+          }
+        }
+        """,
+    )
+
+    first_ssd = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, first_ssd, "SystemComposition")
+    generate_parameter_sets(
+        architecture_dir,
+        first_ssd.parent / "parameter_sets",
+        "SystemComposition",
+    )
+
+    with SSD(first_ssd, mode="r") as ssd:
+        top = ssd.xml.system
+        assert [element.name for element in top.elements] == ["outer"]
+        outer = top.elements[0]
+        assert isinstance(outer, System)
+        assert [element.name for element in outer.elements] == ["inner"]
+        inner = outer.elements[0]
+        assert isinstance(inner, Component)
+        assert [
+            (connector.name, connector.kind)
+            for connector in inner.connectors
+        ] == [("k", "parameter")]
+        [binding] = top.parameter_bindings
+        assert [
+            (mapping.source, mapping.target)
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [("k", "outer.inner.k")]
+
+    roundtrip_arch = tmp_path / "roundtrip_arch"
+    roundtrip_arch.mkdir()
+    generated = roundtrip_arch / "architecture.sysml"
+    generate_sysml_from_ssd(first_ssd, generated)
+    text = generated.read_text()
+    assert "attribute def InnerParameters :> ParameterInterface" in text
+    assert "part def outer" in text
+    assert "part inner : Inner;" in text
+    assert "bind Nom.k = outer.inner.parameters.k;" in text
+
+    second_ssd = tmp_path / "regenerated.ssd"
+    generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
+    with SSD(second_ssd, mode="r") as ssd:
+        top = ssd.xml.system
+        assert [element.name for element in top.elements] == ["outer"]
+        [binding] = top.parameter_bindings
+        assert [
+            (mapping.source, mapping.target)
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [("k", "outer.inner.k")]
+
+    model_descriptions = generate_model_descriptions(
+        architecture_dir,
+        tmp_path / "model_descriptions",
+        "SystemComposition",
+    )
+    assert [path.parent.name for path in model_descriptions] == ["Inner"]
+
+
+def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
+    """Multiple sets at a nested component path keep disjoint mappings."""
+    architecture_dir = tmp_path / "source_arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def InnerParams :> ParameterInterface {
+            attribute count : Integer;
+            attribute gain : Real;
+          }
+
+          attribute def Counts :> ParameterSet {
+            attribute n = 10;
+          }
+
+          attribute def Gains :> ParameterSet {
+            attribute k = 2.5;
+          }
+
+          part def Inner {
+            attribute parameters : InnerParams;
+          }
+
+          part def Outer {
+            part inner : Inner;
+          }
+
+          part def SystemComposition {
+            part outer : Outer;
+            attribute counts : Counts;
+            attribute gains : Gains;
+            bind counts.n = outer.inner.parameters.count;
+            bind gains.k = outer.inner.parameters.gain;
+          }
+        }
+        """,
+    )
+
+    first_ssd = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, first_ssd, "SystemComposition")
+    generate_parameter_sets(
+        architecture_dir,
+        first_ssd.parent / "parameter_sets",
+        "SystemComposition",
+    )
+    mappings = generate_parameter_mappings(
+        architecture_dir, tmp_path / "mappings", "SystemComposition"
+    )
+    assert [path.name for path in mappings] == [
+        "Counts_outer_inner.ssm",
+        "Gains_outer_inner.ssm",
+    ]
+
+    def binding_summary(path: Path):
+        with SSD(path, mode="r") as ssd:
+            return sorted(
+                (
+                    binding.source,
+                    [
+                        (mapping.source, mapping.target)
+                        for mapping in binding.parameter_mapping.mapping.mappings
+                    ],
+                )
+                for binding in ssd.xml.system.parameter_bindings
+            )
+
+    assert binding_summary(first_ssd) == [
+        ("parameter_sets/Counts.ssv", [("n", "outer.inner.count")]),
+        ("parameter_sets/Gains.ssv", [("k", "outer.inner.gain")]),
+    ]
+
+    roundtrip_arch = tmp_path / "roundtrip_arch"
+    roundtrip_arch.mkdir()
+    generated = roundtrip_arch / "architecture.sysml"
+    generate_sysml_from_ssd(first_ssd, generated)
+    text = generated.read_text()
+    assert "bind Counts.n = outer.inner.parameters.count;" in text
+    assert "bind Gains.k = outer.inner.parameters.gain;" in text
+
+    second_ssd = tmp_path / "regenerated.ssd"
+    generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
+    assert binding_summary(second_ssd) == binding_summary(first_ssd)
+
+
+def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
+    """A nested system can own a parameter interface alongside subparts."""
+    architecture_dir = tmp_path / "source_arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def InnerParams :> ParameterInterface {
+            attribute k : Real;
+          }
+
+          attribute def OuterParams :> ParameterInterface {
+            attribute gain : Real = 2.0;
+          }
+
+          attribute def InnerSet :> ParameterSet {
+            attribute k = 3.0;
+          }
+
+          attribute def OuterSet :> ParameterSet {
+            attribute g = 4.0;
+          }
+
+          part def Inner {
+            attribute parameters : InnerParams;
+          }
+
+          part def Outer {
+            attribute parameters : OuterParams;
+            part inner : Inner;
+          }
+
+          part def SystemComposition {
+            part outer : Outer;
+            attribute inner_set : InnerSet;
+            attribute outer_set : OuterSet;
+            bind inner_set.k = outer.inner.parameters.k;
+            bind outer_set.g = outer.parameters.gain;
+          }
+        }
+        """,
+    )
+
+    first_ssd = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, first_ssd, "SystemComposition")
+    generate_parameter_sets(
+        architecture_dir,
+        first_ssd.parent / "parameter_sets",
+        "SystemComposition",
+    )
+
+    with SSD(first_ssd, mode="r") as ssd:
+        outer = ssd.xml.system.elements[0]
+        assert isinstance(outer, System)
+        assert [
+            (connector.name, connector.kind)
+            for connector in outer.connectors
+        ] == [("gain", "parameter")]
+        assert [
+            (binding.source, mapping.target)
+            for binding in ssd.xml.system.parameter_bindings
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [
+            ("parameter_sets/OuterSet.ssv", "outer.gain"),
+            ("parameter_sets/InnerSet.ssv", "outer.inner.k"),
+        ]
+
+    roundtrip_arch = tmp_path / "roundtrip_arch"
+    roundtrip_arch.mkdir()
+    generated = roundtrip_arch / "architecture.sysml"
+    generate_sysml_from_ssd(first_ssd, generated)
+    text = generated.read_text()
+    assert "part def outer" in text
+    assert "attribute parameters : outerParameters;" in text
+    assert "bind OuterSet.g = outer.parameters.gain;" in text
+    assert "bind InnerSet.k = outer.inner.parameters.k;" in text
+
+    second_ssd = tmp_path / "regenerated.ssd"
+    generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
+    with SSD(second_ssd, mode="r") as ssd:
+        assert [
+            (binding.source, mapping.target)
+            for binding in ssd.xml.system.parameter_bindings
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [
+            ("parameter_sets/OuterSet.ssv", "outer.gain"),
+            ("parameter_sets/InnerSet.ssv", "outer.inner.k"),
+        ]

@@ -32,6 +32,11 @@ points at `parameter_sets/NominalSet.ssv`. The FMI model description gets
 parameter variables (with interface defaults when declared; the applied set
 is a runtime mapping, not an FMI start value).
 
+The same dialect supports multiple disjoint sets per component and nested part
+paths such as `bind nominal.k = outer.inner.parameters.k`. For the full
+methodology and more examples, see
+[`docs/methodology/01-parameter-sets.md`](../../docs/methodology/01-parameter-sets.md).
+
 Regenerate SysML from the SSD to see the synthesized dialect:
 
 ```bash

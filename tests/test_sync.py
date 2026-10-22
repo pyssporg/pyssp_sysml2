@@ -15,7 +15,9 @@ from pyssp_standard.ssd import (
 )
 
 from pyssp_sysml2.ssd import generate_ssd
+from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
 from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
@@ -628,3 +630,154 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
     assert "attribute k : Real = 5.0;" in text
     assert "attribute bias : Real = 1.5;" in text
     assert "bind parameters_set = gain.parameters;" in text
+
+
+def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
+    """Sync reconciles nested systems, added components, and set values."""
+    source_arch = tmp_path / "source_arch"
+    write_model(
+        source_arch / "model.sysml",
+        """
+        package Example {
+          attribute def ParameterInterface;
+          attribute def ParameterSet;
+
+          attribute def InnerParams :> ParameterInterface {
+            attribute k : Real = 1.0;
+          }
+
+          attribute def Nom :> ParameterSet {
+            attribute k = 3.0;
+          }
+
+          part def Inner {
+            attribute parameters : InnerParams;
+          }
+
+          part def Outer {
+            part inner : Inner;
+          }
+
+          part def SystemComposition {
+            part outer : Outer;
+            attribute nominal : Nom;
+            bind nominal.k = outer.inner.parameters.k;
+          }
+        }
+        """,
+    )
+
+    ssd_path = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(source_arch, ssd_path, "SystemComposition")
+    generate_parameter_sets(
+        source_arch,
+        ssd_path.parent / "parameter_sets",
+        "SystemComposition",
+    )
+
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir()
+    generate_sysml_from_ssd(ssd_path, architecture_dir / "architecture.sysml")
+
+    (ssd_path.parent / "parameter_sets" / "Nom.ssv").write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
+  <ssv:Parameters>
+    <ssv:Parameter name="k"><ssv:Real value="5.0" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+    with SSD(ssd_path, mode="a") as ssd:
+        outer = ssd.xml.system.elements[0]
+        extra = Component()
+        extra.name = "inner2"
+        extra.source = "resources/Inner.fmu"
+        extra.connectors.append(
+            Connector(name="k", kind="parameter", type_name="Real")
+        )
+        outer.elements.append(extra)
+
+    output_dir = tmp_path / "synced"
+    sync_sysml_from_ssd(
+        architecture_dir,
+        ssd_path,
+        "SystemComposition",
+        output_architecture_dir=output_dir,
+    )
+    text = _architecture_text(output_dir)
+
+    assert "part inner2 : Inner;" in text
+    assert "attribute k : Real = 5.0;" in text
+    assert "bind Nom.k = outer.inner.parameters.k;" in text
+
+
+def test_sync_nested_system_connections(tmp_path: Path) -> None:
+    """Sync recursively reconciles connections inside a nested system."""
+    source_arch = tmp_path / "source_arch"
+    write_model(
+        source_arch / "model.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x : Real;
+          }
+
+          part def Source {
+            out port outSig : Signal;
+          }
+
+          part def Sink {
+            in port inSig : Signal;
+          }
+
+          part def Controller {
+            part src : Source;
+            part dst : Sink;
+            connect src.outSig to dst.inSig;
+          }
+
+          part def SystemComposition {
+            part controller : Controller;
+          }
+        }
+        """,
+    )
+
+    ssd_path = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(source_arch, ssd_path, "SystemComposition")
+
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir()
+    generate_sysml_from_ssd(ssd_path, architecture_dir / "architecture.sysml")
+
+    with SSD(ssd_path, mode="a") as ssd:
+        controller = ssd.xml.system.elements[0]
+        extra = Component()
+        extra.name = "dst2"
+        extra.source = "resources/Sink.fmu"
+        extra.connectors.append(
+            Connector(name="inSig.value", kind="input", type_name="Real")
+        )
+        controller.elements.append(extra)
+        controller.connections = [
+            Connection(
+                start_element="src",
+                start_connector="outSig.value",
+                end_element="dst2",
+                end_connector="inSig.value",
+            )
+        ]
+
+    output_dir = tmp_path / "synced"
+    sync_sysml_from_ssd(
+        architecture_dir,
+        ssd_path,
+        "SystemComposition",
+        output_architecture_dir=output_dir,
+    )
+    text = _architecture_text(output_dir)
+
+    assert "part dst2 : Sink;" in text
+    assert "connect src.outSig to dst2.inSig;" in text
+    assert "connect src.outSig to dst.inSig;" not in text

@@ -26,7 +26,8 @@ def generate_parameter_mappings(
     for spec in mapping_specs(architecture, system):
         if spec.identity:
             continue
-        output_path = output_dir / f"{spec.set_name}_{spec.part_name}.ssm"
+        component_name = spec.component_name.replace(".", "_")
+        output_path = output_dir / f"{spec.set_name}_{component_name}.ssm"
         ensure_directory(output_dir)
         with SSM(output_path, mode="w") as ssm:
             for source, target in spec.entries:

@@ -76,8 +76,10 @@ pyssp generate ssd \
 ```
 
 For parameter-set models the SSD gets parameter connectors plus system-level
-`ParameterBinding` entries. Use `--parameter-set-prefix` to control the
-relative SSV path written into the SSD (default `parameter_sets`):
+`ParameterBinding` entries. Nested SysML part usages become nested
+`ssd:System` elements; leaf parts become `ssd:Component` elements. Use
+`--parameter-set-prefix` to control the relative SSV path written into the
+SSD (default `parameter_sets`):
 
 ```bash
 pyssp generate ssd \
@@ -131,7 +133,9 @@ SSM artifacts or inspection.
 ### Parameter Sets
 
 Parameters can be separated from the component definition into an interface
-and reusable value sets:
+and reusable value sets. The full methodology, including multiple-set and
+nested-path patterns, is in
+[`docs/methodology/01-parameter-sets.md`](docs/methodology/01-parameter-sets.md).
 
 ```sysml
 attribute def ParameterInterface;
@@ -167,16 +171,29 @@ Mapping to SSP artifacts:
 | --- | --- |
 | `attribute def <X> :> ParameterInterface` | parameter connectors in SSD and parameter variables in `modelDescription.xml` |
 | `attribute def <Set> :> ParameterSet` | one `<Set>.ssv` |
-| `bind set.member = part.parameters.member` | inline `ssm:MappingEntry source="member" target="part.member"` |
-| `bind set = part.parameters` | identity mapping → `ParameterBinding prefix="part."` |
-| multiple applied sets on one part | rejected (only the effective set is supported) |
+| `bind set.member = path.parameters.member` | inline `ssm:MappingEntry source="member" target="path.member"` |
+| `bind set = path.parameters` | identity mapping → `ParameterBinding prefix="path."` |
+| multiple sets on one component | allowed when target members are disjoint; overlapping targets are rejected |
 
 Rules:
 
 - Mark interfaces with `:> ParameterInterface` and sets with `:> ParameterSet`.
   The marker definitions must exist in the same package.
-- A component has exactly one `attribute parameters : <Interface>;` bag.
-- A set is applied per component usage with `bind`; only one set per usage.
+- A component or nested system has at most one
+  `attribute parameters : <Interface>;` bag.
+- Sets are applied per component or nested-system usage with `bind`. An
+  element may have several applied sets as long as no target parameter is
+  bound more than once.
+  SysML `bind` is an equality constraint, not an override, so overlapping
+  targets are rejected instead of imposing an order.
+- `path` may be a nested part path, for example
+  `bind nominal.k = outer.inner.parameters.k`. Nested parts are emitted as
+  nested `ssd:System` elements and use SSP hierarchical target names.
+- Apply sets at the composition root. Bindings stored inside a nested part
+  definition are rejected; target nested usages from the root instead.
+- The composition itself is not a parameter target. Attach parameter
+  interfaces to component or nested-system usages; top-level SSD system
+  parameter connectors are rejected.
 - Set member names are the SSV names; the bind target determines the SSP
   hierarchical target name.
 - Fixed list lengths use declared multiplicity, e.g. `Real[3]`.
@@ -203,7 +220,8 @@ pyssp generate fmi \
 
 Parameter-set interfaces produce FMI parameter variables (including fixed
 list expansion). `start` values come from the interface declarations only; an
-applied SSV/SSM supplies runtime values.
+applied SSV/SSM supplies runtime values. Nested leaf components are discovered
+recursively and get their own model description.
 
 ### SysML from SSD
 
@@ -248,11 +266,12 @@ pyssp sync ssd \
 
 Supported:
 
-- Adding/removing component instances through SSD component edits when the component `source` resolves to a known SysML part definition.
+- Adding/removing component or nested-system instances through SSD element edits when the source (for components) resolves to a known SysML part definition.
 - Adding/removing/changing port-to-port composition connections through SSD connection edits.
 - Writing updates in-place or to a separate output architecture directory.
 - Reconciling the parameter dialect (interfaces, set values, set usages, and binds) when the SysML architecture already uses interfaces/sets or was bootstrapped from the SSD.
-- Synthesizing part definitions for new SSD components whose `source` has no matching SysML part definition. The synthesized part definition is derived from the component's FMU source stem, its ports are built from the SSD connector attribute signatures (reusing an existing port definition when the signature matches), and the new definitions are written to `inferred_external_parts.sysml`. Pass `--no-synthesize` to disable this and fail on unknown sources instead.
+- Recursing through nested SSD systems and nested SysML part usages, including adding/removing nested components and reconciling nested connection wiring.
+- Synthesizing part definitions for new SSD components or nested systems that have no matching SysML definition. Component definitions are derived from the FMU source stem; system definitions get ports from their SSD connectors and are populated recursively. Port definitions are reused by signature when possible, and new definitions are written to `inferred_external_parts.sysml`. Pass `--no-synthesize` to disable this and fail on unknown sources instead.
 
 Not supported (command will fail with a validation error):
 
@@ -261,7 +280,6 @@ Not supported (command will fail with a validation error):
 - Connectors that are not expressed in `port.attribute` form.
 - Connections between incompatible port definitions.
 - Unknown components/ports that do not exist in the SysML composition when `--no-synthesize` is used.
-- Nested SSD systems (only flat SSD systems with components are supported).
 - Migrating an existing legacy flat-attribute architecture to interfaces/sets.
   Sync manages the parameter dialect only when the architecture already uses
   it or was bootstrapped from the SSD.
@@ -271,7 +289,8 @@ Notes for `generate sysml`:
 - Generated SysML is intentionally minimal and exported to `architecture.sysml`.
 - Part names are derived from SSD component `source` (FMU stem) when available, otherwise from component names.
 - Port definitions are inferred from SSD connector attribute signatures.
-- Parameter connectors become interface members; `ParameterBinding` entries become set definitions, composition set usages, and `bind` statements.
+- Nested `ssd:System` elements become nested part definitions and part usages.
+- Parameter connectors become interface members; `ParameterBinding` entries become set definitions, composition set usages, and `bind` statements. Nested systems use hierarchical targets such as `outer.inner.k`.
 
 ## 3.5) Round-trip fidelity
 
@@ -335,8 +354,8 @@ bash examples/cli_usage.sh
 PYTHONPATH=src python3 examples/module_usage.py
 ```
 
-- CLI workflow: [`examples/cli_usage.sh`](/home/eriro/pwa/2_work/pyssp_sysml2/examples/cli_usage.sh)
-- Python module workflow: [`examples/module_usage.py`](/home/eriro/pwa/2_work/pyssp_sysml2/examples/module_usage.py)
+- CLI workflow: [`examples/cli_usage.sh`](examples/cli_usage.sh)
+- Python module workflow: [`examples/module_usage.py`](examples/module_usage.py)
 
 ## Help / Discovery
 
@@ -390,11 +409,13 @@ Artifact purpose:
 | `[error] ... partial/invalid attribute mapping ...` during `sync ssd` | SSD connection edits do not include full port attribute mapping | Ensure all attributes of connected ports are mapped consistently |
 | `[error] Connector '...' is not in 'port.attribute' form` | SSD contains connectors that do not map to a SysML port attribute endpoint | Normalize SSD connectors so sync sees `port.attribute` endpoints |
 | `[error] ... incompatible ports ...` during `sync ssd` | SSD connects ports of different definitions | Connect only compatible source/destination ports |
-| `[error] Nested SSD systems are not supported for SysML sync` | SSD contains subsystems instead of only component elements at sync level | Flatten/adjust SSD structure to component-level elements |
+| `[error] Multiple parameter sets bind '...'` | Two sets target the same component parameter | Make the target members disjoint, or use one set |
 | `pyssp: command not found` | Console script not installed on PATH | Use `PYTHONPATH=src python3 -m pyssp_sysml2.cli ...` or `pip install -e .` |
 
 ## Development Docs
 
 Project internals, test/reference behavior, and maintainer workflow are in:
 
-- [`docs/development.md`](/home/eriro/pwa/2_work/pyssp_sysml2/docs/development.md)
+- [`docs/methodology/README.md`](docs/methodology/README.md) — SysML v2
+  simulation-modeling methodology knowledge base, starting with parameter sets
+- [`docs/development.md`](docs/development.md)

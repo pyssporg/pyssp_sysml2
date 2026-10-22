@@ -16,7 +16,8 @@ Core modules:
 - `src/pyssp_sysml2/parameters.py`: resolves parameter interfaces, sets,
   applied-set bindings, and mapping entries
 - `src/pyssp_sysml2/parameter_synthesis.py`: synthesizes interfaces, sets,
-  bags, and binds from SSD parameter connectors and bindings
+  bags, and binds from SSD parameter connectors and bindings, including
+  nested systems and multiple disjoint sets per element
 - `src/pyssp_sysml2/control.py`: shared `pyssp_*` control-attribute names
 - `src/pyssp_sysml2/fmi.py`: generates `modelDescription.xml` files
 - `src/pyssp_sysml2/sysml.py`: generates a minimal SysML model from SSD
@@ -37,6 +38,10 @@ and the parser: only `sysml_model/loader.py` imports `sysmlpy`, `sysml_model/mod
 defines the repo-owned dataclasses the generators work against, and
 `sysml_model/exporter.py` emits the conformant SysML v2 text format (a repo
 contract, independent of sysmlpy's serializer).
+
+User-facing modeling conventions and the implicit knowledge encoded in the
+generators are documented in the methodology knowledge base, starting at
+[`docs/methodology/README.md`](methodology/README.md).
 
 ## Local Setup
 
@@ -72,8 +77,9 @@ Behavior:
 
 - Uses small explicit SysML snippets written per test case under `tmp_path`
 - `tests/test_parameter_sets.py` covers SSV/SSM and SSD/FMI parameter output,
-  identity bindings, and dialect validation; `test_generate_sysml.py`,
-  `test_sync.py`, and `test_roundtrip.py` cover SSD-to-SysML synthesis
+  identity bindings, multiple disjoint sets, and dialect validation;
+  `test_generate_sysml.py`, `test_sync.py`, and `test_roundtrip.py` cover
+  SSD-to-SysML synthesis, nested part paths, nested SSD systems, and round-trips
 - Follows a one-model-per-behavior style where practical, to keep test intent explicit
 - Keeps generated artifacts inside pytest temporary directories
 - Treats readability of tests as a primary concern because this repo is used for experimentation as well as regression coverage
@@ -131,4 +137,6 @@ If `sync ssd` fails on external SSD files, check the SSD shape first:
 
 - connectors must be in `port.attribute` form
 - partial attribute mappings are rejected
-- nested SSD systems are rejected
+- nested SSD systems are supported recursively for parts, connections, and
+  parameters; a nested system with no matching SysML part definition is
+  synthesized unless `--no-synthesize` is used

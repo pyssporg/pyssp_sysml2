@@ -450,3 +450,43 @@ def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="cannot be represented"):
         generate_sysml_from_ssd(ssd_path, tmp_path / "architecture.sysml")
+
+
+def test_generate_sysml_from_ssd_resolves_nested_system_binding(
+    tmp_path: Path,
+) -> None:
+    """A binding inside a nested SSD system is resolved relative to that system."""
+    (tmp_path / "parameters.ssv").write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
+  <ssv:Parameters>
+    <ssv:Parameter name="inner.k"><ssv:Real value="3.0" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "Demo"
+        ssd.xml.version = "1.0"
+        top = System(name="Demo")
+        ssd.xml.system = top
+
+        outer = System(name="outer")
+        top.elements.append(outer)
+
+        inner = Component()
+        inner.name = "inner"
+        inner.source = "resources/Inner.fmu"
+        inner.connectors.append(
+            Connector(name="k", kind="parameter", type_name="Real")
+        )
+        outer.elements.append(inner)
+        outer.parameter_bindings = [ParameterBinding(source="parameters.ssv")]
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "part inner : Inner;" in text
+    assert "bind Nom = outer.inner.parameters;" in text

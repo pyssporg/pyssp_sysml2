@@ -363,22 +363,82 @@ def test_unbounded_parameter_multiplicity_is_rejected(tmp_path) -> None:
         )
 
 
-def test_multiple_sets_for_one_component_is_rejected(tmp_path) -> None:
-    """Only the effective set is supported; a second application is an error."""
-    model = _model(
-        composition="""
-        attribute nominal : NominalSet;
-        attribute aggressive : AggressiveSet;
-        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-        bind aggressive.n_waypoints = autopilot.parameters.waypointCount;
-        """,
-    )
+def test_multiple_sets_binding_same_member_are_rejected(tmp_path) -> None:
+    """Disjoint multiple sets are allowed; overlapping targets are not."""
+    model = f"""
+    package Example {{
+      attribute def ParameterInterface;
+      attribute def ParameterSet;
+      attribute def Params :> ParameterInterface {{
+        attribute count : Integer;
+      }}
+      attribute def CountsA :> ParameterSet {{ attribute n = 10; }}
+      attribute def CountsB :> ParameterSet {{ attribute m = 20; }}
+      part def Comp {{ attribute parameters : Params; }}
+      part def {COMPOSITION_NAME} {{
+        part comp : Comp;
+        attribute counts_a : CountsA;
+        attribute counts_b : CountsB;
+        bind counts_a.n = comp.parameters.count;
+        bind counts_b.m = comp.parameters.count;
+      }}
+    }}
+    """
     architecture_dir = _write(tmp_path, model)
 
-    with pytest.raises(ValueError, match="Multiple parameter sets"):
+    with pytest.raises(
+        ValueError, match="Multiple parameter sets bind 'comp.count'"
+    ):
         generate_parameter_sets(
             architecture_dir, tmp_path / "sets", COMPOSITION_NAME
         )
+
+
+def test_multiple_disjoint_sets_for_one_component_are_supported(
+    tmp_path,
+) -> None:
+    """Multiple sets may target different members of the same component."""
+    model = f"""
+    package Example {{
+      attribute def ParameterInterface;
+      attribute def ParameterSet;
+      attribute def Params :> ParameterInterface {{
+        attribute count : Integer;
+        attribute gain : Real;
+      }}
+      attribute def Counts :> ParameterSet {{ attribute n = 10; }}
+      attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
+      part def Comp {{ attribute parameters : Params; }}
+      part def {COMPOSITION_NAME} {{
+        part comp : Comp;
+        attribute counts : Counts;
+        attribute gains : Gains;
+        bind counts.n = comp.parameters.count;
+        bind gains.k = comp.parameters.gain;
+      }}
+    }}
+    """
+    architecture_dir = _write(tmp_path, model)
+
+    written = generate_parameter_sets(
+        architecture_dir, tmp_path / "sets", COMPOSITION_NAME
+    )
+    assert [path.name for path in written] == ["Counts.ssv", "Gains.ssv"]
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
+    with SSD(ssd_path, mode="r") as ssd:
+        bindings = {
+            binding.source: [
+                (mapping.source, mapping.target)
+                for mapping in binding.parameter_mapping.mapping.mappings
+            ]
+            for binding in ssd.xml.system.parameter_bindings
+        }
+    assert bindings == {
+        "parameter_sets/Counts.ssv": [("n", "comp.count")],
+        "parameter_sets/Gains.ssv": [("k", "comp.gain")],
+    }
 
 
 def test_missing_marker_definitions_are_rejected(tmp_path) -> None:
@@ -553,3 +613,46 @@ def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
             ("waypointX_km[1]", "parameter", "Real"),
             ("waypointX_km[2]", "parameter", "Real"),
         ]
+
+
+def test_generate_ssm_for_multiple_disjoint_sets(tmp_path) -> None:
+    """Each applied set gets its own standalone SSM file."""
+    model = f"""
+    package Example {{
+      attribute def ParameterInterface;
+      attribute def ParameterSet;
+      attribute def Params :> ParameterInterface {{
+        attribute count : Integer;
+        attribute gain : Real;
+      }}
+      attribute def Counts :> ParameterSet {{ attribute n = 10; }}
+      attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
+      part def Comp {{ attribute parameters : Params; }}
+      part def {COMPOSITION_NAME} {{
+        part comp : Comp;
+        attribute counts : Counts;
+        attribute gains : Gains;
+        bind counts.n = comp.parameters.count;
+        bind gains.k = comp.parameters.gain;
+      }}
+    }}
+    """
+    architecture_dir = _write(tmp_path, model)
+    output_dir = tmp_path / "mappings"
+
+    written = generate_parameter_mappings(
+        architecture_dir, output_dir, COMPOSITION_NAME
+    )
+
+    assert [path.name for path in written] == [
+        "Counts_comp.ssm",
+        "Gains_comp.ssm",
+    ]
+    with SSM(written[0], mode="r") as ssm:
+        assert [
+            (mapping.source, mapping.target) for mapping in ssm.xml.mappings
+        ] == [("n", "comp.count")]
+    with SSM(written[1], mode="r") as ssm:
+        assert [
+            (mapping.source, mapping.target) for mapping in ssm.xml.mappings
+        ] == [("k", "comp.gain")]

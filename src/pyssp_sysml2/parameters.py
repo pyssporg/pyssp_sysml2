@@ -5,11 +5,13 @@ The dialect this module implements:
 - a **parameter interface** is an ``attribute def`` marked ``:>
   ParameterInterface``;
 - a parameter **set** is an ``attribute def`` marked ``:> ParameterSet``;
-- a component exposes an interface through a single fixed-name bag,
-  ``attribute parameters : <Interface>;``;
-- a composition applies one set per component usage with ``bind``: either a
-  whole-object bind (identity mapping) or one bind per member (explicit
-  mapping).
+- a component or nested system exposes an interface through a single
+  fixed-name bag, ``attribute parameters : <Interface>;``;
+- a composition applies one or more sets per component usage with ``bind``:
+  either a whole-object bind (identity mapping) or one bind per member
+  (explicit mapping);
+- multiple sets on one component must bind disjoint target members, because
+  SysML ``bind`` is equality, not an override.
 
 Everything here works against the repo-owned model; generators only consume
 the helpers in this module.
@@ -155,7 +157,20 @@ def parameter_declarations(
     ]
 
 
-# -- applied sets -----------------------------------------------------------
+# -- component paths and applied sets ---------------------------------------
+
+
+@dataclass(frozen=True)
+class ComponentRef:
+    """A part usage reached from a composition root."""
+
+    path: tuple[str, ...]
+    part_usage: PartUsage
+    part_def: PartDefinition
+
+    @property
+    def name(self) -> str:
+        return ".".join(self.path)
 
 
 @dataclass(frozen=True)
@@ -164,9 +179,14 @@ class AppliedSet:
 
     usage_name: str
     set_definition: AttributeDefinition
+    component_path: tuple[str, ...]
     part_usage: PartUsage
     bindings: tuple[Binding, ...]
     identity: bool
+
+    @property
+    def component_name(self) -> str:
+        return ".".join(self.component_path)
 
 
 @dataclass(frozen=True)
@@ -175,9 +195,21 @@ class MappingSpec:
 
     set_name: str
     set_usage: str
-    part_name: str
+    component_path: tuple[str, ...]
     identity: bool
     entries: tuple[tuple[str, str], ...]
+
+    @property
+    def component_name(self) -> str:
+        return ".".join(self.component_path)
+
+
+@dataclass(frozen=True)
+class ParameterTarget:
+    """Component path and optional member addressed by a parameter bind target."""
+
+    component_path: tuple[str, ...]
+    member: str | None
 
 
 @dataclass(frozen=True)
@@ -255,6 +287,83 @@ def coerce_parameter_value(type_name: str, value: object) -> object:
     return str(value)
 
 
+def component_refs(
+    architecture: Architecture, system: PartDefinition
+) -> list[ComponentRef]:
+    """Every part usage below ``system``, including nested system usages."""
+    refs: list[ComponentRef] = []
+
+    def walk(
+        part_def: PartDefinition,
+        prefix: tuple[str, ...],
+        ancestors: frozenset[str],
+    ) -> None:
+        for usage in part_def.parts.values():
+            path = prefix + (usage.name,)
+            child = architecture.resolve_part(usage)
+            if child is None:
+                raise ValueError(
+                    f"Unresolved part definition for {'.'.join(path)}"
+                )
+            refs.append(
+                ComponentRef(path=path, part_usage=usage, part_def=child)
+            )
+            if child.parts:
+                if child.name in ancestors:
+                    raise ValueError(
+                        "Recursive part hierarchy at "
+                        f"'{'.'.join(path)}' ({child.name})"
+                    )
+                walk(child, path, ancestors | {child.name})
+
+    walk(system, (), frozenset({system.name}))
+    return refs
+
+
+def component_definitions(
+    architecture: Architecture, system: PartDefinition
+) -> list[PartDefinition]:
+    """Unique part definitions reachable from ``system``, in path order."""
+    definitions: list[PartDefinition] = []
+    seen: set[str] = set()
+    for ref in component_refs(architecture, system):
+        if ref.part_def.name in seen:
+            continue
+        seen.add(ref.part_def.name)
+        definitions.append(ref.part_def)
+    return definitions
+
+
+def parameter_binding_target(binding: Binding) -> ParameterTarget | None:
+    """Resolve a bind target to a component path and optional member.
+
+    ``None`` means the binding is not a parameter binding. The bag segment
+    must appear exactly once and be followed by at most one member name.
+    """
+    target = binding.target
+    indexes = [
+        index
+        for index, name in enumerate(target)
+        if name == PARAMETERS_BAG_NAME
+    ]
+    if not indexes:
+        return None
+    if len(indexes) > 1:
+        raise ValueError(
+            "Parameter binding target contains more than one "
+            f"'{PARAMETERS_BAG_NAME}' segment: '{'.'.join(target)}'"
+        )
+    index = indexes[0]
+    path = target[:index]
+    rest = target[index + 1 :]
+    if not path or len(rest) > 1:
+        raise ValueError(
+            "Parameter bindings must target '<component>.parameters' or "
+            f"'<component>.parameters.<member>', got '{'.'.join(target)}'"
+        )
+    return ParameterTarget(path, rest[0] if rest else None)
+
+
 def has_parameter_dialect(
     architecture: Architecture, system: PartDefinition
 ) -> bool:
@@ -262,16 +371,14 @@ def has_parameter_dialect(
     if set_usages(architecture, system):
         return True
     if any(
-        len(binding.target) >= 2
-        and binding.target[1] == PARAMETERS_BAG_NAME
+        parameter_binding_target(binding) is not None
         for binding in system.bindings
     ):
         return True
-    for usage in system.parts.values():
-        part_def = architecture.resolve_part(usage)
-        if part_def is not None and parameter_bag(architecture, part_def) is not None:
-            return True
-    return False
+    return any(
+        parameter_bag(architecture, ref.part_def) is not None
+        for ref in component_refs(architecture, system)
+    )
 
 
 def set_usages(
@@ -288,59 +395,16 @@ def set_usages(
     return usages
 
 
-def _binding_kind(binding: Binding, part_name: str) -> str | None:
-    """Classify a binding target as ``"identity"``, ``"member"``, or None."""
-    target = binding.target
-    if len(target) < 2 or target[0] != part_name:
-        return None
-    if target[1] != PARAMETERS_BAG_NAME:
-        return None
-    if len(target) == 2:
-        return "identity"
-    if len(target) == 3:
-        return "member"
-    raise ValueError(
-        "Parameter bindings must target '<component>.parameters' or "
-        f"'<component>.parameters.<member>', got '{'.'.join(target)}'"
-    )
-
-
-def applied_set(
-    architecture: Architecture, system: PartDefinition, part_usage: PartUsage
-) -> AppliedSet | None:
-    """The single set applied to ``part_usage``, or None when unbound."""
-    part_name = part_usage.name
-    bindings: list[Binding] = []
-    kinds: set[str] = set()
-    for binding in system.bindings:
-        kind = _binding_kind(binding, part_name)
-        if kind is None:
-            continue
-        if not binding.source:
-            raise ValueError(f"Binding '{binding.key}' has no source feature")
-        bindings.append(binding)
-        kinds.add(kind)
-
-    if not bindings:
-        return None
-    if len(kinds) > 1:
-        raise ValueError(
-            f"{part_name} mixes whole-object and per-member parameter bindings; "
-            "use one form per component usage"
-        )
-
-    usage_names = {binding.source[0] for binding in bindings}
-    if len(usage_names) > 1:
-        raise ValueError(
-            f"Multiple parameter sets are applied to {part_name}: "
-            f"{', '.join(sorted(usage_names))}. Only one effective set is supported."
-        )
-    usage_name = usage_names.pop()
-
+def _resolve_set_definition(
+    architecture: Architecture,
+    system: PartDefinition,
+    usage_name: str,
+    component_name: str,
+) -> AttributeDefinition:
     usage = system.attributes.get(usage_name)
     if usage is None:
         raise ValueError(
-            f"Binding for {part_name} references '{usage_name}', "
+            f"Binding for {component_name} references '{usage_name}', "
             "which is not a composition attribute"
         )
     definition = architecture.resolve_attribute_def(usage)
@@ -354,44 +418,107 @@ def applied_set(
             f"Parameter set usage '{usage_name}' is typed by '{definition.name}', "
             f"which is not marked ':> {PARAMETER_SET_MARKER}'"
         )
+    return definition
 
-    for binding in bindings:
+
+def _applied_sets_for_component(
+    architecture: Architecture,
+    system: PartDefinition,
+    ref: ComponentRef,
+) -> list[AppliedSet]:
+    grouped: dict[str, list[Binding]] = {}
+    for binding in system.bindings:
+        target = parameter_binding_target(binding)
+        if target is None or target.component_path != ref.path:
+            continue
+        if not binding.source:
+            raise ValueError(f"Binding '{binding.key}' has no source feature")
         if len(binding.source) not in (1, 2):
             raise ValueError(
                 "Parameter binding sources must be '<set>.member' or '<set>', "
                 f"got '{'.'.join(binding.source)}'"
             )
-        kind = _binding_kind(binding, part_name)
-        if kind == "identity" and len(binding.source) != 1:
+        if target.member is None and len(binding.source) != 1:
             raise ValueError(
                 "A whole-object parameter binding must reference a set usage, "
                 f"not '{'.'.join(binding.source)}'"
             )
-        if kind == "member" and len(binding.source) != 2:
+        if target.member is not None and len(binding.source) != 2:
             raise ValueError(
                 "A per-member parameter binding must reference '<set>.<member>', "
                 f"got '{'.'.join(binding.source)}'"
             )
+        grouped.setdefault(binding.source[0], []).append(binding)
 
-    return AppliedSet(
-        usage_name=usage_name,
-        set_definition=definition,
-        part_usage=part_usage,
-        bindings=tuple(bindings),
-        identity=("identity" in kinds),
-    )
+    applications: list[AppliedSet] = []
+    for usage_name, bindings in sorted(grouped.items()):
+        kinds = {
+            "identity" if len(binding.source) == 1 else "member"
+            for binding in bindings
+        }
+        if len(kinds) > 1:
+            raise ValueError(
+                f"{ref.name} mixes whole-object and per-member parameter bindings "
+                f"for set '{usage_name}'; use one form per set"
+            )
+        applications.append(
+            AppliedSet(
+                usage_name=usage_name,
+                set_definition=_resolve_set_definition(
+                    architecture, system, usage_name, ref.name
+                ),
+                component_path=ref.path,
+                part_usage=ref.part_usage,
+                bindings=tuple(bindings),
+                identity=("identity" in kinds),
+            )
+        )
+    return applications
 
 
 def applied_sets(
     architecture: Architecture, system: PartDefinition
 ) -> list[AppliedSet]:
-    """Every component usage in ``system`` with an applied parameter set."""
-    applied: list[AppliedSet] = []
-    for part_usage in system.parts.values():
-        application = applied_set(architecture, system, part_usage)
-        if application is not None:
-            applied.append(application)
-    return applied
+    """Every set applied to every component usage below ``system``.
+
+    Multiple sets may apply to one component. They must bind disjoint target
+    members; overlap is rejected by :func:`validate_applied_sets`.
+    """
+    refs = component_refs(architecture, system)
+    refs_by_path = {ref.path: ref for ref in refs}
+
+    for binding in system.bindings:
+        target = parameter_binding_target(binding)
+        if target is None:
+            continue
+        if target.component_path not in refs_by_path:
+            raise ValueError(
+                "Parameter binding target "
+                f"'{'.'.join(binding.target)}' does not resolve to a component "
+                "usage"
+            )
+
+    seen_definitions: set[str] = set()
+    for ref in refs:
+        if ref.part_def.name in seen_definitions:
+            continue
+        seen_definitions.add(ref.part_def.name)
+        if any(
+            parameter_binding_target(binding) is not None
+            for binding in ref.part_def.bindings
+        ):
+            raise ValueError(
+                f"Parameter bindings inside nested part definition "
+                f"'{ref.part_def.name}' are not supported; apply sets at the "
+                "composition root"
+            )
+
+    applications: list[AppliedSet] = []
+    for ref in refs:
+        applications.extend(
+            _applied_sets_for_component(architecture, system, ref)
+        )
+    return applications
 
 
 # -- mapping ----------------------------------------------------------------
@@ -469,7 +596,9 @@ def _member_type_error(
 
 
 def _identity_entries(
-    application: AppliedSet, interface: AttributeDefinition, part_name: str
+    application: AppliedSet,
+    interface: AttributeDefinition,
+    component_name: str,
 ) -> list[tuple[str, str]]:
     """Expand a whole-object bind into identity mappings."""
     set_members = application.set_definition.attributes
@@ -482,11 +611,14 @@ def _identity_entries(
         if source is None:
             continue
         _member_type_error(
-            source, target, member_name, f"{part_name}.{member_name}"
+            source, target, member_name, f"{component_name}.{member_name}"
         )
         entries.extend(
             _expand_entries(
-                member_name, f"{part_name}.{member_name}", source, target
+                member_name,
+                f"{component_name}.{member_name}",
+                source,
+                target,
             )
         )
         mapped.add(member_name)
@@ -498,9 +630,9 @@ def _identity_entries(
     ]
     if unmapped:
         raise ValueError(
-            f"Whole-object bind of '{application.usage_name}' to {part_name} cannot "
-            f"map set members {', '.join(sorted(unmapped))}; use per-member binds "
-            "for differently named parameters"
+            f"Whole-object bind of '{application.usage_name}' to {component_name} "
+            f"cannot map set members {', '.join(sorted(unmapped))}; use "
+            "per-member binds for differently named parameters"
         )
     return entries
 
@@ -514,46 +646,55 @@ def mapping_entries(
     part_def = architecture.resolve_part(application.part_usage)
     if part_def is None:
         raise ValueError(
-            f"Unresolved part definition for {application.part_usage.name}"
+            f"Unresolved part definition for {application.component_name}"
         )
     interface = parameter_interface(architecture, part_def)
     if interface is None:
         raise ValueError(
             f"{part_def.name} declares no parameter interface, but "
-            f"'{application.usage_name}' is bound to {application.part_usage.name}"
+            f"'{application.usage_name}' is bound to {application.component_name}"
         )
 
-    part_name = application.part_usage.name
+    component_name = application.component_name
     if application.identity:
-        return _identity_entries(application, interface, part_name)
+        return _identity_entries(application, interface, component_name)
 
     set_members = application.set_definition.attributes
     entries: list[tuple[str, str]] = []
     bound_sources: set[str] = set()
     for binding in application.bindings:
-        if len(binding.source) != 2 or len(binding.target) != 3:
+        target = parameter_binding_target(binding)
+        if (
+            target is None
+            or target.component_path != application.component_path
+            or target.member is None
+            or len(binding.source) != 2
+        ):
             raise ValueError(
                 "Per-member parameter bindings must have the shape "
                 "'<set>.<member> = <component>.parameters.<member>', got "
                 f"'{'.'.join(binding.source)} = {'.'.join(binding.target)}'"
             )
         source_name = binding.source[1]
-        target_name = binding.target[2]
+        target_name = target.member
         source = set_members.get(source_name)
         if source is None:
             raise ValueError(
                 f"Parameter set '{application.set_definition.name}' has no member "
                 f"'{source_name}'"
             )
-        target = interface.attributes.get(target_name)
-        if target is None:
+        target_attribute = interface.attributes.get(target_name)
+        if target_attribute is None:
             raise ValueError(
                 f"Parameter interface '{interface.name}' has no member '{target_name}'"
             )
-        _member_type_error(source, target, source_name, target_name)
+        _member_type_error(source, target_attribute, source_name, target_name)
         entries.extend(
             _expand_entries(
-                source_name, f"{part_name}.{target_name}", source, target
+                source_name,
+                f"{component_name}.{target_name}",
+                source,
+                target_attribute,
             )
         )
         bound_sources.add(source_name)
@@ -566,7 +707,7 @@ def mapping_entries(
     if unused:
         warnings.warn(
             f"Parameter set '{application.set_definition.name}' members "
-            f"{', '.join(unused)} are not bound to {part_name}; "
+            f"{', '.join(unused)} are not bound to {component_name}; "
             "SSP will ignore them",
             UserWarning,
             stacklevel=2,
@@ -580,10 +721,7 @@ def validate_parameter_dialect(
     """Reject a composition that mixes parameter interfaces and flat attributes."""
     bagged: list[str] = []
     legacy: list[str] = []
-    for usage in system.parts.values():
-        part_def = architecture.resolve_part(usage)
-        if part_def is None:
-            continue
+    for part_def in component_definitions(architecture, system):
         if parameter_bag(architecture, part_def) is not None:
             bagged.append(part_def.name)
         elif any(
@@ -600,12 +738,52 @@ def validate_parameter_dialect(
         )
 
 
+def _validate_disjoint_targets(
+    applications: list[tuple[AppliedSet, tuple[tuple[str, str], ...]]],
+) -> None:
+    """Reject two sets that bind the same component member.
+
+    Multiple sets on one component are allowed only when their target members
+    are disjoint. SysML ``bind`` has equality semantics, not an override order,
+    so overlapping targets would be ambiguous when mapped to SSP.
+    """
+    by_component: dict[str, list[tuple[str, set[str]]]] = {}
+    for application, entries in applications:
+        component_name = application.component_name
+        prefix = component_name + "."
+        members: set[str] = set()
+        for _source_name, target_name in entries:
+            if not target_name.startswith(prefix):
+                raise ValueError(
+                    f"Parameter target '{target_name}' is outside component "
+                    f"'{component_name}'"
+                )
+            members.add(target_name[len(prefix) :].split("[", 1)[0])
+        by_component.setdefault(component_name, []).append(
+            (application.usage_name, members)
+        )
+
+    for component_name, component_applications in by_component.items():
+        seen: dict[str, str] = {}
+        for usage_name, members in component_applications:
+            for member_name in members:
+                previous = seen.get(member_name)
+                if previous is not None:
+                    if previous == usage_name:
+                        continue
+                    raise ValueError(
+                        f"Multiple parameter sets bind "
+                        f"'{component_name}.{member_name}': {previous}, "
+                        f"{usage_name}. Use disjoint target members."
+                    )
+                seen[member_name] = usage_name
+
+
 def validate_applied_sets(
     architecture: Architecture, system: PartDefinition
 ) -> None:
-    """Resolve every applied set's mapping, raising on invalid applications."""
-    for application in applied_sets(architecture, system):
-        mapping_entries(architecture, system, application)
+    """Resolve every applied set's mapping and reject overlapping targets."""
+    mapping_specs(architecture, system)
 
 
 def mapping_specs(
@@ -613,18 +791,27 @@ def mapping_specs(
 ) -> list[MappingSpec]:
     """Mapping entries for every applied set in a composition."""
     validate_marker_definitions(architecture)
-    specs: list[MappingSpec] = []
-    for application in applied_sets(architecture, system):
-        specs.append(
-            MappingSpec(
-                set_name=application.set_definition.name,
-                set_usage=application.usage_name,
-                part_name=application.part_usage.name,
-                identity=application.identity,
-                entries=tuple(mapping_entries(architecture, system, application)),
-            )
+    applications = [
+        (
+            application,
+            tuple(mapping_entries(architecture, system, application)),
         )
-    return specs
+        for application in applied_sets(architecture, system)
+    ]
+    _validate_disjoint_targets(applications)
+    specs = [
+        MappingSpec(
+            set_name=application.set_definition.name,
+            set_usage=application.usage_name,
+            component_path=application.component_path,
+            identity=application.identity,
+            entries=entries,
+        )
+        for application, entries in applications
+    ]
+    return sorted(
+        specs, key=lambda spec: (spec.component_path, spec.set_name)
+    )
 
 
 # -- generation helpers -----------------------------------------------------

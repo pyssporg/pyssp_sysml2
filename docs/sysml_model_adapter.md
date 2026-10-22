@@ -86,14 +86,19 @@ attribute def NominalSet :> ParameterSet { ... }
 ```
 
 The marker definitions themselves must exist in the package (the loader does
-not resolve imports across packages yet). A component exposes its interface
-through the fixed bag `attribute parameters : <Interface>;`. Only one bag per
-part is supported, and mixing it with flat parameter attributes on the same
-part is rejected.
+not resolve imports across packages yet). A component or nested system
+exposes its interface through the fixed bag
+`attribute parameters : <Interface>;`. Only one bag per part is supported,
+and mixing it with flat parameter attributes on the same part is rejected.
 
 `generate ssd` consumes this dialect; `generate sysml` and `sync ssd`
 synthesize or reconcile it from SSD parameter connectors and
-`ParameterBinding` entries (see `parameter_synthesis.py`).
+`ParameterBinding` entries (see `parameter_synthesis.py`). Bind targets may
+use nested part paths (`outer.inner.parameters.member`); several sets may be
+applied to one component when their target members are disjoint.
+
+For the user-facing modeling rules, patterns, and examples, see the
+[parameter-set methodology](methodology/01-parameter-sets.md).
 
 ## Behavior notes
 

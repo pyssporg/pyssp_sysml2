@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Iterable, Mapping, Tuple
 
-from pyssp_standard.ssd import Component
+from pyssp_standard.ssd import Component, System
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
 from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
@@ -12,11 +12,11 @@ from pyssp_sysml2.parameters import has_parameter_dialect
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
     SCALAR_ATTRIBUTE_NAME,
+    _ensure_system_part_def,
     _merge_type_names,
     _part_name_from_component,
     _type_name_from_connector,
     build_architecture_from_ssd,
-    index_components,
     load_ssd_system,
     split_connector,
     split_connector_or_scalar,
@@ -159,38 +159,102 @@ def _resolve_component_part_definition(
     return part_def.name, part_def
 
 
-def _derive_target_parts(
+def _resolve_system_part_definition(
     architecture: Architecture,
-    system: PartDefinition,
+    part_def: PartDefinition,
+    system_element,
+    *,
+    synthesize_external_parts: bool,
+    port_cache,
+):
+    existing = part_def.parts.get(system_element.name)
+    if existing is not None:
+        existing_def = architecture.resolve_part(existing)
+        if existing_def is not None:
+            return existing.type_name, existing_def
+
+    candidate = architecture.part_definitions.get(system_element.name or "")
+    if candidate is not None:
+        return candidate.name, candidate
+
+    if not synthesize_external_parts:
+        raise ValueError(
+            f"SSD system '{system_element.name}' has no matching SysML part "
+            "definition"
+        )
+    child_def = _ensure_system_part_def(
+        architecture,
+        system_element,
+        port_cache,
+        source_file=INFERRED_PARTS_FILENAME,
+    )
+    return child_def.name, child_def
+
+
+def _sync_system_level(
+    architecture: Architecture,
+    part_def: PartDefinition,
     ssd_system,
     *,
-    synthesize_external_parts: bool = True,
-) -> dict[str, PartUsage]:
-    components = index_components(ssd_system)
-    target_parts = {}
-    for component_name in sorted(components):
-        component = components[component_name]
-        part_name, part_def = _resolve_component_part_definition(
-            architecture,
-            system,
-            component,
-            synthesize_external_parts=synthesize_external_parts,
-        )
-        existing = system.parts.get(component_name)
+    synthesize_external_parts: bool,
+    port_cache,
+) -> None:
+    """Reconcile one SSD system level and recurse into nested systems."""
+    target_parts: dict[str, PartUsage] = {}
+    elements = sorted(
+        ssd_system.elements, key=lambda item: item.name or ""
+    )
+    for element in elements:
+        if not element.name:
+            raise ValueError("SSD element without a name cannot be synced")
+        if isinstance(element, Component):
+            part_name, child_def = _resolve_component_part_definition(
+                architecture,
+                part_def,
+                element,
+                synthesize_external_parts=synthesize_external_parts,
+            )
+        elif isinstance(element, System):
+            part_name, child_def = _resolve_system_part_definition(
+                architecture,
+                part_def,
+                element,
+                synthesize_external_parts=synthesize_external_parts,
+                port_cache=port_cache,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported SSD element type: {type(element).__name__}"
+            )
+
+        existing = part_def.parts.get(element.name)
         if (
             existing is not None
             and existing.type_name == part_name
-            and architecture.resolve_part(existing) is part_def
+            and architecture.resolve_part(existing) is child_def
         ):
-            target_parts[component_name] = existing
-            continue
+            target_parts[element.name] = existing
+        else:
+            target_parts[element.name] = PartUsage(
+                name=element.name,
+                type_name=part_name,
+                doc=getattr(existing, "doc", None),
+            )
 
-        target_parts[component_name] = PartUsage(
-            name=component_name,
-            type_name=part_name,
-            doc=getattr(existing, "doc", None),
-        )
-    return target_parts
+        if isinstance(element, System):
+            _sync_system_level(
+                architecture,
+                child_def,
+                element,
+                synthesize_external_parts=synthesize_external_parts,
+                port_cache=port_cache,
+            )
+
+    target_connections = _derive_port_connections_from_ssd(
+        target_parts, ssd_system, architecture
+    )
+    _replace_system_parts(part_def, target_parts)
+    _replace_system_connections(part_def, target_connections)
 
 
 def _derive_port_connections_from_ssd(
@@ -308,15 +372,13 @@ def sync_sysml_from_ssd(
 
     parameter_dialect = loaded and has_parameter_dialect(architecture, system)
 
-    target_parts = _derive_target_parts(
+    _sync_system_level(
         architecture,
         system,
         ssd_system,
         synthesize_external_parts=synthesize_external_parts,
+        port_cache={},
     )
-    target_connections = _derive_port_connections_from_ssd(target_parts, ssd_system, architecture)
-    _replace_system_parts(system, target_parts)
-    _replace_system_connections(system, target_connections)
     if parameter_dialect:
         synthesize_parameter_dialect(
             architecture,

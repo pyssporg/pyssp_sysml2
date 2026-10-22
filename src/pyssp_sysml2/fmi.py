@@ -10,7 +10,11 @@ import xml.etree.ElementTree as ET
 
 from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
-from pyssp_sysml2.parameters import parameter_declarations, parameter_items
+from pyssp_sysml2.parameters import (
+    component_definitions,
+    parameter_declarations,
+    parameter_items,
+)
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
@@ -192,11 +196,13 @@ def generate_model_descriptions(
     system = architecture.get_part_def(composition)
 
     written: list[Path] = []
-    for part_inst_name, part_usage in system.parts.items():
-        part_def = architecture.resolve_part(part_usage)
-        if part_def is None:
-            raise ValueError(f"Unresolved part definition for {part_usage.name}")
-        component_dir = output_dir / part_usage.type_name
+    for part_def in sorted(
+        component_definitions(architecture, system),
+        key=lambda definition: definition.name,
+    ):
+        if part_def.parts:
+            continue
+        component_dir = output_dir / part_def.name
         output_path = component_dir / "modelDescription.xml"
         ensure_directory(component_dir)
 

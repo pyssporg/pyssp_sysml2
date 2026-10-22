@@ -9,6 +9,11 @@ The SSD is the source of truth here:
 This module turns that into ``attribute def ... :> ParameterInterface`` /
 ``:> ParameterSet`` definitions, a ``parameters`` bag on each component part
 definition, composition set usages, and explicit ``bind`` statements.
+
+Nested SSD systems become nested part paths (``outer.inner``). Several sets
+may be applied to one parameterable element as long as their target members
+are disjoint; overlapping targets are rejected because SysML ``bind`` is an
+equality constraint, not an override.
 """
 
 from __future__ import annotations
@@ -18,7 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from pyssp_standard.ssd import Component
+from pyssp_standard.ssd import Component, System
 from pyssp_standard.ssm import SSM
 from pyssp_standard.ssv import SSV
 
@@ -45,6 +50,7 @@ from pyssp_sysml2.sysml_model import (
     AttributeDefinition,
     Binding,
     PartDefinition,
+    PartUsage,
 )
 
 SSP_TYPES = {"Real", "Integer", "Boolean", "String"}
@@ -93,17 +99,25 @@ RESERVED_IDENTIFIERS = {
 
 @dataclass(frozen=True)
 class MappingPair:
-    component: str
+    component_path: tuple[str, ...]
     source: str
     target: str
     count: int | None = None
 
+    @property
+    def component_name(self) -> str:
+        return ".".join(self.component_path)
+
 
 @dataclass(frozen=True)
 class SetApplication:
-    component: str
+    component_path: tuple[str, ...]
     identity: bool
     pairs: tuple[MappingPair, ...]
+
+    @property
+    def component_name(self) -> str:
+        return ".".join(self.component_path)
 
 
 @dataclass
@@ -258,22 +272,37 @@ def _binding_mapping(
         return _mapping_entries(ssm.xml)
 
 
-def _all_bindings(ssd_system) -> list[tuple[str | None, object]]:
-    bindings: list[tuple[str | None, object]] = [
-        (None, binding) for binding in ssd_system.parameter_bindings
-    ]
-    for element in ssd_system.elements:
-        if isinstance(element, Component):
-            bindings.extend(
-                (element.name, binding) for binding in element.parameter_bindings
-            )
+def _all_bindings(
+    ssd_system,
+) -> list[tuple[tuple[str, ...], bool, object]]:
+    """Every parameter binding with its owner path and component-level flag."""
+    bindings: list[tuple[tuple[str, ...], bool, object]] = []
+
+    def walk(system, path: tuple[str, ...]) -> None:
+        bindings.extend(
+            (path, False, binding) for binding in system.parameter_bindings
+        )
+        for element in sorted(
+            system.elements, key=lambda item: item.name or ""
+        ):
+            if isinstance(element, Component):
+                bindings.extend(
+                    (path + (element.name,), True, binding)
+                    for binding in element.parameter_bindings
+                )
+            elif isinstance(element, System):
+                walk(element, path + (element.name,))
+
+    walk(ssd_system, ())
     return bindings
 
 
 # -- component parameter surfaces ------------------------------------------
 
 
-def component_parameter_attributes(component: Component) -> list[Attribute]:
+def component_parameter_attributes(
+    component: Component | System,
+) -> list[Attribute]:
     """Interface members implied by a component's parameter connectors."""
     grouped: dict[str, dict[int | None, str]] = {}
     for connector in component.connectors:
@@ -357,7 +386,7 @@ def _interface_name(
 def ensure_component_interface(
     architecture: Architecture,
     part_def: PartDefinition,
-    component: Component,
+    component: Component | System,
     *,
     source_file: str,
 ) -> AttributeDefinition | None:
@@ -423,34 +452,51 @@ def ensure_marker_definitions(architecture: Architecture, source_file: str) -> N
 
 
 def _mapping_pairs(
-    entries: Iterable[tuple[str, str]], components: set[str]
+    entries: Iterable[tuple[str, str]],
+    components: set[tuple[str, ...]],
+    owner_path: tuple[str, ...] = (),
 ) -> list[MappingPair]:
-    grouped: dict[tuple[str, str, str], dict[int | None, int | None]] = {}
+    grouped: dict[
+        tuple[tuple[str, ...], str, str],
+        dict[int | None, int | None],
+    ] = {}
     for source, target in entries:
         target_base, target_index = split_indexed(target)
         parts = target_base.split(".")
-        if len(parts) != 2:
+        if len(parts) < 2:
             raise ValueError(
-                f"Parameter mapping target '{target}' must be '<component>.<parameter>'"
+                f"Parameter mapping target '{target}' must be a hierarchical "
+                "component parameter path"
             )
-        component, target_member = parts
+        component_path = tuple(parts[:-1])
+        target_member = parts[-1]
+        component_name = ".".join(component_path)
         if (
-            not component
+            not component_name
             or not target_member
             or target_member in RESERVED_IDENTIFIERS
         ):
             raise ValueError(
-                f"Parameter mapping target '{target}' must be '<component>.<parameter>'"
+                f"Parameter mapping target '{target}' must be a hierarchical "
+                "component parameter path"
             )
-        if component not in components:
+        if component_path not in components:
             raise ValueError(
                 f"Parameter mapping target '{target}' references unknown component "
-                f"'{component}'"
+                f"'{component_name}'"
             )
         source_base, source_index = split_indexed(source)
-        if source_base.startswith(f"{component}."):
-            source_base = source_base[len(component) + 1 :]
-        if "." in source_base or source_base in RESERVED_IDENTIFIERS:
+        if source_base.startswith(component_name + "."):
+            source_base = source_base[len(component_name) + 1 :]
+        else:
+            relative_name = ".".join(component_path[len(owner_path) :])
+            if relative_name and source_base.startswith(relative_name + "."):
+                source_base = source_base[len(relative_name) + 1 :]
+        if (
+            "." in source_base
+            or source_base in RESERVED_IDENTIFIERS
+            or is_control_attribute(source_base)
+        ):
             raise ValueError(
                 f"Parameter mapping source '{source}' cannot be represented as a "
                 "SysML attribute name"
@@ -460,13 +506,14 @@ def _mapping_pairs(
                 f"Parameter mapping '{source}' -> '{target}' must use indices on "
                 "both sides or on neither side"
             )
-        key = (component, source_base, target_member)
+        key = (component_path, source_base, target_member)
         grouped.setdefault(key, {})[source_index] = target_index
 
     pairs: list[MappingPair] = []
-    seen_sources: set[tuple[str, str]] = set()
-    seen_targets: set[tuple[str, str]] = set()
-    for (component, source_base, target_member), indices in grouped.items():
+    seen_sources: set[tuple[tuple[str, ...], str]] = set()
+    seen_targets: set[tuple[tuple[str, ...], str]] = set()
+    for (component_path, source_base, target_member), indices in grouped.items():
+        component_name = ".".join(component_path)
         count: int | None = None
         if None in indices:
             if len(indices) > 1:
@@ -489,32 +536,43 @@ def _mapping_pairs(
                     f"{source_indices}"
                 )
             count = len(source_indices)
-        source_key = (component, source_base)
-        target_key = (component, target_member)
+        source_key = (component_path, source_base)
+        target_key = (component_path, target_member)
         if source_key in seen_sources:
             raise ValueError(
                 f"Parameter source '{source_base}' maps to more than one target "
-                f"for component '{component}'"
+                f"for component '{component_name}'"
             )
         if target_key in seen_targets:
             raise ValueError(
                 f"Parameter target '{target_member}' is mapped more than once for "
-                f"component '{component}'"
+                f"component '{component_name}'"
             )
         seen_sources.add(source_key)
         seen_targets.add(target_key)
-        pairs.append(MappingPair(component, source_base, target_member, count))
-    return sorted(pairs, key=lambda pair: (pair.component, pair.source, pair.target))
+        pairs.append(
+            MappingPair(component_path, source_base, target_member, count)
+        )
+    return sorted(
+        pairs,
+        key=lambda pair: (pair.component_path, pair.source, pair.target),
+    )
 
 
 def _normalize_values(
-    values: dict[str, tuple[str, object]], component: str
+    values: dict[str, tuple[str, object]], component_path: tuple[str, ...]
 ) -> dict[str, tuple[str, object]]:
+    prefix = ".".join(component_path) + "."
     normalized: dict[str, tuple[str, object]] = {}
     for base, item in values.items():
-        if base.startswith(f"{component}."):
-            base = base[len(component) + 1 :]
-        if not base or "." in base or base in RESERVED_IDENTIFIERS:
+        if base.startswith(prefix):
+            base = base[len(prefix) :]
+        if (
+            not base
+            or "." in base
+            or base in RESERVED_IDENTIFIERS
+            or is_control_attribute(base)
+        ):
             raise ValueError(
                 f"Parameter '{base}' cannot be represented as a SysML attribute name"
             )
@@ -522,29 +580,33 @@ def _normalize_values(
     return normalized
 
 
+def _is_under(path: tuple[str, ...], owner: tuple[str, ...]) -> bool:
+    return path[: len(owner)] == owner
+
+
+def _component_name(path: tuple[str, ...]) -> str:
+    return ".".join(path)
+
+
 def _infer_component(
     values: dict[str, tuple[str, object]],
-    components: set[str],
-    interfaces: dict[str, AttributeDefinition | None],
-) -> str:
-    prefixes = {base.split(".", 1)[0] for base in values if "." in base}
-    if len(prefixes) == 1:
-        candidate = prefixes.pop()
-        if candidate in components:
-            return candidate
-
-    matches = []
-    for component in sorted(components):
-        interface = interfaces.get(component)
+    components: set[tuple[str, ...]],
+    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
+    owner_path: tuple[str, ...] = (),
+) -> tuple[str, ...]:
+    matches: list[tuple[str, ...]] = []
+    for component_path in sorted(components):
+        if not _is_under(component_path, owner_path):
+            continue
+        interface = interfaces.get(component_path)
         if interface is None:
             continue
-        names = set(interface.attributes)
-        normalized = {
-            base[len(component) + 1 :] if base.startswith(f"{component}.") else base
-            for base in values
-        }
-        if normalized <= names:
-            matches.append(component)
+        try:
+            normalized = _normalize_values(values, component_path)
+        except ValueError:
+            continue
+        if set(normalized) <= set(interface.attributes):
+            matches.append(component_path)
     if len(matches) == 1:
         return matches[0]
     if not matches:
@@ -552,29 +614,30 @@ def _infer_component(
             "Cannot infer which component a parameter set applies to; add a "
             "ParameterBinding prefix or ParameterMapping"
         )
+    names = ", ".join(".".join(path) for path in matches)
     raise ValueError(
         "Parameter set application is ambiguous between components "
-        f"{', '.join(matches)}; add a ParameterBinding prefix or ParameterMapping"
+        f"{names}; add a ParameterBinding prefix or ParameterMapping"
     )
 
 
 def _check_pair_shape(
     pair: MappingPair,
     normalized: dict[str, tuple[str, object]],
-    interfaces: dict[str, AttributeDefinition | None],
+    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
 ) -> None:
     _, source_value = normalized[pair.source]
-    interface = interfaces.get(pair.component)
+    interface = interfaces.get(pair.component_path)
     if interface is None:
         raise ValueError(
-            f"SSD applies a parameter set to '{pair.component}', but that "
+            f"SSD applies a parameter set to '{pair.component_name}', but that "
             "component has no parameter connectors"
         )
     target = interface.attributes.get(pair.target)
     if target is None:
         raise ValueError(
             f"Parameter mapping target '{pair.target}' does not exist on "
-            f"component '{pair.component}'"
+            f"component '{pair.component_name}'"
         )
     if pair.count is None:
         if isinstance(source_value, tuple):
@@ -603,36 +666,106 @@ def _check_pair_shape(
         )
 
 
+def _absolute_values(
+    values: dict[str, tuple[str, object]], owner_path: tuple[str, ...]
+) -> dict[str, tuple[str, object]]:
+    """Make parameter-source names absolute relative to the composition root."""
+    if not owner_path:
+        return values
+    absolute: dict[str, tuple[str, object]] = {}
+    for base, item in values.items():
+        parts = tuple(base.split("."))
+        if parts[: len(owner_path)] != owner_path:
+            parts = owner_path + parts
+        absolute[".".join(parts)] = item
+    return absolute
+
+
+def _absolute_mapping(
+    entries: Iterable[tuple[str, str]], owner_path: tuple[str, ...]
+) -> list[tuple[str, str]]:
+    """Make mapping targets absolute relative to the composition root."""
+    result: list[tuple[str, str]] = []
+    for source, target in entries:
+        target_base, target_index = split_indexed(target)
+        parts = tuple(target_base.split("."))
+        if owner_path and parts[: len(owner_path)] != owner_path:
+            parts = owner_path + parts
+        absolute = ".".join(parts)
+        if target_index is not None:
+            absolute = f"{absolute}[{target_index}]"
+        result.append((source, absolute))
+    return result
+
+
+def _effective_prefix(
+    binding,
+    owner_path: tuple[str, ...],
+    *,
+    component_level: bool,
+) -> tuple[str, ...] | None:
+    if not binding.prefix:
+        return None
+    prefix = binding.prefix.rstrip(".")
+    if component_level and prefix in (
+        _component_name(owner_path),
+        owner_path[-1] if owner_path else "",
+    ):
+        return owner_path
+    return owner_path + tuple(prefix.split("."))
+
+
 def _applications_for_binding(
-    owner: str | None,
+    owner_path: tuple[str, ...],
+    component_level: bool,
     binding,
     values: dict[str, tuple[str, object]],
-    components: set[str],
-    interfaces: dict[str, AttributeDefinition | None],
+    components: set[tuple[str, ...]],
+    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
     ssd_path: Path | None,
 ) -> list[SetApplication]:
+    if not binding.prefix:
+        values = _absolute_values(values, owner_path)
     mapping = _binding_mapping(binding, ssd_path)
     if mapping is not None:
-        pairs = _mapping_pairs(mapping, components)
+        pairs = _mapping_pairs(
+            _absolute_mapping(mapping, owner_path),
+            components,
+            owner_path,
+        )
         if not pairs:
             raise ValueError("ParameterBinding contains an empty ParameterMapping")
-        by_component: dict[str, list[MappingPair]] = {}
+        by_component: dict[tuple[str, ...], list[MappingPair]] = {}
         for pair in pairs:
-            by_component.setdefault(pair.component, []).append(pair)
-        if owner is not None and set(by_component) != {owner}:
+            by_component.setdefault(pair.component_path, []).append(pair)
+        if component_level and set(by_component) != {owner_path}:
             raise ValueError(
-                f"Component-level parameter binding for '{owner}' maps to "
-                f"components {', '.join(sorted(by_component))}"
+                f"Component-level parameter binding for "
+                f"'{_component_name(owner_path)}' maps to components "
+                f"{', '.join(_component_name(path) for path in sorted(by_component))}"
             )
-        if binding.prefix:
-            prefix_component = binding.prefix.rstrip(".")
-            if set(by_component) != {prefix_component}:
-                raise ValueError(
-                    f"ParameterBinding prefix '{binding.prefix}' conflicts with "
-                    f"mapping targets {', '.join(sorted(by_component))}"
-                )
+        prefix_path = _effective_prefix(
+            binding, owner_path, component_level=component_level
+        )
+        if prefix_path is not None and not all(
+            _is_under(path, prefix_path) for path in by_component
+        ):
+            raise ValueError(
+                f"ParameterBinding prefix '{binding.prefix}' conflicts with "
+                f"mapping targets "
+                f"{', '.join(_component_name(path) for path in sorted(by_component))}"
+            )
+        outside = [
+            path for path in by_component if not _is_under(path, owner_path)
+        ]
+        if outside:
+            raise ValueError(
+                f"Parameter binding in '{_component_name(owner_path) or '<root>'}' "
+                "maps outside its scope: "
+                f"{', '.join(_component_name(path) for path in sorted(outside))}"
+            )
         for pair in pairs:
-            normalized = _normalize_values(values, pair.component)
+            normalized = _normalize_values(values, pair.component_path)
             if pair.source not in normalized:
                 raise ValueError(
                     f"Parameter mapping source '{pair.source}' is not present in "
@@ -640,40 +773,54 @@ def _applications_for_binding(
                 )
             _check_pair_shape(pair, normalized, interfaces)
         return [
-            SetApplication(component, False, tuple(pairs))
-            for component, pairs in sorted(by_component.items())
+            SetApplication(component_path, False, tuple(pairs))
+            for component_path, pairs in sorted(by_component.items())
         ]
 
-    if owner is not None:
-        component = owner
-        if binding.prefix and binding.prefix.rstrip(".") != owner:
+    prefix_path = _effective_prefix(
+        binding, owner_path, component_level=component_level
+    )
+    if component_level:
+        component_path = owner_path
+        if prefix_path is not None and prefix_path != owner_path:
             raise ValueError(
-                f"Component-level parameter binding for '{owner}' has conflicting "
-                f"prefix '{binding.prefix}'"
+                f"Component-level parameter binding for "
+                f"'{_component_name(owner_path)}' has conflicting prefix "
+                f"'{binding.prefix}'"
             )
-    elif binding.prefix:
-        component = binding.prefix.rstrip(".")
-        if component not in components:
+    elif prefix_path is not None:
+        component_path = prefix_path
+        if component_path not in components:
             raise ValueError(
-                f"ParameterBinding prefix '{binding.prefix}' references unknown component"
+                f"ParameterBinding prefix '{binding.prefix}' references unknown "
+                "component"
             )
     else:
-        component = _infer_component(values, components, interfaces)
+        component_path = _infer_component(
+            values, components, interfaces, owner_path
+        )
 
-    normalized = _normalize_values(values, component)
-    interface = interfaces.get(component)
+    if not _is_under(component_path, owner_path):
+        raise ValueError(
+            f"Parameter binding in '{_component_name(owner_path) or '<root>'}' "
+            f"targets '{_component_name(component_path)}' outside its scope"
+        )
+
+    normalized = _normalize_values(values, component_path)
+    interface = interfaces.get(component_path)
     if interface is None:
         raise ValueError(
-            f"SSD applies a parameter set to '{component}', but that component "
-            "has no parameter connectors"
+            f"SSD applies a parameter set to "
+            f"'{_component_name(component_path)}', but that component has no "
+            "parameter connectors"
         )
     missing = sorted(set(normalized) - set(interface.attributes))
     if missing:
         raise ValueError(
             f"Parameter set members {', '.join(missing)} do not exist on "
-            f"component '{component}'"
+            f"component '{_component_name(component_path)}'"
         )
-    return [SetApplication(component, True, ())]
+    return [SetApplication(component_path, True, ())]
 
 
 # -- public synthesis -------------------------------------------------------
@@ -731,10 +878,7 @@ def _remove_parameter_usage(
     system.bindings = [
         binding
         for binding in system.bindings
-        if not (
-            len(binding.target) >= 2
-            and binding.target[1] == PARAMETERS_BAG_NAME
-        )
+        if PARAMETERS_BAG_NAME not in binding.target
     ]
     for name, attribute in list(system.attributes.items()):
         if is_control_attribute(name):
@@ -742,6 +886,45 @@ def _remove_parameter_usage(
         if is_parameter_set(architecture.resolve_attribute_def(attribute)):
             del system.attributes[name]
     system.attributes.pop(PARAMETER_SET_ATTR, None)
+
+
+def _component_map(
+    ssd_system,
+) -> dict[tuple[str, ...], Component | System]:
+    """Every parameterable component or system, keyed by its nested path."""
+    components: dict[tuple[str, ...], Component | System] = {}
+
+    def walk(system, path: tuple[str, ...]) -> None:
+        for element in sorted(
+            system.elements, key=lambda item: item.name or ""
+        ):
+            if not element.name:
+                continue
+            element_path = path + (element.name,)
+            components[element_path] = element
+            if isinstance(element, System):
+                walk(element, element_path)
+
+    walk(ssd_system, ())
+    return components
+
+
+def _part_at_path(
+    architecture: Architecture,
+    system: PartDefinition,
+    path: tuple[str, ...],
+):
+    """Resolve a nested part usage path to its usage and definition."""
+    current = system
+    usage: PartUsage | None = None
+    for name in path:
+        usage = current.parts.get(name)
+        if usage is None:
+            return None, None
+        current = architecture.resolve_part(usage)
+        if current is None:
+            return usage, None
+    return usage, current
 
 
 def synthesize_parameter_dialect(
@@ -754,13 +937,17 @@ def synthesize_parameter_dialect(
     sync: bool = False,
 ) -> None:
     """Build the parameter dialect from SSD connectors and parameter bindings."""
-    components = {
-        element.name: element
-        for element in ssd_system.elements
-        if isinstance(element, Component) and element.name
-    }
+    components = _component_map(ssd_system)
     if not components:
         return
+    if any(
+        connector.kind == "parameter"
+        for connector in ssd_system.connectors
+    ):
+        raise ValueError(
+            "Top-level SSD system parameter connectors are not supported; "
+            "attach parameter connectors to component or nested-system elements"
+        )
 
     bindings = _all_bindings(ssd_system)
     has_parameter_surface = bool(bindings) or any(
@@ -771,12 +958,9 @@ def synthesize_parameter_dialect(
     if not has_parameter_surface:
         if sync:
             _remove_parameter_usage(architecture, system)
-            for component_name in components:
-                part_usage = system.parts.get(component_name)
-                part_def = (
-                    architecture.resolve_part(part_usage)
-                    if part_usage is not None
-                    else None
+            for component_path in components:
+                _, part_def = _part_at_path(
+                    architecture, system, component_path
                 )
                 if part_def is not None:
                     part_def.attributes.pop(PARAMETERS_BAG_NAME, None)
@@ -784,21 +968,20 @@ def synthesize_parameter_dialect(
 
     ensure_marker_definitions(architecture, source_file)
 
-    interfaces: dict[str, AttributeDefinition | None] = {}
-    for component_name in sorted(components):
-        part_usage = system.parts.get(component_name)
-        if part_usage is None:
-            continue
-        part_def = architecture.resolve_part(part_usage)
-        if part_def is None:
+    interfaces: dict[tuple[str, ...], AttributeDefinition | None] = {}
+    for component_path in sorted(components):
+        part_usage, part_def = _part_at_path(
+            architecture, system, component_path
+        )
+        if part_usage is None or part_def is None:
             continue
         interface = ensure_component_interface(
             architecture,
             part_def,
-            components[component_name],
+            components[component_path],
             source_file=source_file,
         )
-        interfaces[component_name] = interface
+        interfaces[component_path] = interface
         if interface is None and sync:
             part_def.attributes.pop(PARAMETERS_BAG_NAME, None)
 
@@ -856,15 +1039,30 @@ def synthesize_parameter_dialect(
             set_builds[candidate] = SetBuild(definition, [application])
             return
 
-    for owner, binding in bindings:
+    for owner_path, component_level, binding in bindings:
         set_name, parameters = _binding_parameters(binding, ssd_path)
         values = _group_values(parameters)
+        application_values = (
+            values
+            if binding.prefix
+            else _absolute_values(values, owner_path)
+        )
         applications = _applications_for_binding(
-            owner, binding, values, set(components), interfaces, ssd_path
+            owner_path,
+            component_level,
+            binding,
+            application_values,
+            set(components),
+            interfaces,
+            ssd_path,
         )
         for application in applications:
-            normalized = _normalize_values(values, application.component)
-            add_set(set_name, normalized, application, application.component)
+            normalized = _normalize_values(
+                application_values, application.component_path
+            )
+            add_set(
+                set_name, normalized, application, application.component_name
+            )
 
     if not set_builds:
         return
@@ -885,18 +1083,16 @@ def synthesize_parameter_dialect(
                 bindings = [
                     Binding(
                         source=(usage_name,),
-                        target=(application.component, PARAMETERS_BAG_NAME),
+                        target=application.component_path
+                        + (PARAMETERS_BAG_NAME,),
                     )
                 ]
             else:
                 bindings = [
                     Binding(
                         source=(usage_name, pair.source),
-                        target=(
-                            application.component,
-                            PARAMETERS_BAG_NAME,
-                            pair.target,
-                        ),
+                        target=application.component_path
+                        + (PARAMETERS_BAG_NAME, pair.target),
                     )
                     for pair in application.pairs
                 ]
