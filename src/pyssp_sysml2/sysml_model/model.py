@@ -161,9 +161,15 @@ class Connection:
 class Binding:
     """A ``bind source.feature = target.feature;`` inside a part def.
 
-    Endpoints are stored as feature-name chains so generators can resolve
-    parameter-set members (``("nominal", "n_waypoints")``) and component
-    parameter bags (``("autopilot", "parameters", "waypointCount")``).
+    Endpoints are stored as feature-name chains **as written**: ``source`` is
+    the left-hand side, ``target`` the right-hand side. SysML ``bind`` is
+    equality, but the parameter dialect fixes the orientation, putting the
+    parameter port on the left and the set usage on the right::
+
+        bind autopilot.parameters.waypointCount = nominal.waypointCount;
+
+    :func:`pyssp_sysml2.parameters.parameter_bind` resolves the endpoints by
+    role and rejects the reversed form.
     """
 
     source: tuple[str, ...]

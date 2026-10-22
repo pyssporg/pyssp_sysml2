@@ -70,7 +70,7 @@ def write_parameter_cli_architecture(root: Path) -> Path:
           part def {COMPOSITION_NAME} {{
             part src : Source;
             attribute nominal : NominalSet;
-            bind nominal.gain_value = src.parameters.gain;
+            bind src.parameters.gain = nominal.gain_value;
           }}
         }}
         """,

@@ -69,7 +69,7 @@ package ParameterDemo {
 
     attribute nominal : NominalSet;
 
-    bind nominal = autopilot.parameters;
+    bind autopilot.parameters = nominal;
   }
 }
 ```
@@ -86,7 +86,7 @@ What each piece means:
   connects a part definition to its parameter interface.
 - `attribute nominal : NominalSet;` declares a **set usage** in the
   composition.
-- `bind nominal = autopilot.parameters;` applies the set to the component.
+- `bind autopilot.parameters = nominal;` applies the set to the component.
 
 Generated artifacts for this model:
 
@@ -113,20 +113,26 @@ The set is a runtime SSP mapping.
 
 There are three names to keep apart:
 
-```sysml
-bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-     ^set usage
-             ^set member
-                                  ^component path
-                                             ^bag
-                                                       ^interface member
+```text
+bind autopilot.parameters.waypointCount = nominal.n_waypoints
+     ^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^^^^^^^   ^^^^^^^ ^^^^^^^^^^^
+     component bag        interface      set      set member
+     path                 member         usage
 ```
 
 - The **set member name** becomes the SSV parameter name.
 - The **interface member name** becomes the SSD parameter connector name and
   the FMI variable name.
-- The **bind target** determines the SSP hierarchical target name, for
-  example `autopilot.waypointCount`.
+- The **parameter port on the left** determines the SSP hierarchical target
+  name, for example `autopilot.waypointCount`.
+
+The bind is always written with the parameter port on the left. SSP stores the
+mapping in the opposite order, so this is expected:
+
+```text
+SysML:  bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+SSP:    <ssm:MappingEntry source="n_waypoints" target="autopilot.waypointCount"/>
+```
 
 An explicit bind is therefore a rename:
 
@@ -156,7 +162,7 @@ attribute def NominalSet :> ParameterSet {
 part def AircraftComposition {
   part autopilot : AutopilotModule;
   attribute nominal : NominalSet;
-  bind nominal = autopilot.parameters;
+  bind autopilot.parameters = nominal;
 }
 ```
 
@@ -194,7 +200,7 @@ part def Outer {
 part def SystemComposition {
   part outer : Outer;
   attribute nominal : NominalSet;
-  bind nominal = outer.inner.parameters;
+  bind outer.inner.parameters = nominal;
 }
 ```
 
@@ -213,7 +219,7 @@ attribute def NominalSet :> ParameterSet {
 part def AircraftComposition {
   part autopilot : AutopilotModule;
   attribute nominal : NominalSet;
-  bind nominal = autopilot.parameters; // error: n_waypoints is not in the interface
+  bind autopilot.parameters = nominal; // error: n_waypoints is not in the interface
 }
 ```
 
@@ -238,8 +244,8 @@ part def AircraftComposition {
   part autopilot : AutopilotModule;
   attribute nominal : NominalSet;
 
-  bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-  bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+  bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+  bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
 }
 ```
 
@@ -277,7 +283,7 @@ attribute def NominalSet :> ParameterSet {
   attribute reserve_km = 5.0;
 }
 
-bind nominal.n_waypoints = autopilot.parameters.waypointCount;
+bind autopilot.parameters.waypointCount = nominal.n_waypoints;
 ```
 
 `reserve_km` is not applied. The generator emits a warning:
@@ -297,8 +303,8 @@ A single set usage must use one form:
 ```sysml
 attribute nominal : NominalSet;
 
-bind nominal = autopilot.parameters;                    // identity
-bind nominal.n_waypoints = autopilot.parameters.count;  // invalid mix
+bind autopilot.parameters = nominal;                    // identity
+bind autopilot.parameters.count = nominal.n_waypoints;  // invalid mix
 ```
 
 Use either a whole-object bind or per-member binds for that usage.
@@ -308,19 +314,20 @@ Use either a whole-object bind or per-member binds for that usage.
 These are rejected:
 
 ```sysml
-bind nominal = autopilot.parameters.count;       // whole set to one member
-bind nominal.n_waypoints = autopilot.parameters; // one member to whole bag
-bind nominal.a.b = autopilot.parameters.count;   // set path deeper than one
-bind nominal.n_waypoints = autopilot.parameters.a.b; // interface path deeper than one
+bind autopilot.parameters.count = nominal;        // whole set into one member
+bind autopilot.parameters = nominal.n_waypoints;  // whole bag from one member
+bind autopilot.parameters.count = nominal.a.b;    // set path deeper than one
+bind autopilot.parameters.a.b = nominal.n_waypoints; // parameter path deeper than one
 ```
 
 The current grammar for a parameter bind is:
 
 ```text
-bind <set-usage>[.<set-member>] = <component-path>.parameters[.<interface-member>]
+bind <component-path>.parameters[.<interface-member>] = <set-usage>[.<set-member>]
 ```
 
-where `<component-path>` may itself contain dots for nested parts.
+where `<component-path>` may itself contain dots for nested parts. A bind that
+puts the set usage on the left is rejected with the rewritten form.
 
 ## 7. Multiple sets on one component
 
@@ -350,8 +357,8 @@ part def Composition {
   attribute counts : Counts;
   attribute gains : Gains;
 
-  bind counts.n = comp.parameters.count;
-  bind gains.k = comp.parameters.gain;
+  bind comp.parameters.count = counts.n;
+  bind comp.parameters.gain = gains.k;
 }
 ```
 
@@ -372,8 +379,8 @@ part def Composition {
   attribute counts_a : CountsA;
   attribute counts_b : CountsB;
 
-  bind counts_a.n = comp.parameters.count;
-  bind counts_b.m = comp.parameters.count;  // same target
+  bind comp.parameters.count = counts_a.n;
+  bind comp.parameters.count = counts_b.m;  // same target
 }
 ```
 
@@ -394,7 +401,7 @@ Disjoint targets keep the mapping deterministic.
 You cannot bind a single list index:
 
 ```sysml
-bind counts.n = comp.parameters.xs[0];  // not a supported bind shape
+bind comp.parameters.xs[0] = counts.n;  // not a supported bind shape
 ```
 
 A bind addresses the whole `xs` list feature. Therefore two sets that both
@@ -410,8 +417,8 @@ attribute def Composition {
   part right : Comp;
   attribute nominal : NominalSet;
 
-  bind nominal = left.parameters;
-  bind nominal = right.parameters;
+  bind left.parameters = nominal;
+  bind right.parameters = nominal;
 }
 ```
 
@@ -446,7 +453,7 @@ package NestedDemo {
   part def SystemComposition {
     part outer : Outer;
     attribute nominal : NominalSet;
-    bind nominal.k = outer.inner.parameters.k;
+    bind outer.inner.parameters.k = nominal.k;
   }
 }
 ```
@@ -485,8 +492,9 @@ Important distinctions:
 
 - `outer.inner` is a **component path**.
 - `k` is the **interface member**.
-- There is no “set group path” in the current dialect. `bind nominal.gains.k`
-  is not supported because sets cannot contain sets.
+- There is no “set group path” in the current dialect.
+  `bind outer.inner.parameters.k = nominal.gains.k` is not supported because
+  sets cannot contain sets.
 
 ### Multiple disjoint sets at a nested path
 
@@ -502,8 +510,8 @@ part def SystemComposition {
   attribute counts : Counts;
   attribute gains : Gains;
 
-  bind counts.n = outer.inner.parameters.count;
-  bind gains.k = outer.inner.parameters.gain;
+  bind outer.inner.parameters.count = counts.n;
+  bind outer.inner.parameters.gain = gains.k;
 }
 ```
 
@@ -531,7 +539,7 @@ part def Outer {
 part def SystemComposition {
   part outer : Outer;
   attribute outer_set : OuterSet;
-  bind outer_set.g = outer.parameters.gain;
+  bind outer.parameters.gain = outer_set.g;
 }
 ```
 
@@ -552,7 +560,7 @@ attribute def NominalSet :> ParameterSet {
   attribute waypoints_x_km = (0.0, 10.0, 20.0);
 }
 
-bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
 ```
 
 Consequences:
@@ -762,12 +770,12 @@ These are intentional current limits, not parser accidents:
 
 | Intent | Valid syntax | Generated form |
 | --- | --- | --- |
-| Apply a set by matching names | `bind nominal = autopilot.parameters;` | `ParameterBinding` + prefix |
-| Apply one member with a rename | `bind nominal.n = autopilot.parameters.count;` | inline mapping / SSM |
-| Apply to a nested component | `bind nominal.k = outer.inner.parameters.k;` | target `outer.inner.k` |
-| Apply to a nested system bag | `bind nominal.g = outer.parameters.gain;` | target `outer.gain` |
-| Apply two disjoint sets | `bind counts.n = comp.parameters.count;` plus `bind gains.k = comp.parameters.gain;` | two SSVs and two bindings |
-| Apply a list | `bind nominal.xs = comp.parameters.xs;` | element-wise `xs[i]` mappings |
+| Apply a set by matching names | `bind autopilot.parameters = nominal;` | `ParameterBinding` + prefix |
+| Apply one member with a rename | `bind autopilot.parameters.count = nominal.n;` | inline mapping / SSM |
+| Apply to a nested component | `bind outer.inner.parameters.k = nominal.k;` | target `outer.inner.k` |
+| Apply to a nested system bag | `bind outer.parameters.gain = nominal.g;` | target `outer.gain` |
+| Apply two disjoint sets | `bind comp.parameters.count = counts.n;` plus `bind comp.parameters.gain = gains.k;` | two SSVs and two bindings |
+| Apply a list | `bind comp.parameters.xs = nominal.xs;` | element-wise `xs[i]` mappings |
 | Declare only an interface | no bind | connectors and FMI defaults only |
 
 ## 16. Related runnable examples

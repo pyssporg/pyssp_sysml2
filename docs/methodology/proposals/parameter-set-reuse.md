@@ -171,7 +171,7 @@ Rules:
 part def Composition {
   part autopilot : AutopilotModule;
   attribute aggressive : AggressiveSet;
-  bind aggressive.n_waypoints = autopilot.parameters.waypointCount;
+  bind autopilot.parameters.waypointCount = aggressive.n_waypoints;
 }
 ```
 

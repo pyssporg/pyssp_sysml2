@@ -27,7 +27,7 @@ package MultipleSetExample {
     attribute counts : Counts;
     attribute gains : Gains;
 
-    bind counts.n = controller.parameters.count;
-    bind gains.k = controller.parameters.gain;
+    bind controller.parameters.count = counts.n;
+    bind controller.parameters.gain = gains.k;
   }
 }

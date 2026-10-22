@@ -878,7 +878,8 @@ def _remove_parameter_usage(
     system.bindings = [
         binding
         for binding in system.bindings
-        if PARAMETERS_BAG_NAME not in binding.target
+        if PARAMETERS_BAG_NAME not in binding.source
+        and PARAMETERS_BAG_NAME not in binding.target
     ]
     for name, attribute in list(system.attributes.items()):
         if is_control_attribute(name):
@@ -1082,17 +1083,17 @@ def synthesize_parameter_dialect(
             if application.identity:
                 bindings = [
                     Binding(
-                        source=(usage_name,),
-                        target=application.component_path
+                        source=application.component_path
                         + (PARAMETERS_BAG_NAME,),
+                        target=(usage_name,),
                     )
                 ]
             else:
                 bindings = [
                     Binding(
-                        source=(usage_name, pair.source),
-                        target=application.component_path
+                        source=application.component_path
                         + (PARAMETERS_BAG_NAME, pair.target),
+                        target=(usage_name, pair.source),
                     )
                     for pair in application.pairs
                 ]

@@ -5,7 +5,7 @@ package ParameterDemo {
 
     attribute nominal : NominalSet;
 
-    bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-    bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+    bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+    bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
   }
 }

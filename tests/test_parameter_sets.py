@@ -46,8 +46,8 @@ def _model(
     if not composition:
         composition = """
         attribute nominal : NominalSet;
-        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """
     return f"""
     package Example {{
@@ -199,7 +199,7 @@ def test_whole_object_bind_is_identity_and_needs_no_ssm(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal = autopilot.parameters;
+        bind autopilot.parameters = nominal;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -272,7 +272,7 @@ def test_generate_ssd_identity_binding_uses_prefix(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal = autopilot.parameters;
+        bind autopilot.parameters = nominal;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -302,8 +302,8 @@ def test_generate_model_descriptions_uses_interface_defaults(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -330,7 +330,7 @@ def test_whole_object_bind_requires_matching_names(tmp_path) -> None:
     model = _model(
         composition="""
         attribute nominal : NominalSet;
-        bind nominal = autopilot.parameters;
+        bind autopilot.parameters = nominal;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -352,7 +352,7 @@ def test_unbounded_parameter_multiplicity_is_rejected(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -379,8 +379,8 @@ def test_multiple_sets_binding_same_member_are_rejected(tmp_path) -> None:
         part comp : Comp;
         attribute counts_a : CountsA;
         attribute counts_b : CountsB;
-        bind counts_a.n = comp.parameters.count;
-        bind counts_b.m = comp.parameters.count;
+        bind comp.parameters.count = counts_a.n;
+        bind comp.parameters.count = counts_b.m;
       }}
     }}
     """
@@ -413,8 +413,8 @@ def test_multiple_disjoint_sets_for_one_component_are_supported(
         part comp : Comp;
         attribute counts : Counts;
         attribute gains : Gains;
-        bind counts.n = comp.parameters.count;
-        bind gains.k = comp.parameters.gain;
+        bind comp.parameters.count = counts.n;
+        bind comp.parameters.gain = gains.k;
       }}
     }}
     """
@@ -487,8 +487,8 @@ def test_mixed_parameter_dialects_are_rejected(tmp_path) -> None:
     model = _model(
         composition="""
         attribute nominal : NominalSet;
-        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """,
     )
     # Add a second component that still uses the legacy flat dialect.
@@ -526,7 +526,7 @@ def test_type_mismatch_is_rejected(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
+        bind autopilot.parameters.waypointCount = nominal.n_waypoints;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -548,7 +548,7 @@ def test_list_length_mismatch_is_rejected(tmp_path) -> None:
         """,
         composition="""
         attribute nominal : NominalSet;
-        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """,
     )
     architecture_dir = _write(tmp_path, model)
@@ -632,8 +632,8 @@ def test_generate_ssm_for_multiple_disjoint_sets(tmp_path) -> None:
         part comp : Comp;
         attribute counts : Counts;
         attribute gains : Gains;
-        bind counts.n = comp.parameters.count;
-        bind gains.k = comp.parameters.gain;
+        bind comp.parameters.count = counts.n;
+        bind comp.parameters.gain = gains.k;
       }}
     }}
     """

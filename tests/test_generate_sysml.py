@@ -270,7 +270,7 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
     assert "attribute def parameters :> ParameterSet {" in text
     assert "attribute k : Real = 3.0;" in text
     assert "attribute parameters_set : parameters;" in text
-    assert "bind parameters_set = gain.parameters;" in text
+    assert "bind gain.parameters = parameters_set;" in text
 
 
 def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
@@ -321,8 +321,8 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
     assert "attribute n : Integer = 5;" in text
     assert "attribute x : Real[2] = (1.0, 2.0);" in text
     assert "attribute Nom : Nom;" in text
-    assert "bind Nom.n = comp.parameters.count;" in text
-    assert "bind Nom.x = comp.parameters.xs;" in text
+    assert "bind comp.parameters.count = Nom.n;" in text
+    assert "bind comp.parameters.xs = Nom.x;" in text
 
 
 def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
@@ -351,7 +351,7 @@ def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
 
     assert "attribute def parameters :> ParameterSet {" in text
     assert "attribute k : Real = 4.0;" in text
-    assert "bind parameters_set = gain.parameters;" in text
+    assert "bind gain.parameters = parameters_set;" in text
 
 
 def test_generate_sysml_from_ssd_keeps_interface_without_binding(
@@ -428,8 +428,8 @@ def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "bind Nom.n = comp.parameters.count;" in text
-    assert "bind Nom.x = comp.parameters.xs;" in text
+    assert "bind comp.parameters.count = Nom.n;" in text
+    assert "bind comp.parameters.xs = Nom.x;" in text
 
 
 def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
@@ -489,4 +489,4 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
     text = output.read_text()
 
     assert "part inner : Inner;" in text
-    assert "bind Nom = outer.inner.parameters;" in text
+    assert "bind outer.inner.parameters = Nom;" in text

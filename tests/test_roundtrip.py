@@ -74,7 +74,7 @@ def test_ssd_sysml_ssd_preserves_metadata(tmp_path: Path) -> None:
     assert "attribute def GainParameters :> ParameterInterface" in generated_text
     assert "attribute def parameters :> ParameterSet" in generated_text
     assert "attribute parameters_set : parameters;" in generated_text
-    assert "bind parameters_set = gain.parameters;" in generated_text
+    assert "bind gain.parameters = parameters_set;" in generated_text
 
     regenerated = tmp_path / "regenerated.ssd"
     generate_ssd(architecture_dir, regenerated, "RoundTrip")
@@ -123,8 +123,8 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
           part def SystemComposition {
             part c : Comp;
             attribute nominal : Nom;
-            bind nominal.n = c.parameters.count;
-            bind nominal.x = c.parameters.xs;
+            bind c.parameters.count = nominal.n;
+            bind c.parameters.xs = nominal.x;
           }
         }
         """,
@@ -195,7 +195,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
           part def SystemComposition {
             part outer : Outer;
             attribute nominal : Nom;
-            bind nominal.k = outer.inner.parameters.k;
+            bind outer.inner.parameters.k = nominal.k;
           }
         }
         """,
@@ -235,7 +235,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     assert "attribute def InnerParameters :> ParameterInterface" in text
     assert "part def outer" in text
     assert "part inner : Inner;" in text
-    assert "bind Nom.k = outer.inner.parameters.k;" in text
+    assert "bind outer.inner.parameters.k = Nom.k;" in text
 
     second_ssd = tmp_path / "regenerated.ssd"
     generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
@@ -291,8 +291,8 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
             part outer : Outer;
             attribute counts : Counts;
             attribute gains : Gains;
-            bind counts.n = outer.inner.parameters.count;
-            bind gains.k = outer.inner.parameters.gain;
+            bind outer.inner.parameters.count = counts.n;
+            bind outer.inner.parameters.gain = gains.k;
           }
         }
         """,
@@ -336,8 +336,8 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
     generated = roundtrip_arch / "architecture.sysml"
     generate_sysml_from_ssd(first_ssd, generated)
     text = generated.read_text()
-    assert "bind Counts.n = outer.inner.parameters.count;" in text
-    assert "bind Gains.k = outer.inner.parameters.gain;" in text
+    assert "bind outer.inner.parameters.count = Counts.n;" in text
+    assert "bind outer.inner.parameters.gain = Gains.k;" in text
 
     second_ssd = tmp_path / "regenerated.ssd"
     generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
@@ -383,8 +383,8 @@ def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
             part outer : Outer;
             attribute inner_set : InnerSet;
             attribute outer_set : OuterSet;
-            bind inner_set.k = outer.inner.parameters.k;
-            bind outer_set.g = outer.parameters.gain;
+            bind outer.inner.parameters.k = inner_set.k;
+            bind outer.parameters.gain = outer_set.g;
           }
         }
         """,
@@ -421,8 +421,8 @@ def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
     text = generated.read_text()
     assert "part def outer" in text
     assert "attribute parameters : outerParameters;" in text
-    assert "bind OuterSet.g = outer.parameters.gain;" in text
-    assert "bind InnerSet.k = outer.inner.parameters.k;" in text
+    assert "bind outer.parameters.gain = OuterSet.g;" in text
+    assert "bind outer.inner.parameters.k = InnerSet.k;" in text
 
     second_ssd = tmp_path / "regenerated.ssd"
     generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")

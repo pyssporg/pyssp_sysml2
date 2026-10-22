@@ -23,7 +23,7 @@ Format (2-space indent, one blank line between definitions, trailing newline):
         part src : Source;
         attribute nominal : NominalSet;
         connect src.outSig to dst.inSig;
-        bind nominal.gain = src.parameters.gain;
+        bind src.parameters.gain = nominal.gain;
       }
     }
 

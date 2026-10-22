@@ -133,8 +133,8 @@ Behavior:
 Example explicit bind:
 
 ```sysml
-bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
 ```
 
 ```xml
@@ -198,7 +198,7 @@ attribute def AutopilotParameters :> ParameterInterface {
 Identity bind:
 
 ```sysml
-bind nominal = autopilot.parameters;
+bind autopilot.parameters = nominal;
 ```
 
 ```xml
@@ -374,7 +374,7 @@ part def Gain {
 part def ParamDemo {
   attribute parameters_set : parameters;
   part gain : Gain;
-  bind parameters_set = gain.parameters;
+  bind gain.parameters = parameters_set;
 }
 ```
 
@@ -384,8 +384,8 @@ avoid the reserved bag name.
 Explicit mapping synthesis:
 
 ```sysml
-bind Nom.n = comp.parameters.count;
-bind Nom.x = comp.parameters.xs;
+bind comp.parameters.count = Nom.n;
+bind comp.parameters.xs = Nom.x;
 ```
 
 List entries `x[0]`, `x[1]` in an SSV/SSM are grouped back into a list member
@@ -404,7 +404,7 @@ part def outer {
 The target of a nested binding is expressed as:
 
 ```sysml
-bind Nom.k = outer.inner.parameters.k;
+bind outer.inner.parameters.k = Nom.k;
 ```
 
 ### Component-level and system-level bindings

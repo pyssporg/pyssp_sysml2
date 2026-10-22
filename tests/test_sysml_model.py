@@ -444,8 +444,8 @@ def test_bindings_loaded_with_feature_chains(tmp_path) -> None:
             part componentB : Component;
             attribute nominal : Set;
 
-            bind nominal.gain_value = componentA.parameters.gain;
-            bind nominal = componentB.parameters;
+            bind componentA.parameters.gain = nominal.gain_value;
+            bind componentB.parameters = nominal;
           }
         }
         """,
@@ -453,9 +453,11 @@ def test_bindings_loaded_with_feature_chains(tmp_path) -> None:
 
     bindings = load(model_file).part_definitions["SystemComposition"].bindings
 
+    # Fields are positional: source is the left-hand side (the port), target is
+    # the right-hand side (the set usage).
     assert [(binding.source, binding.target) for binding in bindings] == [
-        (("nominal", "gain_value"), ("componentA", "parameters", "gain")),
-        (("nominal",), ("componentB", "parameters")),
+        (("componentA", "parameters", "gain"), ("nominal", "gain_value")),
+        (("componentB", "parameters"), ("nominal",)),
     ]
     assert all(binding.name is None for binding in bindings)
 
@@ -738,7 +740,7 @@ def test_export_round_trip(tmp_path) -> None:
             attribute nominal : NominalMeasurements;
 
             connect src.sig to dst.sigIn;
-            bind nominal.temps = measured.parameters.temperature;
+            bind measured.parameters.temperature = nominal.temps;
           }
 
           requirement def Connected {

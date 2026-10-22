@@ -102,36 +102,37 @@ attach parameter interfaces to component usages
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
 | A bind must name a set usage in the composition | `... references 'x', which is not a composition attribute` | Declare `attribute x : SomeSet;` |
-| A bind target component path must resolve | `Parameter binding target '...' does not resolve to a component usage` | Fix the component path or add the part usage |
-| A bind target must use the `parameters` bag | `Parameter bindings must target '<component>.parameters' ...` | Add `.parameters` and optionally one member |
-| A whole-object bind must use a set usage only | `A whole-object parameter binding must reference a set usage` | Remove the member from the source |
-| A per-member bind must use `<set>.<member>` | `A per-member parameter binding must reference '<set>.<member>'` | Use exactly one set member |
-| A set usage must not mix identity and per-member binds | `mixes whole-object and per-member parameter bindings for set ...` | Choose one form |
+| A bind target component path must resolve | `Parameter bind target '...' does not resolve to a component usage` | Fix the component path or add the part usage |
+| A bind target must put the parameter port on the left | `must be written with the parameter port on the left` | Swap the two sides |
+| A bind target must use the `parameters` bag | `Parameter bind targets must be '<component>.parameters' ...` | Add `.parameters` and optionally one member |
+| A bind must pair whole set with whole port, or member with member | `Parameter binds must bind a whole set to ... or one set member to ...` | Match the shapes on both sides |
+| A per-member bind must use `<set>.<member>` | `Parameter bind sources must be '<set>' or '<set>.<member>'` | Use exactly one set member |
+| A set usage must not mix identity and per-member binds | `mixes whole-object and per-member parameter binds for set ...` | Choose one form |
 | A bound component must have an interface | `... declares no parameter interface` | Add a bag or remove the bind |
 | Identity bind members must exist in the interface | `Whole-object bind ... cannot map set members ...` | Rename members or use explicit binds |
-| A per-member source must exist in the set | `Parameter set 'S' has no member 'x'` | Fix the source member name |
-| A per-member target must exist in the interface | `Parameter interface 'P' has no member 'x'` | Fix the target member name |
-| Bindings inside nested part definitions are rejected | `Parameter bindings inside nested part definition 'X' are not supported` | Move the bind to the composition root |
+| A per-member bind must name a set member | `Parameter set 'S' has no member 'x'` | Fix the set member name |
+| A per-member bind must name an interface member | `Parameter interface 'P' has no member 'x'` | Fix the port member name |
+| Binds inside nested part definitions are rejected | `Parameter binds inside nested part definition 'X' are not supported` | Move the bind to the composition root |
 
 Valid identity:
 
 ```sysml
 attribute nominal : NominalSet;
-bind nominal = comp.parameters;
+bind comp.parameters = nominal;
 ```
 
 Valid explicit:
 
 ```sysml
 attribute nominal : NominalSet;
-bind nominal.n = comp.parameters.count;
+bind comp.parameters.count = nominal.n;
 ```
 
 Invalid identity with renamed members:
 
 ```sysml
 attribute nominal : NominalSet;   // member n
-bind nominal = comp.parameters;    // interface member count
+bind comp.parameters = nominal;    // interface member count
 ```
 
 ```text
@@ -145,7 +146,7 @@ Invalid bind inside a nested part definition:
 part def Outer {
   part inner : Inner;
   attribute nominal : NominalSet;
-  bind nominal.k = inner.parameters.k;  // rejected
+  bind inner.parameters.k = nominal.k;  // rejected
 }
 ```
 
@@ -162,15 +163,15 @@ Move the set usage and bind to the composition that owns `outer`.
 Valid:
 
 ```sysml
-bind counts.n = comp.parameters.count;
-bind gains.k = comp.parameters.gain;
+bind comp.parameters.count = counts.n;
+bind comp.parameters.gain = gains.k;
 ```
 
 Invalid:
 
 ```sysml
-bind counts_a.n = comp.parameters.count;
-bind counts_b.m = comp.parameters.count;
+bind comp.parameters.count = counts_a.n;
+bind comp.parameters.count = counts_b.m;
 ```
 
 ```text
@@ -204,7 +205,7 @@ attribute def P :> ParameterInterface {
 attribute def S :> ParameterSet {
   attribute xs = (1.0, 2.0, 3.0);
 }
-bind s.xs = comp.parameters.xs;
+bind comp.parameters.xs = s.xs;
 ```
 
 Invalid unbounded:
@@ -350,8 +351,8 @@ Before running a generator:
 - [ ] No composition mixes bagged and legacy components.
 - [ ] The composition has no `parameters` bag.
 - [ ] All binds are at the composition root.
-- [ ] Every bind source is a declared set usage/member.
-- [ ] Every bind target component has a bag.
+- [ ] Every bind target is a declared set usage/member.
+- [ ] Every bind source names a component parameter bag.
 - [ ] Multiple sets have disjoint effective targets.
 - [ ] List multiplicities are fixed and lengths match.
 - [ ] Parameter names avoid `pyssp_` and SysML keywords.

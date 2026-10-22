@@ -160,8 +160,8 @@ part def AircraftComposition {
 
   attribute nominal : NominalSet;
 
-  bind nominal.n_waypoints = autopilot.parameters.waypointCount;
-  bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+  bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+  bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
 }
 ```
 
@@ -171,8 +171,8 @@ Mapping to SSP artifacts:
 | --- | --- |
 | `attribute def <X> :> ParameterInterface` | parameter connectors in SSD and parameter variables in `modelDescription.xml` |
 | `attribute def <Set> :> ParameterSet` | one `<Set>.ssv` |
-| `bind set.member = path.parameters.member` | inline `ssm:MappingEntry source="member" target="path.member"` |
-| `bind set = path.parameters` | identity mapping → `ParameterBinding prefix="path."` |
+| `bind path.parameters.member = set.member` | inline `ssm:MappingEntry source="member" target="path.member"` |
+| `bind path.parameters = set` | identity mapping → `ParameterBinding prefix="path."` |
 | multiple sets on one component | allowed when target members are disjoint; overlapping targets are rejected |
 
 Rules:
@@ -181,21 +181,24 @@ Rules:
   The marker definitions must exist in the same package.
 - A component or nested system has at most one
   `attribute parameters : <Interface>;` bag.
+- Write parameter binds with the parameter port on the left:
+  `bind path.parameters.member = set.member;`. The reversed form is rejected
+  with the rewritten bind in the error message.
 - Sets are applied per component or nested-system usage with `bind`. An
   element may have several applied sets as long as no target parameter is
   bound more than once.
   SysML `bind` is an equality constraint, not an override, so overlapping
   targets are rejected instead of imposing an order.
 - `path` may be a nested part path, for example
-  `bind nominal.k = outer.inner.parameters.k`. Nested parts are emitted as
+  `bind outer.inner.parameters.k = nominal.k`. Nested parts are emitted as
   nested `ssd:System` elements and use SSP hierarchical target names.
 - Apply sets at the composition root. Bindings stored inside a nested part
   definition are rejected; target nested usages from the root instead.
 - The composition itself is not a parameter target. Attach parameter
   interfaces to component or nested-system usages; top-level SSD system
   parameter connectors are rejected.
-- Set member names are the SSV names; the bind target determines the SSP
-  hierarchical target name.
+- Set member names are the SSV names; the parameter port on the left determines
+  the SSP hierarchical target name.
 - Fixed list lengths use declared multiplicity, e.g. `Real[3]`.
 - `generate ssd` emits parameter connectors from the interface and inlines
   explicit mappings; `generate fmi` emits interface parameters using interface

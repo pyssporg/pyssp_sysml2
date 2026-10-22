@@ -24,6 +24,6 @@ package IdentityExample {
     part autopilot : AutopilotModule;
     attribute nominal : NominalSet;
 
-    bind nominal = autopilot.parameters;
+    bind autopilot.parameters = nominal;
   }
 }

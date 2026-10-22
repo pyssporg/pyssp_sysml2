@@ -181,7 +181,7 @@ class AppliedSet:
     set_definition: AttributeDefinition
     component_path: tuple[str, ...]
     part_usage: PartUsage
-    bindings: tuple[Binding, ...]
+    bindings: tuple[ParameterBind, ...]
     identity: bool
 
     @property
@@ -205,11 +205,43 @@ class MappingSpec:
 
 
 @dataclass(frozen=True)
-class ParameterTarget:
-    """Component path and optional member addressed by a parameter bind target."""
+class ParameterBind:
+    """A parameter bind resolved by role, not by written position.
 
-    component_path: tuple[str, ...]
-    member: str | None
+    Canonical form puts the parameter port on the left and the set usage on
+    the right::
+
+        bind <component-path>.parameters[.<member>] = <set>[.<member>];
+
+    ``bind`` is equality in SysML, so the endpoints are identified by the
+    ``parameters`` segment. Only that canonical orientation is accepted; the
+    reversed form is rejected with the rewritten bind in the error message.
+    """
+
+    binding: Binding
+    port_path: tuple[str, ...]
+    port_member: str | None
+    set_path: tuple[str, ...]
+
+    @property
+    def set_usage(self) -> str:
+        return self.set_path[0]
+
+    @property
+    def set_member(self) -> str | None:
+        return self.set_path[1] if len(self.set_path) == 2 else None
+
+    @property
+    def identity(self) -> bool:
+        """True for a whole-object bind (``<port> = <set>``)."""
+        return self.port_member is None
+
+    def port_reference(self) -> str:
+        """The left-hand feature chain, for error messages."""
+        parts = self.port_path + (PARAMETERS_BAG_NAME,)
+        if self.port_member is not None:
+            parts += (self.port_member,)
+        return ".".join(parts)
 
 
 @dataclass(frozen=True)
@@ -334,34 +366,70 @@ def component_definitions(
     return definitions
 
 
-def parameter_binding_target(binding: Binding) -> ParameterTarget | None:
-    """Resolve a bind target to a component path and optional member.
+def parameter_bind(binding: Binding) -> ParameterBind | None:
+    """Resolve a bind by role, or ``None`` for a non-parameter bind.
 
-    ``None`` means the binding is not a parameter binding. The bag segment
-    must appear exactly once and be followed by at most one member name.
+    Only the canonical orientation is accepted: the parameter port must be
+    on the left of ``=``. The ``parameters`` segment must appear exactly once
+    on that side and be followed by at most one member name.
     """
-    target = binding.target
-    indexes = [
-        index
-        for index, name in enumerate(target)
-        if name == PARAMETERS_BAG_NAME
+    left = list(binding.source)
+    right = list(binding.target)
+    left_indexes = [
+        index for index, name in enumerate(left) if name == PARAMETERS_BAG_NAME
     ]
-    if not indexes:
+    right_indexes = [
+        index for index, name in enumerate(right) if name == PARAMETERS_BAG_NAME
+    ]
+
+    if not left_indexes and not right_indexes:
         return None
-    if len(indexes) > 1:
+    if left_indexes and right_indexes:
         raise ValueError(
-            "Parameter binding target contains more than one "
-            f"'{PARAMETERS_BAG_NAME}' segment: '{'.'.join(target)}'"
+            f"Parameter bind '{binding.key}' connects two parameter ports; "
+            "bind a parameter port to a parameter set, or use a connection"
         )
-    index = indexes[0]
-    path = target[:index]
-    rest = target[index + 1 :]
-    if not path or len(rest) > 1:
+    if right_indexes:
         raise ValueError(
-            "Parameter bindings must target '<component>.parameters' or "
-            f"'<component>.parameters.<member>', got '{'.'.join(target)}'"
+            f"Parameter bind '{binding.key}' must be written with the "
+            "parameter port on the left:\n"
+            f"  bind {'.'.join(right)} = {'.'.join(left)};"
         )
-    return ParameterTarget(path, rest[0] if rest else None)
+    if len(left_indexes) > 1:
+        raise ValueError(
+            "Parameter bind target contains more than one "
+            f"'{PARAMETERS_BAG_NAME}' segment: '{'.'.join(left)}'"
+        )
+
+    index = left_indexes[0]
+    port_path = tuple(left[:index])
+    rest = left[index + 1 :]
+    if len(rest) > 1:
+        raise ValueError(
+            "Parameter bind targets must be '<component>.parameters' or "
+            f"'<component>.parameters.<member>', got '{'.'.join(left)}'"
+        )
+    port_member = rest[0] if rest else None
+
+    set_path = tuple(right)
+    if len(set_path) not in (1, 2):
+        raise ValueError(
+            "Parameter bind sources must be '<set>' or '<set>.<member>', "
+            f"got '{'.'.join(right)}'"
+        )
+    if (port_member is None) != (len(set_path) == 1):
+        raise ValueError(
+            "Parameter binds must bind a whole set to '<component>.parameters' "
+            "or one set member to '<component>.parameters.<member>', got "
+            f"'{binding.key}'"
+        )
+
+    return ParameterBind(
+        binding=binding,
+        port_path=port_path,
+        port_member=port_member,
+        set_path=set_path,
+    )
 
 
 def has_parameter_dialect(
@@ -371,7 +439,7 @@ def has_parameter_dialect(
     if set_usages(architecture, system):
         return True
     if any(
-        parameter_binding_target(binding) is not None
+        parameter_bind(binding) is not None
         for binding in system.bindings
     ):
         return True
@@ -426,39 +494,22 @@ def _applied_sets_for_component(
     system: PartDefinition,
     ref: ComponentRef,
 ) -> list[AppliedSet]:
-    grouped: dict[str, list[Binding]] = {}
+    grouped: dict[str, list[ParameterBind]] = {}
     for binding in system.bindings:
-        target = parameter_binding_target(binding)
-        if target is None or target.component_path != ref.path:
+        bind = parameter_bind(binding)
+        if bind is None or bind.port_path != ref.path:
             continue
-        if not binding.source:
-            raise ValueError(f"Binding '{binding.key}' has no source feature")
-        if len(binding.source) not in (1, 2):
-            raise ValueError(
-                "Parameter binding sources must be '<set>.member' or '<set>', "
-                f"got '{'.'.join(binding.source)}'"
-            )
-        if target.member is None and len(binding.source) != 1:
-            raise ValueError(
-                "A whole-object parameter binding must reference a set usage, "
-                f"not '{'.'.join(binding.source)}'"
-            )
-        if target.member is not None and len(binding.source) != 2:
-            raise ValueError(
-                "A per-member parameter binding must reference '<set>.<member>', "
-                f"got '{'.'.join(binding.source)}'"
-            )
-        grouped.setdefault(binding.source[0], []).append(binding)
+        grouped.setdefault(bind.set_usage, []).append(bind)
 
     applications: list[AppliedSet] = []
-    for usage_name, bindings in sorted(grouped.items()):
+    for usage_name, binds in sorted(grouped.items()):
         kinds = {
-            "identity" if len(binding.source) == 1 else "member"
-            for binding in bindings
+            "identity" if bind.identity else "member"
+            for bind in binds
         }
         if len(kinds) > 1:
             raise ValueError(
-                f"{ref.name} mixes whole-object and per-member parameter bindings "
+                f"{ref.name} mixes whole-object and per-member parameter binds "
                 f"for set '{usage_name}'; use one form per set"
             )
         applications.append(
@@ -469,7 +520,7 @@ def _applied_sets_for_component(
                 ),
                 component_path=ref.path,
                 part_usage=ref.part_usage,
-                bindings=tuple(bindings),
+                bindings=tuple(binds),
                 identity=("identity" in kinds),
             )
         )
@@ -488,13 +539,13 @@ def applied_sets(
     refs_by_path = {ref.path: ref for ref in refs}
 
     for binding in system.bindings:
-        target = parameter_binding_target(binding)
-        if target is None:
+        bind = parameter_bind(binding)
+        if bind is None:
             continue
-        if target.component_path not in refs_by_path:
+        if bind.port_path not in refs_by_path:
             raise ValueError(
-                "Parameter binding target "
-                f"'{'.'.join(binding.target)}' does not resolve to a component "
+                "Parameter bind target "
+                f"'{bind.port_reference()}' does not resolve to a component "
                 "usage"
             )
 
@@ -504,11 +555,11 @@ def applied_sets(
             continue
         seen_definitions.add(ref.part_def.name)
         if any(
-            parameter_binding_target(binding) is not None
+            parameter_bind(binding) is not None
             for binding in ref.part_def.bindings
         ):
             raise ValueError(
-                f"Parameter bindings inside nested part definition "
+                f"Parameter binds inside nested part definition "
                 f"'{ref.part_def.name}' are not supported; apply sets at the "
                 "composition root"
             )
@@ -662,21 +713,20 @@ def mapping_entries(
     set_members = application.set_definition.attributes
     entries: list[tuple[str, str]] = []
     bound_sources: set[str] = set()
-    for binding in application.bindings:
-        target = parameter_binding_target(binding)
+    for bind in application.bindings:
         if (
-            target is None
-            or target.component_path != application.component_path
-            or target.member is None
-            or len(binding.source) != 2
+            bind.port_path != application.component_path
+            or bind.port_member is None
+            or bind.set_member is None
         ):
             raise ValueError(
-                "Per-member parameter bindings must have the shape "
-                "'<set>.<member> = <component>.parameters.<member>', got "
-                f"'{'.'.join(binding.source)} = {'.'.join(binding.target)}'"
+                "Per-member parameter binds must have the shape "
+                "'<component>.parameters.<member> = <set>.<member>', got "
+                f"'{'.'.join(bind.binding.source)} = "
+                f"{'.'.join(bind.binding.target)}'"
             )
-        source_name = binding.source[1]
-        target_name = target.member
+        source_name = bind.set_member
+        target_name = bind.port_member
         source = set_members.get(source_name)
         if source is None:
             raise ValueError(

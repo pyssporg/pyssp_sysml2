@@ -24,6 +24,6 @@ package NestedPathExample {
     part outer : Outer;
     attribute nominal : NominalSet;
 
-    bind nominal.k = outer.inner.parameters.k;
+    bind outer.inner.parameters.k = nominal.k;
   }
 }

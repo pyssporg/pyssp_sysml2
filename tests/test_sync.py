@@ -629,7 +629,7 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
     assert "attribute bias : Real;" in text
     assert "attribute k : Real = 5.0;" in text
     assert "attribute bias : Real = 1.5;" in text
-    assert "bind parameters_set = gain.parameters;" in text
+    assert "bind gain.parameters = parameters_set;" in text
 
 
 def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
@@ -661,7 +661,7 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
           part def SystemComposition {
             part outer : Outer;
             attribute nominal : Nom;
-            bind nominal.k = outer.inner.parameters.k;
+            bind outer.inner.parameters.k = nominal.k;
           }
         }
         """,
@@ -709,7 +709,7 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
 
     assert "part inner2 : Inner;" in text
     assert "attribute k : Real = 5.0;" in text
-    assert "bind Nom.k = outer.inner.parameters.k;" in text
+    assert "bind outer.inner.parameters.k = Nom.k;" in text
 
 
 def test_sync_nested_system_connections(tmp_path: Path) -> None:

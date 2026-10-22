@@ -72,7 +72,7 @@ The adapter also loads the parameter-set dialect:
 - specialization with `:>` (used for the `ParameterInterface` /
   `ParameterSet` markers);
 - `bind` statements with full feature chains, e.g.
-  `bind set.member = component.parameters.member;`.
+  `bind component.parameters.member = set.member;`.
 
 The parameter tooling treats an `attribute def` as a parameter interface or
 parameter set only when it specializes the matching marker definition:

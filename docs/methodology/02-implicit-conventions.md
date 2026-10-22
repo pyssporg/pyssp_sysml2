@@ -81,12 +81,14 @@ attribute note = "nominal";     // valid
 ### Bind and connect endpoints are feature chains
 
 ```sysml
-bind nominal.n_waypoints = autopilot.parameters.waypointCount;
+bind autopilot.parameters.waypointCount = nominal.n_waypoints;
 connect src.outSig to dst.inSig;
 ```
 
-The loader preserves the full feature chain for binds. The parameter tooling
-then interprets the chain as described in
+The loader preserves the full feature chain for binds. A parameter bind always
+puts the parameter port on the left and the set usage on the right
+(`bind comp.parameters.k = nominal.k;`); the reversed form is rejected. The
+parameter tooling then interprets the chain as described in
 [01 — Parameter sets](01-parameter-sets.md).
 
 ### One package per architecture
