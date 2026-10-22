@@ -482,8 +482,8 @@ def test_unmarked_set_is_rejected(tmp_path) -> None:
         )
 
 
-def test_mixed_parameter_dialects_are_rejected(tmp_path) -> None:
-    """A composition cannot mix a parameter port with legacy flat attributes."""
+def test_flat_parameter_attributes_are_rejected(tmp_path) -> None:
+    """Flat component attributes are retired; parameters use interfaces/sets."""
     model = _model(
         composition="""
         attribute nominal : NominalSet;
@@ -509,7 +509,7 @@ def test_mixed_parameter_dialects_are_rejected(tmp_path) -> None:
     )
     architecture_dir = _write(tmp_path, model)
 
-    with pytest.raises(ValueError, match="mixes parameter interfaces"):
+    with pytest.raises(ValueError, match="flat parameter attribute"):
         generate_parameter_sets(
             architecture_dir, tmp_path / "sets", COMPOSITION_NAME
         )

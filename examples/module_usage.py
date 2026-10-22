@@ -25,7 +25,7 @@ from pathlib import Path
 
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
@@ -62,12 +62,14 @@ def main() -> None:
     args = parse_args()
 
     ssd_path = args.output_root / "SystemStructure.ssd"
-    ssv_path = args.output_root / "parameters.ssv"
+    parameter_set_dir = args.output_root / "parameter_sets"
     fmi_dir = args.output_root / "model_descriptions"
     sync_dir = args.output_root / "synced_sysml"
 
     generate_ssd(args.architecture, ssd_path, args.composition)
-    generate_parameter_set(args.architecture, ssv_path, args.composition)
+    generate_parameter_sets(
+        args.architecture, parameter_set_dir, args.composition
+    )
     written = generate_model_descriptions(args.architecture, fmi_dir, args.composition)
     bootstrapped = []
     if args.bootstrap_architecture_dir is not None:
@@ -86,7 +88,7 @@ def main() -> None:
     )
 
     print(f"SSD: {ssd_path}")
-    print(f"SSV: {ssv_path}")
+    print(f"Parameter sets: {parameter_set_dir}")
     print("FMI model descriptions:")
     for path in written:
         print(f"  - {path}")

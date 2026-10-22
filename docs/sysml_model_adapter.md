@@ -90,8 +90,8 @@ attribute def NominalSet :> ParameterSet { ... }
 The marker definitions themselves must exist in the package (the loader does
 not resolve imports across packages yet). A component or nested system
 exposes its interface through the fixed port
-`in port parameters : <Interface>;`. Only one port per part is supported,
-and mixing it with flat parameter attributes on the same part is rejected.
+`in port parameters : <Interface>;`. Only one port per part is supported.
+Flat parameter attributes are retired and rejected.
 
 `generate ssd` consumes this dialect; `generate sysml` and `sync ssd`
 synthesize or reconcile it from SSD parameter connectors and

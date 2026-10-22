@@ -38,7 +38,7 @@ printf "Command      : %s\n" "${RUNNER[*]}"
 "${RUNNER[@]}" generate ssv \
   --architecture "$ARCH" \
   --composition "$COMP" \
-  --output "$OUT_DIR/parameters.ssv"
+  --output-dir "$OUT_DIR/parameter_sets"
 
 "${RUNNER[@]}" generate fmi \
   --architecture "$ARCH" \
@@ -59,7 +59,7 @@ mkdir -p "$BOOTSTRAP_DIR"
 
 printf "\nGenerated artifacts:\n"
 printf "%s\n" "- $OUT_DIR/SystemStructure.ssd"
-printf "%s\n" "- $OUT_DIR/parameters.ssv"
+printf "%s\n" "- $OUT_DIR/parameter_sets"
 printf "%s\n" "- $OUT_DIR/model_descriptions"
 printf "%s\n" "- $BOOTSTRAP_DIR/architecture.sysml"
 printf "%s\n" "- $OUT_DIR/synced_sysml"

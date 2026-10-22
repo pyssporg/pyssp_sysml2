@@ -716,39 +716,42 @@ Consequences:
 This is useful when the component is parameterized externally or later in the
 workflow.
 
-## 13. Legacy flat-attribute parameters
+## 13. Legacy flat-attribute parameters (retired)
 
-Before interfaces/sets, a leaf component could declare its parameters directly:
+The flat-attribute dialect is no longer supported. Parameters must be declared
+through a parameter interface and applied through SysML-defined sets:
 
 ```sysml
-part def Comp {
-  attribute gain : Real = 2.0;
-  attribute count : Integer = 10;
+port def Params :> ParameterInterface {
+  attribute gain : Real;
 }
-```
 
-For a leaf component, non-control attributes are treated as parameters. This
-still works for `generate ssd` and `generate fmi`.
-
-Limits:
-
-- A part definition cannot mix a `parameters` port with flat parameter
-  attributes.
-- Flat attributes on the **top composition** are not parameters; only leaf
-  component definitions are parameterized.
-- `sync ssd` does not migrate a legacy flat-attribute architecture to
-  interfaces/sets. It preserves the legacy model.
-- The legacy `pyssp_parameter_set` attribute on the composition can still
-  point at an SSV.
-
-Invalid mixing:
-
-```sysml
 part def Comp {
   in port parameters : Params;
-  attribute gain : Real;  // error: mixed dialects
+}
+
+attribute def NominalSet :> ParameterSet {
+  attribute gain = 2.0;
+}
+
+part def Composition {
+  part comp : Comp;
+  attribute nominal : NominalSet;
+  bind comp.parameters.gain = nominal.gain;
 }
 ```
+
+A component that still declares `attribute gain : Real;` directly fails with:
+
+```text
+Comp.gain is a flat parameter attribute, which is no longer supported.
+Declare a parameter interface with 'in port parameters : <Interface>;' and
+apply a ParameterSet with 'bind'.
+```
+
+The legacy `pyssp_parameter_set` composition attribute is retired for the same
+reason. `generate sysml` can still convert an SSD `ParameterBinding` into
+interfaces, sets, and binds when bootstrapping from an existing SSP.
 
 ## 14. What is not supported
 

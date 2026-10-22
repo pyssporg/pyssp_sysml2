@@ -149,8 +149,9 @@ becomes:
 ```
 
 The **usage name** is the SSD element name (`controller`, `src`, `dst`). The
-**definition name** determines the FMU resource stem (`Source.fmu`,
-`Sink.fmu`). Dots in a definition name become underscores in the FMU filename.
+**definition name** determines the default FMU resource stem (`Source.fmu`,
+`Sink.fmu`); `fmu_meta.resource_name` can override it. Dots in a definition
+name become underscores in the default FMU filename.
 
 ### A nested system cannot also be an FMU
 
@@ -158,13 +159,13 @@ This is rejected:
 
 ```sysml
 part def Controller {
-  attribute pyssp_implementation = "Controller.fmu";
+  attribute fmu_meta : ControllerFmu;
   part src : Source;
 }
 ```
 
 A part definition with subparts is a system; a leaf part definition is an FMU.
-The implementation control attribute is only meaningful on a leaf.
+FMU metadata is only meaningful on a leaf.
 
 ### Childless systems
 
@@ -270,21 +271,47 @@ therefore become the same one-attribute port type and round-trip as
 This is intentional: SSP only gives the attribute names, not the original
 SysML port definition names.
 
-## 5. Control attributes
+## 5. Control attributes and FMU metadata
 
-Several SSP concepts have no first-class SysML v2 equivalent. They are carried
-as ordinary `pyssp_*` attributes.
+Several SSP concepts have no first-class SysML v2 equivalent. Simple metadata
+is carried as ordinary `pyssp_*` attributes:
 
 | Control attribute | Where | Meaning |
 | --- | --- | --- |
-| `pyssp_implementation` | leaf part definition | SSD component `implementation` string |
 | `pyssp_default_start_time` | composition | SSD `DefaultExperiment/@startTime` |
 | `pyssp_default_stop_time` | composition | SSD `DefaultExperiment/@stopTime` |
 | `pyssp_flat_connector` | port definition | Emit a scalar connector instead of `port.attribute` |
-| `pyssp_parameter_set` | composition | Legacy SSD `ParameterBinding/@source` for flat-attribute models |
 
 All attributes whose name starts with `pyssp_` are skipped as model data by
 parameter, port, and FMI generation. The prefix is reserved.
+
+Structured FMU metadata uses a typed value definition instead:
+
+```sysml
+attribute def FmuMetadata {
+  attribute source : String;
+  attribute resource_name : String;
+  attribute implementation : String;
+}
+
+attribute def AutopilotFmu :> FmuMetadata {
+  attribute source = "build/fmus/AutopilotModule.fmu";
+  attribute resource_name = "AutopilotModule.fmu";
+  attribute implementation = "CoSimulation";
+}
+
+part def AutopilotModule {
+  attribute fmu_meta : AutopilotFmu;
+}
+```
+
+Metadata is recognized by type, not by the usage name, and is allowed only on
+leaf component definitions. `source` is the build artifact path and is not
+written to the SSD. `resource_name` and `implementation` map to
+`Component/@source` and `Component/@implementation`.
+
+The retired `pyssp_implementation` and `pyssp_parameter_set` attributes are
+rejected with a migration message.
 
 Example:
 
@@ -374,30 +401,32 @@ Attach parameter interfaces to component or nested-system usages instead. The
 composition may still carry default-experiment control attributes and may have
 ports for structural wiring.
 
-## 8. Legacy flat-attribute dialect
+## 8. Legacy flat-attribute dialect (retired)
 
-Before interfaces and sets, leaf components carried their parameters as flat
-attributes:
+The flat-attribute dialect is retired. A leaf component cannot declare
+parameters directly:
 
 ```sysml
 part def Comp {
-  attribute gain : Real = 2.0;
-  attribute count : Integer = 10;
+  attribute gain : Real = 2.0;  // error
 }
 ```
 
-Rules:
+Use a parameter interface and a set instead:
 
-- Only **leaf component definitions** treat non-control attributes as
-  parameters.
-- The composition's own flat attributes are not parameter declarations.
-- A leaf component may not mix flat attributes with a `parameters` port.
-- Legacy architectures are still supported by `generate ssd` and
-  `generate fmi`.
-- `sync ssd` preserves a legacy architecture; it does not migrate it to
-  interfaces/sets.
-- The legacy `pyssp_parameter_set` control attribute can still point the SSD
-  at an SSV.
+```sysml
+port def Params :> ParameterInterface {
+  attribute gain : Real;
+}
+
+part def Comp {
+  in port parameters : Params;
+}
+```
+
+`generate ssd`, `generate ssv`, `generate fmi`, and `sync ssd` reject flat
+parameter attributes with a migration message. `generate sysml` still converts
+an existing SSD `ParameterBinding` into interfaces, sets, and binds.
 
 ## 9. What lives in SysML vs what is derived
 
@@ -410,8 +439,9 @@ a model:
 | Parameter values | set | `generate ssv` |
 | SSV file path prefix | no | CLI `--parameter-set-prefix` |
 | Inline vs standalone SSM | no | `generate ssd` inlines explicit mappings; `generate ssm` writes a file |
-| FMU resource path | part definition name | `fmu_resource_path()` |
-| Implementation string | `pyssp_implementation` | `generate ssd` |
+| FMU resource path | `fmu_meta.resource_name`, else part definition name | `generate ssd` |
+| Implementation string | `fmu_meta.implementation` | `generate ssd` |
+| Built FMU location | `fmu_meta.source` | future SSP packaging |
 | Default experiment | control attributes | `generate ssd` |
 | FMU model name | composition + part definition | `generate fmi` |
 | FMU GUID | deterministic UUID | `generate fmi` |
@@ -424,7 +454,8 @@ Use this when adding a new model pattern:
 - [ ] Are list values written as tuples?
 - [ ] Are marker definitions present (`ParameterInterface`, `ParameterSet`)?
 - [ ] Does each parameterized part have at most one `parameters` port?
-- [ ] Does a leaf component avoid flat attributes when it has a port?
+- [ ] Are all component parameters declared in a parameter interface?
+- [ ] Is FMU metadata (`fmu_meta`) only on leaf component definitions?
 - [ ] Is a part with subparts intended as a system, not an FMU?
 - [ ] Does a connection use compatible port definitions?
 - [ ] Are parameter binds at the composition root, not inside nested part
@@ -444,6 +475,7 @@ Use this when adding a new model pattern:
 - `src/pyssp_sysml2/sysml.py` — leaf/system split, port inference, nested
   systems;
 - `src/pyssp_sysml2/ssd.py` — port/parameter connectors and connections;
+- `src/pyssp_sysml2/fmu_metadata.py` — typed FMU metadata resolution;
 - `src/pyssp_sysml2/control.py` — control-attribute names;
 - `tests/test_sysml_model.py`, `tests/test_generate_sysml.py`,
-  `tests/test_roundtrip.py`.
+  `tests/test_fmu_metadata.py`, `tests/test_roundtrip.py`.

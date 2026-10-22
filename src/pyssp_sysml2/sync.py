@@ -6,9 +6,16 @@ from typing import Dict, Iterable, Mapping, Tuple
 
 from pyssp_standard.ssd import Component, System
 
-from pyssp_sysml2.fmi_helpers import fmu_resource_path
+from pyssp_sysml2.fmu_metadata import (
+    component_source,
+    fmu_metadata,
+    update_fmu_metadata_from_component,
+)
 from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
-from pyssp_sysml2.parameters import has_parameter_dialect
+from pyssp_sysml2.parameters import (
+    has_parameter_dialect,
+    validate_parameter_dialect,
+)
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
     SCALAR_ATTRIBUTE_NAME,
@@ -93,6 +100,12 @@ def _synthesize_component_part_def(
 
     part_def = PartDefinition(name=part_name, source_file=INFERRED_PARTS_FILENAME)
     architecture.add_part_def(part_def)
+    update_fmu_metadata_from_component(
+        architecture,
+        part_def,
+        component,
+        source_file=INFERRED_PARTS_FILENAME,
+    )
 
     port_attributes, port_directions = _collect_component_ports(component)
     for port_name in sorted(port_attributes):
@@ -131,7 +144,17 @@ def _resolve_component_part_definition(
     existing = system.parts.get(component.name)
     existing_part_def = None if existing is None else architecture.resolve_part(existing)
     if existing is not None and existing_part_def is not None:
-        if component.source is None or component.source == fmu_resource_path(existing.type_name):
+        existing_source = component_source(
+            existing_part_def,
+            fmu_metadata(architecture, existing_part_def),
+        )
+        if component.source is None or component.source == existing_source:
+            update_fmu_metadata_from_component(
+                architecture,
+                existing_part_def,
+                component,
+                source_file=INFERRED_PARTS_FILENAME,
+            )
             return existing.type_name, existing_part_def
 
     if component.source is None:
@@ -142,7 +165,9 @@ def _resolve_component_part_definition(
     matches = [
         part_def
         for part_def in architecture.part_definitions.values()
-        if fmu_resource_path(part_def.name) == component.source
+        if component_source(
+            part_def, fmu_metadata(architecture, part_def)
+        ) == component.source
     ]
     if not matches and synthesize_external_parts:
         _, part_def = _synthesize_component_part_def(architecture, component)
@@ -370,6 +395,8 @@ def sync_sysml_from_ssd(
         )
         loaded = False
 
+    if loaded:
+        validate_parameter_dialect(architecture, system)
     parameter_dialect = loaded and has_parameter_dialect(architecture, system)
 
     _sync_system_level(

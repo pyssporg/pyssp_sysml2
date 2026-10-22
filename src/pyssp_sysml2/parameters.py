@@ -23,6 +23,12 @@ import warnings
 from dataclasses import dataclass
 
 from pyssp_sysml2.control import FLAT_CONNECTOR_ATTR, is_control_attribute
+from pyssp_sysml2.fmu_metadata import (
+    FMU_METADATA_ATTR,
+    fmu_metadata,
+    is_fmu_metadata_definition,
+    validate_retired_control_attributes,
+)
 from pyssp_sysml2.sysml_model import (
     Architecture,
     Attribute,
@@ -32,7 +38,6 @@ from pyssp_sysml2.sysml_model import (
     PartUsage,
     PortDefinition,
     PortUsage,
-    load,
 )
 
 PARAMETERS_PORT_NAME = "parameters"
@@ -182,9 +187,9 @@ def parameter_interface(
 ) -> PortDefinition | None:
     """Resolve and validate the parameter interface of a part def.
 
-    ``None`` means the part uses the legacy flat-attribute dialect. A
-    ``parameters`` port typed by an unmarked port def is an error: the dialect
-    requires the marker so role confusion is caught early. Parameter ports are
+    ``None`` means the part declares no parameters. A ``parameters`` port
+    typed by an unmarked port def is an error: the dialect requires the marker
+    so role confusion is caught early. Parameter ports are
     undirected or ``in``; other directions are rejected because the SSP/FMI
     role is ``parameter``, not an input/output signal.
     """
@@ -214,33 +219,18 @@ def parameter_interface(
 def parameter_declarations(
     architecture: Architecture, part_def: PartDefinition
 ) -> list[Attribute]:
-    """Ordered parameter declarations for a component.
+    """Ordered parameter declarations from a component's parameter interface.
 
-    New dialect: the members of the part's parameter interface. Legacy
-    dialect: the part's own non-control attributes. Mixing a parameter port
-    with flat parameter attributes is rejected so the two dialects never blur.
+    Parameters are only declared through ``in port parameters : <Interface>``.
+    Flat parameter attributes were retired; callers validate the architecture
+    with :func:`validate_parameter_dialect` before generating artifacts.
     """
     interface = parameter_interface(architecture, part_def)
-    if interface is not None:
-        flat = [
-            name
-            for name in part_def.attributes
-            if not is_control_attribute(name)
-        ]
-        if flat:
-            raise ValueError(
-                f"{part_def.name} mixes a '{PARAMETERS_PORT_NAME}' port with flat "
-                f"parameter attributes: {', '.join(sorted(flat))}"
-            )
-        return [
-            attribute
-            for name, attribute in interface.attributes.items()
-            if not is_control_attribute(name)
-        ]
-
+    if interface is None:
+        return []
     return [
         attribute
-        for name, attribute in part_def.attributes.items()
+        for name, attribute in interface.attributes.items()
         if not is_control_attribute(name)
     ]
 
@@ -853,26 +843,70 @@ def mapping_entries(
     return entries
 
 
+def _is_metadata_attribute(
+    architecture: Architecture, attribute: Attribute
+) -> bool:
+    definition = architecture.resolve_attribute_def(attribute)
+    return is_fmu_metadata_definition(architecture, definition)
+
+
+def _reject_flat_attributes(
+    architecture: Architecture, part_def: PartDefinition
+) -> None:
+    for name, attribute in part_def.attributes.items():
+        if is_control_attribute(name):
+            continue
+        if _is_metadata_attribute(architecture, attribute):
+            if part_def.parts:
+                raise ValueError(
+                    f"{part_def.name}.{name} is FMU metadata, but the part has "
+                    "subparts; a nested system cannot also be an FMU component"
+                )
+            fmu_metadata(architecture, part_def)
+            continue
+        if name == FMU_METADATA_ATTR:
+            raise ValueError(
+                f"{part_def.name}.{name} must be typed by an attribute def "
+                "marked ':> FmuMetadata'"
+            )
+        raise ValueError(
+            f"{part_def.name}.{name} is a flat parameter attribute, which is no "
+            "longer supported. Declare a parameter interface with "
+            f"'in port {PARAMETERS_PORT_NAME} : <Interface>;' and apply a "
+            "ParameterSet with 'bind'."
+        )
+
+
 def validate_parameter_dialect(
     architecture: Architecture, system: PartDefinition
 ) -> None:
-    """Reject a composition that mixes parameter interfaces and flat attributes."""
-    ported: list[str] = []
-    legacy: list[str] = []
+    """Reject retired flat parameters and unsupported model attributes.
+
+    Parameters must come from a parameter interface. The composition may carry
+    control attributes and parameter-set usages, but no flat parameters.
+    """
+    validate_retired_control_attributes(architecture)
+
     for part_def in component_definitions(architecture, system):
-        if parameter_port(architecture, part_def) is not None:
-            ported.append(part_def.name)
-        elif any(
-            not is_control_attribute(name) for name in part_def.attributes
-        ):
-            legacy.append(part_def.name)
-    has_sets = bool(set_usages(architecture, system))
-    if legacy and (ported or has_sets):
-        dialect_parts = ported or ["parameter set usages"]
+        _reject_flat_attributes(architecture, part_def)
+
+    for name, attribute in system.attributes.items():
+        if is_control_attribute(name):
+            continue
+        if _is_metadata_attribute(architecture, attribute):
+            raise ValueError(
+                f"{system.name}.{name} is FMU metadata, but the composition is "
+                "not an FMU component"
+            )
+        definition = architecture.resolve_attribute_def(attribute)
+        if definition is not None:
+            # Set usages (and other value attributes) are resolved by the
+            # parameter/bind validation, which reports role errors precisely.
+            continue
         raise ValueError(
-            "Composition mixes parameter interfaces/sets "
-            f"({', '.join(sorted(dialect_parts))}) with flat parameter attributes "
-            f"({', '.join(sorted(legacy))}); use one dialect per composition"
+            f"{system.name}.{name} is a flat parameter attribute, which is no "
+            "longer supported. Define parameter sets inside SysML and bind them "
+            "to component usages."
         )
 
 
@@ -991,12 +1025,3 @@ def parameter_sets_for_generation(
         for application in applied_sets(architecture, system)
     }
     return sorted(definitions.values(), key=lambda item: item.name)
-
-
-def uses_parameter_sets(
-    architecture_path, composition: str
-) -> bool:
-    """True when the composition uses the interface/set dialect."""
-    architecture = load(architecture_path)
-    system = architecture.get_part_def(composition)
-    return has_parameter_dialect(architecture, system)

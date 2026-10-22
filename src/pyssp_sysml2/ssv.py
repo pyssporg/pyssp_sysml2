@@ -36,27 +36,6 @@ def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attrib
         ssv.xml.add_parameter(name, ptype=data_type, value=formatted)
 
 
-def generate_parameter_set(architecture_path: Path, output_path: Path, composition: str) -> Path:
-    architecture = load(architecture_path)
-    system = architecture.get_part_def(composition)
-
-    pairs = []
-    for part_name, part_usage in system.parts.items():
-        part_def = architecture.resolve_part(part_usage)
-        if part_def is None:
-            raise ValueError(f"Unresolved part definition for {part_usage.name}")
-        for attr_name, attr in part_def.attributes.items():
-            if is_control_attribute(attr_name):
-                continue
-            pairs.append((f"{part_name}.{attr_name}", attr))
-
-    ensure_parent_dir(output_path)
-    with SSV(output_path, mode="w") as ssv:
-        ssv.xml.name = "ArchitecturalDefaults"
-        populate_parameter_set(ssv, pairs)
-    return output_path
-
-
 def write_parameter_set(
     definition: AttributeDefinition, output_path: Path
 ) -> Path:

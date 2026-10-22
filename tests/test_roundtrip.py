@@ -75,6 +75,10 @@ def test_ssd_sysml_ssd_preserves_metadata(tmp_path: Path) -> None:
     assert "attribute def parameters :> ParameterSet" in generated_text
     assert "attribute parameters_set : parameters;" in generated_text
     assert "bind gain.parameters = parameters_set;" in generated_text
+    assert "attribute def FmuMetadata {" in generated_text
+    assert "attribute def GainFmuMetadata :> FmuMetadata {" in generated_text
+    assert 'attribute implementation : String = "CoSimulation";' in generated_text
+    assert "attribute fmu_meta : GainFmuMetadata;" in generated_text
 
     regenerated = tmp_path / "regenerated.ssd"
     generate_ssd(architecture_dir, regenerated, "RoundTrip")

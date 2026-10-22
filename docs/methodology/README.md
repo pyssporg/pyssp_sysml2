@@ -27,7 +27,7 @@ Every chapter or major section carries one of these labels:
 
 | Chapter | Status | Covers |
 | --- | --- | --- |
-| [01 — Parameter sets](01-parameter-sets.md) | Implemented | Interfaces, sets, identity/explicit binds, multiple disjoint sets, nested part paths, lists, legacy parameters |
+| [01 — Parameter sets](01-parameter-sets.md) | Implemented | Interfaces, sets, identity/explicit binds, multiple disjoint sets, nested part paths, lists, retired flat parameters |
 | [02 — Implicit modeling conventions](02-implicit-conventions.md) | Convention | Files/packages, parts vs systems vs FMUs, ports/connections, control attributes, naming |
 | [03 — Generation and round-trip](03-generation-and-roundtrip.md) | Implemented | SSV/SSM/SSD/FMI generation, SSD→SysML synthesis, `sync ssd`, fidelity limits |
 | [04 — Validation catalog](04-validation-catalog.md) | Implemented | Valid/invalid rules, diagnostics, fixes |

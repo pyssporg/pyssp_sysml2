@@ -58,8 +58,8 @@ Parameter port Comp.parameters is typed by 'P', which is not marked
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
 | At most one `parameters` port per part | Duplicate port / model error | Rename or remove the extra port |
-| A part with a port may not also have flat parameter attributes | `mixes a 'parameters' port with flat parameter attributes: ...` | Move flat attributes into the interface |
-| A composition may not mix parameter ports and legacy components | `Composition mixes parameter interfaces/sets (...) with flat parameter attributes (...)` | Use one dialect per composition |
+| A part may not declare flat parameter attributes | `... is a flat parameter attribute, which is no longer supported` | Move members into a parameter interface and apply a set |
+| A composition may not declare flat parameter attributes | `... is a flat parameter attribute, which is no longer supported` | Define sets in SysML and bind them to component usages |
 | The composition root is not a parameter target | `Top-level composition parameter interfaces are not supported` | Attach the port to a component or nested-system usage |
 | A synthesized parameter port cannot reuse a subpart name | `already has a subpart named 'parameters'` | Rename the subpart |
 
@@ -71,17 +71,18 @@ part def Comp {
 }
 ```
 
-Invalid mixed leaf:
+Invalid flat leaf parameter:
 
 ```sysml
 part def Comp {
-  in port parameters : CompParameters;
   attribute gain : Real;
 }
 ```
 
 ```text
-Comp mixes a 'parameters' port with flat parameter attributes: gain
+Comp.gain is a flat parameter attribute, which is no longer supported.
+Declare a parameter interface with 'in port parameters : <Interface>;' and
+apply a ParameterSet with 'bind'.
 ```
 
 Invalid top-level port:
@@ -266,13 +267,61 @@ Parameter connector 'gains.k' cannot be represented as a SysML
 attribute name
 ```
 
+## 7.5 FMU metadata
+
+| Rule | Diagnostic | Fix |
+| --- | --- | --- |
+| A metadata usage must be typed by a def marked `:> FmuMetadata` | `must be typed by an attribute def marked ':> FmuMetadata'` | Add the marker specialization |
+| The marker definition must exist | `missing marker definition 'FmuMetadata'` | Add `attribute def FmuMetadata { ... }` |
+| At most one metadata attribute per part | `declares multiple FMU metadata attributes` | Keep one |
+| Metadata is only allowed on leaf parts | `has both subparts and 'fmu_meta' metadata` | Remove the metadata or the subparts |
+| Only known members are allowed | `declares unsupported member(s): ...` | Use `source`, `resource_name`, `implementation` |
+| Member values must be strings | `must be a String` | Quote the value |
+| `resource_name` must be flat | `must be a flat resource name` | Remove directory separators |
+| `pyssp_implementation` is retired | `pyssp_implementation is no longer supported` | Move it into `fmu_meta` |
+| `pyssp_parameter_set` is retired | `pyssp_parameter_set is no longer supported` | Define a set in SysML and bind it |
+
+Valid metadata:
+
+```sysml
+attribute def FmuMetadata {
+  attribute source : String;
+  attribute resource_name : String;
+  attribute implementation : String;
+}
+
+attribute def CompFmu :> FmuMetadata {
+  attribute source = "build/fmus/Comp.fmu";
+  attribute resource_name = "Comp.fmu";
+  attribute implementation = "CoSimulation";
+}
+
+part def Comp {
+  attribute fmu_meta : CompFmu;
+}
+```
+
+Invalid metadata on a nested system:
+
+```sysml
+part def Controller {
+  attribute fmu_meta : ControllerFmu;
+  part src : Source;
+}
+```
+
+```text
+Controller.fmu_meta is FMU metadata, but the part has subparts;
+a nested system cannot also be an FMU component
+```
+
 ## 8. Composition and nesting
 
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
 | Part references must resolve | `Unresolved part definition for ...` | Add the part definition |
 | Recursive part hierarchies are rejected | `Recursive part hierarchy at '...' (...)` | Break the part-definition cycle |
-| A system cannot also be an FMU | `has both subparts and 'pyssp_implementation'` | Remove the implementation or the subparts |
+| A system cannot also be an FMU | `has both subparts and 'fmu_meta' metadata` | Remove the metadata or the subparts |
 | Nested SSD systems are supported recursively | — | Use nested part definitions/usages |
 | Bind targets may use nested part paths | — | `outer.inner.parameters.k` |
 | A nested system may own an interface | — | Put a port on the nested system part definition |
@@ -337,18 +386,19 @@ These are intentional:
 - Extra interface members that no set provides.
 - Multiple set usages of the same set definition on different components.
 - A nested system with its own parameter interface.
-- A leaf component with a flat legacy parameter dialect.
+- A leaf component with FMU metadata and no parameter interface.
 - A nested SSD `System` with no parameter connectors.
 
 ## 12. Pre-flight checklist
 
 Before running a generator:
 
-- [ ] Markers exist.
+- [ ] Markers exist (`ParameterInterface`, `ParameterSet`, and `FmuMetadata` when used).
 - [ ] Every port is typed by a marked interface.
 - [ ] Every set usage is typed by a marked set.
-- [ ] No part mixes a port with flat attributes.
-- [ ] No composition mixes parameter ports and legacy components.
+- [ ] No part or composition declares flat parameter attributes.
+- [ ] FMU metadata is only on leaf components and uses known members.
+- [ ] Retired `pyssp_implementation` / `pyssp_parameter_set` attributes are absent.
 - [ ] The composition has no `parameters` port.
 - [ ] All binds are at the composition root.
 - [ ] Every bind target is a declared set usage/member.
@@ -364,9 +414,11 @@ Before running a generator:
 
 - `src/pyssp_sysml2/parameters.py`
 - `src/pyssp_sysml2/parameter_synthesis.py`
+- `src/pyssp_sysml2/fmu_metadata.py`
 - `src/pyssp_sysml2/ssd.py`
 - `src/pyssp_sysml2/sysml.py`
 - `src/pyssp_sysml2/sync.py`
 - `tests/test_parameter_sets.py`
+- `tests/test_fmu_metadata.py`
 - `tests/test_generate_sysml.py`
 - `tests/test_sync.py`

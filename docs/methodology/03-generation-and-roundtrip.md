@@ -41,7 +41,7 @@ mapping. `generate fmi` does not use applied set values; it uses the interface.
 | --- | --- | --- |
 | SSV | parameter set definition | Parameter values, flat names, list indices |
 | SSM | explicit binds | Source→target name mapping |
-| SSD | composition + parts + interfaces + binds | Structure, connectors, connections, `ParameterBinding`s |
+| SSD | composition + parts + interfaces + binds + FMU metadata | Structure, connectors, connections, `ParameterBinding`s, component source/implementation |
 | FMI model description | leaf part definition + interface | Parameters, ports, types, defaults, model metadata |
 | SysML from SSD | SSD + referenced SSV/SSM | Synthesized model, sets, interfaces, binds |
 
@@ -166,10 +166,35 @@ pyssp generate ssd \
 - A leaf part definition becomes an `ssd:Component`.
 - A part definition with subparts becomes a nested `ssd:System`.
 - The part **usage name** becomes the SSD element name.
-- The part **definition name** determines `resources/<Definition>.fmu` for a
-  leaf component.
-- `pyssp_implementation` overrides the component implementation string.
+- The part **definition name** determines the default `resources/<Definition>.fmu`
+  for a leaf component.
+- `fmu_meta.resource_name` overrides the FMU resource name.
+- `fmu_meta.implementation` sets `Component/@implementation`.
 - Connections are written per system level.
+
+### FMU metadata
+
+```sysml
+attribute def FmuMetadata {
+  attribute source : String;
+  attribute resource_name : String;
+  attribute implementation : String;
+}
+
+attribute def AutopilotFmu :> FmuMetadata {
+  attribute source = "build/fmus/AutopilotModule.fmu";
+  attribute resource_name = "AutopilotModule.fmu";
+  attribute implementation = "CoSimulation";
+}
+
+part def AutopilotModule {
+  attribute fmu_meta : AutopilotFmu;
+}
+```
+
+`generate ssd` writes `source="resources/<resource_name>"` and
+`implementation="<implementation>"`. `source` is authoring/build metadata and
+is not written to the SSD. Metadata on a nested system is rejected.
 
 ### Parameter connectors
 
@@ -420,7 +445,7 @@ component-level binding is treated as relative to that component.
 - Parameter connectors that cannot be represented as flat SysML feature names
   (for example, dotted names) are rejected.
 - A parameter interface/port is not created for the top composition.
-- Mixing a port with flat attributes is rejected.
+- Flat parameter attributes are rejected; parameters must use an interface.
 
 ## 8. Sync
 
@@ -468,8 +493,8 @@ If the existing model uses interfaces/sets, sync:
 - preserves interface defaults and docs when the signature is unchanged;
 - removes a port when the SSD no longer has parameter connectors.
 
-If the existing model is legacy flat-attribute, sync does **not** migrate it to
-interfaces/sets.
+Flat-attribute architectures are rejected: components must declare parameters
+through a parameter interface and SysML-defined sets.
 
 ### Limits
 
@@ -480,6 +505,8 @@ interfaces/sets.
   `--no-synthesize` to fail instead.
 - A childless SSD `System` can regenerate as a leaf component.
 - Set inheritance/union is not implemented.
+- Flat parameter attributes are retired.
+- `pyssp_implementation` and `pyssp_parameter_set` are retired.
 
 ## 9. Round-trip fidelity
 
@@ -494,7 +521,8 @@ interfaces/sets.
 | Identity/explicit binding intent | Identity → prefix; explicit → mapping |
 | Nested system structure | Nested SSD `System` ↔ nested part definition/usage |
 | Connections | Per system level |
-| Control metadata | Implementation and default experiment |
+| FMU metadata | `fmu_meta` resource name and implementation |
+| Control metadata | Default experiment |
 | Unrelated definitions and file layout | `sync` preserves them; `generate sysml` starts fresh |
 
 ### Renamed or normalized
@@ -517,7 +545,6 @@ interfaces/sets.
 | Original port definition names | SSD only stores connector names |
 | Set inheritance/union | Not implemented; see proposal |
 | Original multi-file layout in `generate sysml` | It writes one synthesized file |
-| Legacy flat dialect migration | Sync preserves instead of migrating |
 | Distinction between an empty SSD `System` and a leaf component | No structural marker |
 | Exact source formatting/docs | Synthesis produces a repo-owned model |
 
@@ -556,10 +583,12 @@ Keep the parameter directory next to the SSD or preserve the relative paths.
 - `src/pyssp_sysml2/ssm.py`
 - `src/pyssp_sysml2/ssd.py`
 - `src/pyssp_sysml2/fmi.py`
+- `src/pyssp_sysml2/fmu_metadata.py`
 - `src/pyssp_sysml2/sysml.py`
 - `src/pyssp_sysml2/parameter_synthesis.py`
 - `src/pyssp_sysml2/sync.py`
 - `tests/test_parameter_sets.py`
+- `tests/test_fmu_metadata.py`
 - `tests/test_generate_sysml.py`
 - `tests/test_roundtrip.py`
 - `tests/test_sync.py`

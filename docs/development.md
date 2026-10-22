@@ -11,14 +11,16 @@ Core modules:
 - `src/pyssp_sysml2/sysml_model/`: SysML v2 model adapter (loader over `sysmlpy`,
   repo-owned dataclasses, conformant text exporter)
 - `src/pyssp_sysml2/ssd.py`: generates `SystemStructure.ssd`
-- `src/pyssp_sysml2/ssv.py`: generates `parameters.ssv` / per-set SSV files
+- `src/pyssp_sysml2/ssv.py`: generates one SSV file per parameter set
 - `src/pyssp_sysml2/ssm.py`: generates SSP parameter-mapping (`.ssm`) files
 - `src/pyssp_sysml2/parameters.py`: resolves parameter interfaces, sets,
   applied-set bindings, and mapping entries
 - `src/pyssp_sysml2/parameter_synthesis.py`: synthesizes interfaces, sets,
-  bags, and binds from SSD parameter connectors and bindings, including
-  nested systems and multiple disjoint sets per element
+  and binds from SSD parameter connectors and bindings, including nested
+  systems and multiple disjoint sets per element
 - `src/pyssp_sysml2/control.py`: shared `pyssp_*` control-attribute names
+- `src/pyssp_sysml2/fmu_metadata.py`: resolves typed `FmuMetadata` definitions
+  and maps them to SSD component source/implementation
 - `src/pyssp_sysml2/fmi.py`: generates `modelDescription.xml` files
 - `src/pyssp_sysml2/sysml.py`: generates a minimal SysML model from SSD
 - `src/pyssp_sysml2/sync.py`: syncs SSD composition edits back into SysML

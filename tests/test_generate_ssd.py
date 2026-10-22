@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.ssd import build_ssd, generate_ssd
@@ -62,8 +63,15 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
         architecture_dir / "parts.sysml",
         """
         package Example {
+          port def ParameterInterface;
+          attribute def ParameterSet;
+
+          port def SourceParameters :> ParameterInterface {
+            attribute gains : Real[2];
+          }
+
           part def Source {
-            attribute gains = (1.0, 2.0);
+            in port parameters : SourceParameters;
             out port sig : Signal;
           }
 
@@ -159,8 +167,8 @@ def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
         assert component.source == "resources/Source.fmu"
 
 
-def test_generate_ssd_keeps_legacy_parameter_set_binding(tmp_path: Path) -> None:
-    """Existing flat-attribute models still use pyssp_parameter_set semantics."""
+def test_generate_ssd_rejects_retired_parameter_set_attribute(tmp_path: Path) -> None:
+    """The legacy external SSV pointer is replaced by SysML-defined sets."""
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
@@ -179,14 +187,5 @@ def test_generate_ssd_keeps_legacy_parameter_set_binding(tmp_path: Path) -> None
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
-    generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
-
-    with SSD(output_path, mode="r") as ssd:
-        [binding] = ssd.xml.system.parameter_bindings
-        assert binding.source == "parameters.ssv"
-        assert binding.prefix is None
-        assert binding.parameter_mapping is None
-        component = ssd.xml.system.elements[0]
-        assert [(connector.name, connector.kind) for connector in component.connectors] == [
-            ("k", "parameter")
-        ]
+    with pytest.raises(ValueError, match="pyssp_parameter_set is no longer supported"):
+        generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)

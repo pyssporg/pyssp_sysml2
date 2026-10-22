@@ -1,11 +1,37 @@
 package Aircraft {
+  port def ParameterInterface;
+  attribute def ParameterSet;
 
+  attribute def FmuMetadata {
+    attribute source : String;
+    attribute resource_name : String;
+    attribute implementation : String;
+  }
+
+  port def AutopilotParameters :> ParameterInterface {
+    attribute note : String;
+    attribute waypointCount : Integer;
+    attribute waypointX_km : Real[3];
+  }
+
+  attribute def NominalSet :> ParameterSet {
+    attribute note = "uses waypoint tracking";
+    attribute n_waypoints = 10;
+    attribute waypoints_x_km = (0.0, 10.0, 20.0);
+  }
+
+  attribute def AutopilotFmu :> FmuMetadata {
+    attribute source = "build/fmus/AutopilotModule.fmu";
+    attribute resource_name = "AutopilotModule.fmu";
+    attribute implementation = "CoSimulation";
+  }
 
   part def AutopilotModule {
     doc /* F-16 autopilot, takes in sensor data and translates it into a equivalent hotas command. */
-    attribute note = "uses waypoint tracking";
-    attribute waypointCount = 10;
-    attribute waypointX_km = (0.0, 10.0, 20.0);
+    attribute fmu_meta : AutopilotFmu;
+
+    doc /* Autopilot tuning and waypoint parameters. */
+    in port parameters : AutopilotParameters;
 
     doc /* Mission-computer flight status back into autopilot. */
     in port feedbackBus : FlightStatusPacket;

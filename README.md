@@ -13,10 +13,9 @@ Typical workflow:
 
 1. Start from a SysML architecture (`*.sysml`).
 2. Generate SSD (`SystemStructure.ssd`) for system wiring.
-3. Generate SSV (`parameters.ssv`) for default parameter values.
-4. Generate FMI `modelDescription.xml` per component.
-5. For parameter-set models, generate one SSV per set and SSM mapping files
-   (`pyssp generate ssv`, `pyssp generate ssm`); see “Parameter Sets” below.
+3. Generate one SSV per parameter set (`pyssp generate ssv`); see “Parameter Sets” below.
+4. Generate SSM mapping files for explicit `bind` mappings (`pyssp generate ssm`).
+5. Generate FMI `modelDescription.xml` per component.
 6. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
 7. Optionally edit SSD wiring in an external tool.
 8. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
@@ -91,20 +90,12 @@ pyssp generate ssd \
 
 ### SSV
 
-Legacy flat-attribute models produce one file:
+Parameters live in SysML `ParameterSet` definitions, so `generate ssv` writes one
+file per set:
 
 ```bash
 pyssp generate ssv \
   --architecture examples/aircraft_subset \
-  --composition AircraftComposition \
-  --output build/generated/parameters.ssv
-```
-
-Parameter-set models produce one file per set (see “Parameter Sets” below):
-
-```bash
-pyssp generate ssv \
-  --architecture examples/parameter_sets \
   --composition AircraftComposition \
   --output-dir build/generated/parameter_sets
 ```
@@ -227,6 +218,37 @@ list expansion). `start` values come from the interface declarations only; an
 applied SSV/SSM supplies runtime values. Nested leaf components are discovered
 recursively and get their own model description.
 
+### FMU metadata
+
+Leaf component definitions can carry typed metadata for the built FMU. The
+schema is a normal `attribute def` hierarchy:
+
+```sysml
+attribute def FmuMetadata {
+  attribute source : String;         // built .fmu file or extracted FMU dir
+  attribute resource_name : String;  // name under resources/
+  attribute implementation : String;
+}
+
+attribute def AutopilotFmu :> FmuMetadata {
+  attribute source = "build/fmus/AutopilotModule.fmu";
+  attribute resource_name = "AutopilotModule.fmu";
+  attribute implementation = "CoSimulation";
+}
+
+part def AutopilotModule {
+  attribute fmu_meta : AutopilotFmu;
+}
+```
+
+`generate ssd` uses `resource_name` for `Component/@source` and
+`implementation` for `Component/@implementation`. `source` is authoring/build
+metadata and is not written to the SSD. If metadata is absent, the source
+defaults to `resources/<PartDef>.fmu` and no implementation is written.
+
+Metadata is only valid on leaf part definitions. Nested systems and the
+composition cannot declare it.
+
 ### SysML from SSD
 
 Generate a minimal SysML model directly from an SSD:
@@ -284,9 +306,11 @@ Not supported (command will fail with a validation error):
 - Connectors that are not expressed in `port.attribute` form.
 - Connections between incompatible port definitions.
 - Unknown components/ports that do not exist in the SysML composition when `--no-synthesize` is used.
-- Migrating an existing legacy flat-attribute architecture to interfaces/sets.
-  Sync manages the parameter dialect only when the architecture already uses
-  it or was bootstrapped from the SSD.
+- Flat parameter attributes. The legacy flat-attribute dialect was retired;
+  parameters must be declared through a parameter interface and applied with
+  SysML-defined sets.
+- The retired `pyssp_implementation` and `pyssp_parameter_set` control
+  attributes.
 
 Notes for `generate sysml`:
 
@@ -299,16 +323,19 @@ Notes for `generate sysml`:
 ## 3.5) Round-trip fidelity
 
 `pyssp generate sysml` records SSD metadata that has no first-class SysML
-equivalent as `pyssp_*` control attributes. They are preserved by
-`pyssp generate ssd` and skipped by the SSV/FMI generators:
+equivalent as typed FMU metadata or `pyssp_*` control attributes. They are
+preserved by `pyssp generate ssd` and skipped by the SSV/FMI generators:
 
 | SSD metadata | SysML representation |
 | --- | --- |
-| `Component/@implementation` | `attribute pyssp_implementation : String` |
-| `ParameterBinding/@source` (legacy models) | `attribute pyssp_parameter_set : String` |
+| `Component/@implementation` | `attribute fmu_meta : <Part>FmuMetadata` with `implementation` |
 | Parameter connectors / bindings | `port def` interfaces, sets, `parameters` ports, and `bind` |
 | `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
 | Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
+
+`Component/@source` is normally derived from the part definition name.
+`fmu_meta.resource_name` can override it in hand-authored models, and `sync`
+preserves that override.
 
 Parameter values are read from the bound SSV and written into synthesized set
 definitions. A generated architecture therefore shows the effective values
@@ -323,7 +350,7 @@ SSV values stay set values and are not promoted to interface defaults.
 from pathlib import Path
 
 from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_set
+from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
@@ -332,7 +359,9 @@ architecture = Path("examples/aircraft_subset")
 composition = "AircraftComposition"
 
 generate_ssd(architecture, Path("build/generated/SystemStructure.ssd"), composition)
-generate_parameter_set(architecture, Path("build/generated/parameters.ssv"), composition)
+generate_parameter_sets(
+    architecture, Path("build/generated/parameter_sets"), composition
+)
 generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
 generate_sysml_from_ssd(
     Path("build/generated/SystemStructure.ssd"),
@@ -386,9 +415,8 @@ PYTHONPATH=src python3 -m pyssp_sysml2.cli --help
 Typical generated structure:
 
 - `build/generated/SystemStructure.ssd`
-- `build/generated/parameters.ssv` (legacy flat-attribute models)
-- `build/generated/parameter_sets/*.ssv` (parameter-set models)
-- `build/generated/parameter_mappings/*.ssm` (parameter-set models with explicit binds)
+- `build/generated/parameter_sets/*.ssv`
+- `build/generated/parameter_mappings/*.ssm` (models with explicit binds)
 - `build/generated/model_descriptions/*/modelDescription.xml`
 - `build/generated/architecture.sysml` (when running `pyssp generate sysml`)
 - `build/synced_sysml/*.sysml` (when running `pyssp sync ssd --output-architecture-dir ...`)
@@ -396,7 +424,6 @@ Typical generated structure:
 Artifact purpose:
 
 - `SystemStructure.ssd`: component/connectors/connections structure plus parameter bindings for SSP workflows.
-- `parameters.ssv`: default parameter values for legacy flat-attribute models.
 - `parameter_sets/*.ssv`: one parameter set, referenced by SSD parameter bindings.
 - `parameter_mappings/*.ssm`: optional standalone source→target mapping for explicit binds.
 - `modelDescription.xml`: FMI variable/interface declaration per component.
@@ -414,6 +441,9 @@ Artifact purpose:
 | `[error] Connector '...' is not in 'port.attribute' form` | SSD contains connectors that do not map to a SysML port attribute endpoint | Normalize SSD connectors so sync sees `port.attribute` endpoints |
 | `[error] ... incompatible ports ...` during `sync ssd` | SSD connects ports of different definitions | Connect only compatible source/destination ports |
 | `[error] Multiple parameter sets bind '...'` | Two sets target the same component parameter | Make the target members disjoint, or use one set |
+| `[error] ... is a flat parameter attribute` | A component declares parameters directly | Move the members into a `port def :> ParameterInterface` and apply a `ParameterSet` with `bind` |
+| `[error] ... pyssp_implementation is no longer supported` | Legacy FMU implementation control attribute | Move `implementation` into `attribute fmu_meta : <Part>FmuMetadata` |
+| `[error] ... pyssp_parameter_set is no longer supported` | Legacy external SSV pointer | Define sets in SysML and bind them to component usages |
 | `pyssp: command not found` | Console script not installed on PATH | Use `PYTHONPATH=src python3 -m pyssp_sysml2.cli ...` or `pip install -e .` |
 
 ## Development Docs

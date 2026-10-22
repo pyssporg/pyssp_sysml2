@@ -10,9 +10,9 @@ from pyssp_sysml2.control import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
-    IMPLEMENTATION_ATTR,
     is_control_attribute,
 )
+from pyssp_sysml2.fmu_metadata import update_fmu_metadata_from_component
 from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
 from pyssp_sysml2.parameters import is_parameter_interface
 from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
@@ -232,10 +232,12 @@ def _ensure_component_part_def(
         architecture.add_part_def(part_def)
         component_defs[base_name] = part_def
 
-    if getattr(component, "implementation", None):
-        part_def.attributes[IMPLEMENTATION_ATTR] = _control_attribute(
-            IMPLEMENTATION_ATTR, component.implementation, "String"
-        )
+    update_fmu_metadata_from_component(
+        architecture,
+        part_def,
+        component,
+        source_file="architecture.sysml",
+    )
     _ensure_ports_for_element(part_def, component, architecture, port_cache)
     return part_def
 

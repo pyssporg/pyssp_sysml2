@@ -6,6 +6,11 @@ package Aircraft {
     part missionComputer : MissionComputer;
     part environment : Environment;
 
+    attribute nominal : NominalSet;
+    bind autopilot.parameters.note = nominal.note;
+    bind autopilot.parameters.waypointCount = nominal.n_waypoints;
+    bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
+
     connect autopilot.autopilotCmd to missionComputer.autopilotInput;
     connect missionComputer.direction_command to environment.direction_command;
     connect environment.orientation to autopilot.currentOrientation;

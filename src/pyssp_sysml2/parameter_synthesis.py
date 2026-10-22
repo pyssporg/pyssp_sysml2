@@ -30,9 +30,9 @@ from pyssp_standard.ssv import SSV
 
 from pyssp_sysml2.control import (
     CONTROL_PREFIX,
-    PARAMETER_SET_ATTR,
     is_control_attribute,
 )
+from pyssp_sysml2.fmu_metadata import is_fmu_metadata_definition
 from pyssp_sysml2.parameters import (
     PARAMETERS_PORT_NAME,
     PARAMETER_INTERFACE_MARKER,
@@ -430,8 +430,11 @@ def ensure_component_interface(
 
     flat = [
         name
-        for name in part_def.attributes
+        for name, attribute in part_def.attributes.items()
         if not is_control_attribute(name)
+        and not is_fmu_metadata_definition(
+            architecture, architecture.resolve_attribute_def(attribute)
+        )
     ]
     if flat:
         raise ValueError(
@@ -909,7 +912,6 @@ def _remove_parameter_usage(
             continue
         if is_parameter_set(architecture.resolve_attribute_def(attribute)):
             del system.attributes[name]
-    system.attributes.pop(PARAMETER_SET_ATTR, None)
 
 
 def _component_map(

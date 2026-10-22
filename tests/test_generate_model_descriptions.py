@@ -3,6 +3,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import pytest
+
 from pyssp_sysml2.fmi import generate_model_descriptions
 from tests.test_utils import COMPOSITION_NAME, write_model
 
@@ -55,9 +57,16 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
         architecture_dir / "parts.sysml",
         f"""
         package Example {{
+          port def ParameterInterface;
+          attribute def ParameterSet;
+
+          port def CompParameters :> ParameterInterface {{
+            attribute int_list : Integer[2] = (1, 2);
+            attribute bool_list : Boolean[2] = (true, false);
+          }}
+
           part def Comp {{
-            attribute int_list = (1, 2);
-            attribute bool_list = (true, false);
+            in port parameters : CompParameters;
             out port status : Status;
           }}
 
@@ -89,6 +98,28 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
         "bool_list[1]|parameter|fixed|Boolean|false|3|nonoutput",
         "status.ok|output|None|Boolean|None|4|output",
     ]
+
+
+def test_generate_model_descriptions_rejects_flat_parameters(tmp_path: Path) -> None:
+    write_model(
+        tmp_path / "arch" / "model.sysml",
+        f"""
+        package Example {{
+          part def Comp {{
+            attribute gain : Real = 1.0;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            part c : Comp;
+          }}
+        }}
+        """,
+    )
+
+    with pytest.raises(ValueError, match="flat parameter attribute"):
+        generate_model_descriptions(
+            tmp_path / "arch", tmp_path / "model_descriptions", COMPOSITION_NAME
+        )
 
 
 def test_generate_model_descriptions_writes_expected_root_metadata(tmp_path: Path) -> None:

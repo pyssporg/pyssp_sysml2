@@ -15,6 +15,7 @@ from pyssp_sysml2.parameters import (
     is_parameter_interface,
     parameter_declarations,
     parameter_items,
+    validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
@@ -198,6 +199,7 @@ def generate_model_descriptions(
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    validate_parameter_dialect(architecture, system)
 
     written: list[Path] = []
     for part_def in sorted(

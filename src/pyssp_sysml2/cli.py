@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import Optional
 
 from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.parameters import uses_parameter_sets
 from pyssp_sysml2.paths import (
     DEFAULT_ARCH_PATH,
     DEFAULT_COMPOSITION_NAME,
@@ -15,7 +14,7 @@ from pyssp_sysml2.paths import (
 )
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssm import generate_parameter_mappings
-from pyssp_sysml2.ssv import generate_parameter_set, generate_parameter_sets
+from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
@@ -78,9 +77,8 @@ def main(argv: Optional[list[str]] = None) -> int:
         type=Path,
         default=None,
         help=(
-            "Output SSV file path. Legacy flat-attribute models default to "
-            f"{GENERATED_DIR / 'parameters.ssv'}; parameter-set models require "
-            "exactly one selected set."
+            "Output SSV file path for exactly one selected parameter set. "
+            "Use --output-dir to write one file per set."
         ),
     )
     ssv_parser.add_argument(
@@ -182,32 +180,19 @@ def main(argv: Optional[list[str]] = None) -> int:
             return 0
 
         if args.command == "generate" and args.artifact == "ssv":
-            use_parameter_sets = bool(
-                args.set
-                or args.all_sets
-                or uses_parameter_sets(args.architecture, args.composition)
+            written = generate_parameter_sets(
+                args.architecture,
+                args.output_dir,
+                args.composition,
+                set_names=args.set,
+                all_sets=args.all_sets,
+                output_path=args.output,
             )
-            if use_parameter_sets:
-                written = generate_parameter_sets(
-                    args.architecture,
-                    args.output_dir,
-                    args.composition,
-                    set_names=args.set,
-                    all_sets=args.all_sets,
-                    output_path=args.output,
-                )
-                if not written:
-                    print("No parameter sets matched.")
-                    return 1
-                for path in written:
-                    print(f"Wrote {path}")
-                return 0
-
-            output = args.output or (GENERATED_DIR / "parameters.ssv")
-            output = generate_parameter_set(
-                args.architecture, output, args.composition
-            )
-            print(f"Wrote {output}")
+            if not written:
+                print("No parameter sets matched.")
+                return 1
+            for path in written:
+                print(f"Wrote {path}")
             return 0
 
         if args.command == "generate" and args.artifact == "ssm":
