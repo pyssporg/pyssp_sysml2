@@ -13,17 +13,27 @@ from pyssp_standard.ssd import (
     SSD,
     System,
 )
+from pyssp_standard.standard.ssp1.model import (
+    Ssd1ParameterMappingReference,
+    Ssp1ParameterMapping,
+)
 
+from pyssp_sysml2.control import PARAMETER_SET_ATTR, is_control_attribute
 from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definition
-from pyssp_sysml2.parameters import reject_parameter_model
+from pyssp_sysml2.parameters import (
+    MappingSpec,
+    has_parameter_dialect,
+    mapping_specs,
+    parameter_declarations,
+    parameter_items,
+    validate_parameter_dialect,
+)
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
     IMPLEMENTATION_ATTR,
-    PARAMETER_SET_ATTR,
-    is_control_attribute,
 )
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
@@ -50,16 +60,46 @@ def _endpoint_port_def(
     return port_def
 
 
+def _parameter_set_source(set_name: str, prefix: str) -> str:
+    prefix = prefix.strip().strip("/")
+    return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
+
+
+def _parameter_binding(
+    spec: MappingSpec, parameter_set_prefix: str
+) -> ParameterBinding:
+    source = _parameter_set_source(spec.set_name, parameter_set_prefix)
+    if spec.identity:
+        return ParameterBinding(source=source, prefix=f"{spec.part_name}.")
+
+    mapping = Ssp1ParameterMapping(version="1.0")
+    for source_name, target_name in spec.entries:
+        mapping.add_mapping(source_name, target_name)
+    return ParameterBinding(
+        source=source,
+        parameter_mapping=Ssd1ParameterMappingReference(mapping=mapping),
+    )
+
+
 def build_ssd(
     ssd: SSD,
     system: PartDefinition,
     architecture: Architecture,
     type_check=True,
+    parameter_set_prefix: str = "parameter_sets",
 ) -> None:
     ssd.xml.name = system.name
     ssd.xml.version = "1.0"
     ssd.xml.system = System(name=system.name)
-    reject_parameter_model(architecture, system, "generate ssd")
+
+    parameter_model = has_parameter_dialect(architecture, system)
+    specs = []
+    if parameter_model:
+        validate_parameter_dialect(architecture, system)
+        specs = sorted(
+            mapping_specs(architecture, system),
+            key=lambda spec: (spec.part_name, spec.set_name),
+        )
 
     for part_name, part_usage in system.parts.items():
         part = architecture.resolve_part(part_usage)
@@ -96,18 +136,29 @@ def build_ssd(
                     )
                 )
 
-        for attrib_name, attribute in part.attributes.items():
-            if is_control_attribute(attrib_name):
-                continue
-            for idx, _ in attribute.enumerator():
-                name = f"{attrib_name}[{idx}]" if attribute.is_list else attrib_name
-                component.connectors.append(
-                    Connector(
-                        name=name,
-                        kind="parameter",
-                        type_name=attribute.effective_type_name,
+        if parameter_model:
+            for attribute in parameter_declarations(architecture, part):
+                for item in parameter_items(attribute):
+                    component.connectors.append(
+                        Connector(
+                            name=item.name,
+                            kind="parameter",
+                            type_name=item.type_name,
+                        )
                     )
-                )
+        else:
+            for attrib_name, attribute in part.attributes.items():
+                if is_control_attribute(attrib_name):
+                    continue
+                for idx, _ in attribute.enumerator():
+                    name = f"{attrib_name}[{idx}]" if attribute.is_list else attrib_name
+                    component.connectors.append(
+                        Connector(
+                            name=name,
+                            kind="parameter",
+                            type_name=attribute.effective_type_name,
+                        )
+                    )
 
         ssd.xml.system.elements.append(component)
 
@@ -150,20 +201,35 @@ def build_ssd(
         stop_time=float(stop.value) if stop is not None else 3600,
     )
 
-    parameter_set = system.attributes.get(PARAMETER_SET_ATTR)
-    if parameter_set is not None and parameter_set.value is not None:
+    if parameter_model:
         ssd.xml.system.parameter_bindings = [
-            ParameterBinding(source=str(parameter_set.value))
+            _parameter_binding(spec, parameter_set_prefix) for spec in specs
         ]
+    else:
+        parameter_set = system.attributes.get(PARAMETER_SET_ATTR)
+        if parameter_set is not None and parameter_set.value is not None:
+            ssd.xml.system.parameter_bindings = [
+                ParameterBinding(source=str(parameter_set.value))
+            ]
 
 
 def generate_ssd(
-    architecture_path: Path, output_path: Path, composition: str, type_check=True
+    architecture_path: Path,
+    output_path: Path,
+    composition: str,
+    type_check=True,
+    parameter_set_prefix: str = "parameter_sets",
 ) -> Path:
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
-        build_ssd(ssd, system, architecture, type_check)
+        build_ssd(
+            ssd,
+            system,
+            architecture,
+            type_check,
+            parameter_set_prefix=parameter_set_prefix,
+        )
     return output_path

@@ -5,7 +5,14 @@ from pathlib import Path
 import pytest
 from textwrap import dedent
 
-from pyssp_standard.ssd import Component, Connection, Connector, SSD
+from pyssp_standard.ssd import (
+    Component,
+    Connection,
+    Connector,
+    ParameterBinding,
+    SSD,
+    System,
+)
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
@@ -560,3 +567,64 @@ def test_sync_sysml_from_ssd_rejects_unknown_source_without_synthesis(
             output_architecture_dir=output_dir,
             synthesize_external_parts=False,
         )
+
+
+def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
+    """Sync reconciles interfaces, set values, and binds from SSD/SSV."""
+    parameter_path = tmp_path / "parameters.ssv"
+    parameter_path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
+  <ssv:Parameters>
+    <ssv:Parameter name="k"><ssv:Real value="3.0" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+        ssd.xml.system.parameter_bindings = [
+            ParameterBinding(source="parameters.ssv", prefix="gain")
+        ]
+
+        gain = Component()
+        gain.name = "gain"
+        gain.source = "resources/Gain.fmu"
+        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
+        ssd.xml.system.elements.append(gain)
+
+    architecture_dir = tmp_path / "arch"
+    architecture_dir.mkdir()
+    sync_sysml_from_ssd(architecture_dir, ssd_path, "ParamDemo")
+
+    parameter_path.write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
+  <ssv:Parameters>
+    <ssv:Parameter name="k"><ssv:Real value="5.0" /></ssv:Parameter>
+    <ssv:Parameter name="bias"><ssv:Real value="1.5" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+    with SSD(ssd_path, mode="a") as ssd:
+        gain = ssd.xml.system.elements[0]
+        gain.connectors.append(Connector(name="bias", kind="parameter", type_name="Real"))
+
+    output_dir = tmp_path / "synced"
+    sync_sysml_from_ssd(
+        architecture_dir,
+        ssd_path,
+        "ParamDemo",
+        output_architecture_dir=output_dir,
+    )
+    text = _architecture_text(output_dir)
+
+    assert "attribute bias : Real;" in text
+    assert "attribute k : Real = 5.0;" in text
+    assert "attribute bias : Real = 1.5;" in text
+    assert "bind parameters_set = gain.parameters;" in text

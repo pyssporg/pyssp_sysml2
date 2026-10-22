@@ -5,8 +5,14 @@ from pathlib import Path
 from typing import Dict, Iterable
 
 from pyssp_standard.ssd import Component, SSD
-from pyssp_standard.ssv import SSV
 
+from pyssp_sysml2.control import (
+    DEFAULT_START_ATTR,
+    DEFAULT_STOP_ATTR,
+    FLAT_CONNECTOR_ATTR,
+    IMPLEMENTATION_ATTR,
+)
+from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
 from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
 from pyssp_sysml2.sysml_model import (
     Architecture,
@@ -19,20 +25,6 @@ from pyssp_sysml2.sysml_model import (
 )
 
 SCALAR_ATTRIBUTE_NAME = "value"
-
-# Control attributes carry SSD metadata that SysML v2 has no first-class
-# equivalent for. They are written as ordinary attributes so the exporter and
-# loader preserve them, and every generator skips them as model data.
-CONTROL_PREFIX = "pyssp_"
-IMPLEMENTATION_ATTR = f"{CONTROL_PREFIX}implementation"
-PARAMETER_SET_ATTR = f"{CONTROL_PREFIX}parameter_set"
-DEFAULT_START_ATTR = f"{CONTROL_PREFIX}default_start_time"
-DEFAULT_STOP_ATTR = f"{CONTROL_PREFIX}default_stop_time"
-FLAT_CONNECTOR_ATTR = f"{CONTROL_PREFIX}flat_connector"
-
-
-def is_control_attribute(name: str) -> bool:
-    return name.startswith(CONTROL_PREFIX)
 
 
 def load_ssd_system(ssd_path: Path):
@@ -159,47 +151,6 @@ def _part_name_from_component(component: Component) -> str:
     raise ValueError("SSD component without a name cannot be synced")
 
 
-def _coerce_parameter_value(type_name: str, value: object) -> object:
-    if value is None:
-        return None
-    if type_name == "Real":
-        return float(value)
-    if type_name == "Integer":
-        return int(value)
-    if type_name == "Boolean":
-        return str(value).lower() == "true"
-    return str(value)
-
-
-def _parameter_values(ssd_path: Path | None, bindings) -> dict[str, tuple[str, object]]:
-    """Collect parameter name -> (type, value) from SSD/SSV bindings."""
-    values: dict[str, tuple[str, object]] = {}
-
-    def collect(parameters) -> None:
-        for name, type_name, raw in parameters:
-            values[name] = (type_name, _coerce_parameter_value(type_name, raw))
-
-    def from_parameter_set(parameter_set) -> list[tuple[str, str, object]]:
-        return [
-            (parameter.name, parameter.type_name, parameter.attributes.get("value"))
-            for parameter in parameter_set.parameters
-        ]
-
-    for binding in bindings or []:
-        inline = getattr(binding, "parameter_set", None)
-        if inline is not None:
-            collect(from_parameter_set(inline))
-            continue
-        source = getattr(binding, "source", None)
-        if ssd_path is None or not source:
-            continue
-        source_path = (ssd_path.parent / source).resolve()
-        if source_path.is_file():
-            with SSV(source_path, mode="r") as ssv:
-                collect(from_parameter_set(ssv.xml))
-    return values
-
-
 def _control_attribute(name: str, value: object, type_name: str) -> Attribute:
     return Attribute(name=name, type_name=type_name, value=value)
 
@@ -212,9 +163,6 @@ def build_architecture_from_ssd(
     default_experiment=None,
 ):
     components = index_components(ssd_system)
-    parameter_values = _parameter_values(
-        ssd_path, getattr(ssd_system, "parameter_bindings", None)
-    )
     endpoint_attributes: dict[tuple[str, str], dict[str, str]] = {}
     endpoint_directions: dict[tuple[str, str], str] = {}
     flat_endpoints: set[tuple[str, str]] = set()
@@ -277,19 +225,6 @@ def build_architecture_from_ssd(
                 IMPLEMENTATION_ATTR, component.implementation, "String"
             )
 
-        for connector in component.connectors:
-            if connector.kind != "parameter":
-                continue
-            type_name = _type_name_from_connector(connector)
-            _, value = parameter_values.get(
-                f"{component_name}.{connector.name}", (type_name, None)
-            )
-            part_def.attributes[connector.name] = Attribute(
-                name=connector.name,
-                type_name=type_name,
-                value=value,
-            )
-
         for endpoint in sorted(key for key in endpoint_attributes if key[0] == component_name):
             _, port_name = endpoint
             signature = group_signatures[endpoint_groups[endpoint]]
@@ -319,12 +254,6 @@ def build_architecture_from_ssd(
 
     system = PartDefinition(name=composition, source_file="architecture.sysml")
     architecture.add_part_def(system)
-    for binding in getattr(ssd_system, "parameter_bindings", None) or []:
-        if getattr(binding, "source", None):
-            system.attributes[PARAMETER_SET_ATTR] = _control_attribute(
-                PARAMETER_SET_ATTR, binding.source, "String"
-            )
-            break
     if default_experiment is not None:
         system.attributes[DEFAULT_START_ATTR] = _control_attribute(
             DEFAULT_START_ATTR, default_experiment.start_time, "Real"
@@ -355,6 +284,14 @@ def build_architecture_from_ssd(
             destination_port=dst_port,
         )
         system.connections[connection.key] = connection
+
+    synthesize_parameter_dialect(
+        architecture,
+        system,
+        ssd_system,
+        ssd_path,
+        source_file="architecture.sysml",
+    )
 
     return architecture, system
 

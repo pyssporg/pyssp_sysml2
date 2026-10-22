@@ -20,7 +20,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 
-from pyssp_sysml2.sysml import is_control_attribute
+from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.sysml_model import (
     Architecture,
     Attribute,
@@ -178,6 +178,100 @@ class MappingSpec:
     part_name: str
     identity: bool
     entries: tuple[tuple[str, str], ...]
+
+
+@dataclass(frozen=True)
+class ParameterItem:
+    """One SSP-level parameter after expanding a declared multiplicity."""
+
+    name: str
+    type_name: str
+    value: object = None
+
+
+def parameter_items(attribute: Attribute) -> list[ParameterItem]:
+    """Expand an attribute's multiplicity/list value into SSP parameter items.
+
+    Interfaces use the declared multiplicity (``Real[3]``) even without a
+    value; legacy tuple values expand element-wise. The value is the declared
+    default when present, otherwise ``None``.
+    """
+    type_name = attribute.primitive_type_str()
+    if attribute.multiplicity:
+        count = fixed_count(attribute.multiplicity, attribute.name)
+        value = attribute.value
+        if value is None:
+            values: tuple = (None,) * count
+        elif not isinstance(value, tuple):
+            raise ValueError(
+                f"Parameter '{attribute.name}' must provide {count} values for "
+                f"[{attribute.multiplicity}], got a scalar"
+            )
+        elif len(value) != count:
+            raise ValueError(
+                f"Parameter '{attribute.name}' provides {len(value)} values but "
+                f"declares [{attribute.multiplicity}]"
+            )
+        else:
+            values = value
+        return [
+            ParameterItem(
+                name=f"{attribute.name}[{index}]",
+                type_name=type_name,
+                value=values[index],
+            )
+            for index in range(count)
+        ]
+
+    if attribute.is_list:
+        return [
+            ParameterItem(
+                name=f"{attribute.name}[{index}]",
+                type_name=type_name,
+                value=value,
+            )
+            for index, value in enumerate(attribute.value)
+        ]
+
+    return [
+        ParameterItem(
+            name=attribute.name,
+            type_name=type_name,
+            value=attribute.value,
+        )
+    ]
+
+
+def coerce_parameter_value(type_name: str, value: object) -> object:
+    """Coerce an SSV literal to the Python type used in SysML attributes."""
+    if value is None:
+        return None
+    if type_name == "Real":
+        return float(value)
+    if type_name == "Integer":
+        return int(value)
+    if type_name == "Boolean":
+        return str(value).lower() == "true"
+    return str(value)
+
+
+def has_parameter_dialect(
+    architecture: Architecture, system: PartDefinition
+) -> bool:
+    """True when a composition uses parameter interfaces/sets or bindings."""
+    if set_usages(architecture, system):
+        return True
+    if any(
+        len(binding.target) >= 2
+        and binding.target[1] == PARAMETERS_BAG_NAME
+        for binding in system.bindings
+    ):
+        return True
+    for usage in system.parts.values():
+        part_def = architecture.resolve_part(usage)
+        if part_def is not None and parameter_bag(architecture, part_def) is not None:
+            return True
+    return False
 
 
 def set_usages(
@@ -496,10 +590,12 @@ def validate_parameter_dialect(
             not is_control_attribute(name) for name in part_def.attributes
         ):
             legacy.append(part_def.name)
-    if bagged and legacy:
+    has_sets = bool(set_usages(architecture, system))
+    if legacy and (bagged or has_sets):
+        dialect_parts = bagged or ["parameter set usages"]
         raise ValueError(
-            "Composition mixes parameter interfaces "
-            f"({', '.join(sorted(bagged))}) with flat parameter attributes "
+            "Composition mixes parameter interfaces/sets "
+            f"({', '.join(sorted(dialect_parts))}) with flat parameter attributes "
             f"({', '.join(sorted(legacy))}); use one dialect per composition"
         )
 
@@ -578,31 +674,4 @@ def uses_parameter_sets(
     """True when the composition uses the interface/set dialect."""
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
-    if system.bindings or set_usages(architecture, system):
-        return True
-    return any(
-        parameter_bag(architecture, part_def) is not None
-        for part_def in (
-            architecture.resolve_part(usage) for usage in system.parts.values()
-        )
-        if part_def is not None
-    )
-
-
-def reject_parameter_model(
-    architecture: Architecture, system: PartDefinition, tool: str
-) -> None:
-    """Fail fast when a stage-3 tool meets the parameter-set dialect."""
-    has_bag = any(
-        parameter_bag(architecture, part_def) is not None
-        for part_def in (
-            architecture.resolve_part(usage) for usage in system.parts.values()
-        )
-        if part_def is not None
-    )
-    if system.bindings or set_usages(architecture, system) or has_bag:
-        raise ValueError(
-            f"{tool} does not support parameter interfaces/sets yet: "
-            f"{system.name} uses the parameter-set dialect. Use "
-            "'pyssp generate ssv' and 'pyssp generate ssm' for parameter sets."
-        )
+    return has_parameter_dialect(architecture, system)

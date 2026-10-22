@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from pyssp_standard.ssd import SSD
+
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
 from tests.test_generate_ssd import _ssd_summary
@@ -233,3 +235,29 @@ def test_pyssp_sync_ssd_cli_fails_for_missing_ssd(tmp_path: Path) -> None:
     assert code == 1
     after = composition_path.read_text(encoding="utf-8")
     assert after == before
+
+
+def test_pyssp_generate_ssd_cli_parameter_set_prefix(tmp_path: Path) -> None:
+    """CLI generate ssd forwards the parameter-set source prefix."""
+    architecture_dir = write_parameter_cli_architecture(tmp_path / "arch")
+    output = tmp_path / "SystemStructure.ssd"
+
+    code = main(
+        [
+            "generate",
+            "ssd",
+            "--architecture",
+            str(architecture_dir),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output",
+            str(output),
+            "--parameter-set-prefix",
+            "custom_sets",
+        ]
+    )
+
+    assert code == 0
+    with SSD(output, mode="r") as ssd:
+        [binding] = ssd.xml.system.parameter_bindings
+        assert binding.source == "custom_sets/NominalSet.ssv"

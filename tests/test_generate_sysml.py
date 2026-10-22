@@ -3,7 +3,21 @@ from __future__ import annotations
 from pathlib import Path
 from textwrap import dedent
 
-from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
+import pytest
+from pyssp_standard.ssd import (
+    Component,
+    Connection,
+    Connector,
+    ParameterBinding,
+    SSD,
+    System,
+)
+from pyssp_standard.ssm import SSM
+from pyssp_standard.standard.ssp1.model import (
+    Ssd1ParameterMappingReference,
+    Ssp1ParameterMapping,
+    Ssp1ParameterSet,
+)
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
@@ -216,3 +230,223 @@ def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_pat
     assert text.count("Port_1") == 3
     assert "Port_2" not in text
     assert "attribute value : Real;" in text
+
+
+def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
+    tmp_path: Path,
+) -> None:
+    """A prefixed SSD ParameterBinding becomes an interface, set, and identity bind."""
+    (tmp_path / "parameters.ssv").write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
+  <ssv:Parameters>
+    <ssv:Parameter name="k"><ssv:Real value="3.0" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+        ssd.xml.system.parameter_bindings = [
+            ParameterBinding(source="parameters.ssv", prefix="gain")
+        ]
+
+        gain = Component()
+        gain.name = "gain"
+        gain.source = "resources/Gain.fmu"
+        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
+        ssd.xml.system.elements.append(gain)
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "attribute def GainParameters :> ParameterInterface {" in text
+    assert "attribute k : Real;" in text
+    assert "attribute parameters : GainParameters;" in text
+    assert "attribute def parameters :> ParameterSet {" in text
+    assert "attribute k : Real = 3.0;" in text
+    assert "attribute parameters_set : parameters;" in text
+    assert "bind parameters_set = gain.parameters;" in text
+
+
+def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
+    tmp_path: Path,
+) -> None:
+    """Inline SSM entries become per-member binds with list expansion."""
+    parameter_set = Ssp1ParameterSet(name="Nom", version="1.0")
+    parameter_set.add_parameter("n", "Integer", value=5)
+    parameter_set.add_parameter("x[0]", "Real", value=1.0)
+    parameter_set.add_parameter("x[1]", "Real", value=2.0)
+    mapping = Ssp1ParameterMapping(version="1.0")
+    mapping.add_mapping("n", "comp.count")
+    mapping.add_mapping("x[0]", "comp.xs[0]")
+    mapping.add_mapping("x[1]", "comp.xs[1]")
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+        ssd.xml.system.parameter_bindings = [
+            ParameterBinding(
+                parameter_set=parameter_set,
+                parameter_mapping=Ssd1ParameterMappingReference(mapping=mapping),
+            )
+        ]
+
+        comp = Component()
+        comp.name = "comp"
+        comp.source = "resources/Comp.fmu"
+        comp.connectors.extend(
+            [
+                Connector(name="count", kind="parameter", type_name="Integer"),
+                Connector(name="xs[0]", kind="parameter", type_name="Real"),
+                Connector(name="xs[1]", kind="parameter", type_name="Real"),
+            ]
+        )
+        ssd.xml.system.elements.append(comp)
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "attribute def CompParameters :> ParameterInterface {" in text
+    assert "attribute count : Integer;" in text
+    assert "attribute xs : Real[2];" in text
+    assert "attribute def Nom :> ParameterSet {" in text
+    assert "attribute n : Integer = 5;" in text
+    assert "attribute x : Real[2] = (1.0, 2.0);" in text
+    assert "attribute Nom : Nom;" in text
+    assert "bind Nom.n = comp.parameters.count;" in text
+    assert "bind Nom.x = comp.parameters.xs;" in text
+
+
+def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
+    tmp_path: Path,
+) -> None:
+    """A component-level inline ParameterValues applies to its owning component."""
+    parameter_set = Ssp1ParameterSet(name="parameters", version="1.0")
+    parameter_set.add_parameter("k", "Real", value=4.0)
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+
+        gain = Component()
+        gain.name = "gain"
+        gain.source = "resources/Gain.fmu"
+        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
+        gain.parameter_bindings.append(ParameterBinding(parameter_set=parameter_set))
+        ssd.xml.system.elements.append(gain)
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "attribute def parameters :> ParameterSet {" in text
+    assert "attribute k : Real = 4.0;" in text
+    assert "bind parameters_set = gain.parameters;" in text
+
+
+def test_generate_sysml_from_ssd_keeps_interface_without_binding(
+    tmp_path: Path,
+) -> None:
+    """Parameter connectors still define an interface when no set is applied."""
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+
+        gain = Component()
+        gain.name = "gain"
+        gain.source = "resources/Gain.fmu"
+        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
+        ssd.xml.system.elements.append(gain)
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "attribute def GainParameters :> ParameterInterface {" in text
+    assert "attribute parameters : GainParameters;" in text
+    assert "ParameterSet {" not in text
+    assert "bind " not in text
+
+
+def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
+    """ParameterMapping/@source is resolved relative to the SSD."""
+    (tmp_path / "parameters.ssv").write_text(
+        """<?xml version="1.0" encoding="UTF-8"?>
+<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
+  <ssv:Parameters>
+    <ssv:Parameter name="n"><ssv:Integer value="5" /></ssv:Parameter>
+    <ssv:Parameter name="x[0]"><ssv:Real value="1.0" /></ssv:Parameter>
+    <ssv:Parameter name="x[1]"><ssv:Real value="2.0" /></ssv:Parameter>
+  </ssv:Parameters>
+</ssv:ParameterSet>
+"""
+    )
+    with SSM(tmp_path / "mapping.ssm", mode="w") as ssm:
+        ssm.xml.add_mapping("n", "comp.count")
+        ssm.xml.add_mapping("x[0]", "comp.xs[0]")
+        ssm.xml.add_mapping("x[1]", "comp.xs[1]")
+
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+        ssd.xml.system.parameter_bindings = [
+            ParameterBinding(
+                source="parameters.ssv",
+                parameter_mapping=Ssd1ParameterMappingReference(
+                    source="mapping.ssm"
+                ),
+            )
+        ]
+
+        comp = Component()
+        comp.name = "comp"
+        comp.source = "resources/Comp.fmu"
+        comp.connectors.extend(
+            [
+                Connector(name="count", kind="parameter", type_name="Integer"),
+                Connector(name="xs[0]", kind="parameter", type_name="Real"),
+                Connector(name="xs[1]", kind="parameter", type_name="Real"),
+            ]
+        )
+        ssd.xml.system.elements.append(comp)
+
+    output = tmp_path / "architecture.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = output.read_text()
+
+    assert "bind Nom.n = comp.parameters.count;" in text
+    assert "bind Nom.x = comp.parameters.xs;" in text
+
+
+def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
+    """Reserved SysML keywords cannot become parameter feature names."""
+    ssd_path = tmp_path / "SystemStructure.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "ParamDemo"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="ParamDemo")
+
+        comp = Component()
+        comp.name = "comp"
+        comp.source = "resources/Comp.fmu"
+        comp.connectors.append(
+            Connector(name="part", kind="parameter", type_name="Real")
+        )
+        ssd.xml.system.elements.append(comp)
+
+    with pytest.raises(ValueError, match="cannot be represented"):
+        generate_sysml_from_ssd(ssd_path, tmp_path / "architecture.sysml")

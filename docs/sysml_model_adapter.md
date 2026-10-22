@@ -91,6 +91,10 @@ through the fixed bag `attribute parameters : <Interface>;`. Only one bag per
 part is supported, and mixing it with flat parameter attributes on the same
 part is rejected.
 
+`generate ssd` consumes this dialect; `generate sysml` and `sync ssd`
+synthesize or reconcile it from SSD parameter connectors and
+`ParameterBinding` entries (see `parameter_synthesis.py`).
+
 ## Behavior notes
 
 - Loading is non-validating: unresolved references surface as

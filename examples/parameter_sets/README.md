@@ -13,14 +13,29 @@ pyssp generate ssv \
   --composition AircraftComposition \
   --output-dir build/generated/parameter_sets
 
-pyssp generate ssm \
+pyssp generate ssd \
   --architecture examples/parameter_sets \
   --composition AircraftComposition \
-  --output-dir build/generated/parameter_mappings
+  --output build/generated/SystemStructure.ssd
+
+pyssp generate fmi \
+  --architecture examples/parameter_sets \
+  --composition AircraftComposition \
+  --output-dir build/generated/model_descriptions
 ```
 
 `generate ssv --all-sets` also writes `AggressiveSet.ssv`.
 
-`generate ssd` / `generate fmi` currently reject the parameter-set dialect;
-they still support the legacy flat-attribute models such as
-`examples/aircraft_subset`.
+The SSD gets parameter connectors from the interface and an inline
+`ssd:ParameterMapping` for the explicit binds; its `ParameterBinding/@source`
+points at `parameter_sets/NominalSet.ssv`. The FMI model description gets
+parameter variables (with interface defaults when declared; the applied set
+is a runtime mapping, not an FMI start value).
+
+Regenerate SysML from the SSD to see the synthesized dialect:
+
+```bash
+pyssp generate sysml \
+  --ssd build/generated/SystemStructure.ssd \
+  --output build/generated/parameter_sets_roundtrip.sysml
+```

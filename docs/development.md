@@ -15,6 +15,9 @@ Core modules:
 - `src/pyssp_sysml2/ssm.py`: generates SSP parameter-mapping (`.ssm`) files
 - `src/pyssp_sysml2/parameters.py`: resolves parameter interfaces, sets,
   applied-set bindings, and mapping entries
+- `src/pyssp_sysml2/parameter_synthesis.py`: synthesizes interfaces, sets,
+  bags, and binds from SSD parameter connectors and bindings
+- `src/pyssp_sysml2/control.py`: shared `pyssp_*` control-attribute names
 - `src/pyssp_sysml2/fmi.py`: generates `modelDescription.xml` files
 - `src/pyssp_sysml2/sysml.py`: generates a minimal SysML model from SSD
 - `src/pyssp_sysml2/sync.py`: syncs SSD composition edits back into SysML
@@ -68,8 +71,9 @@ Run:
 Behavior:
 
 - Uses small explicit SysML snippets written per test case under `tmp_path`
-- `tests/test_parameter_sets.py` covers SSV/SSM generation, identity bindings,
-  and the parameter-dialect validation errors
+- `tests/test_parameter_sets.py` covers SSV/SSM and SSD/FMI parameter output,
+  identity bindings, and dialect validation; `test_generate_sysml.py`,
+  `test_sync.py`, and `test_roundtrip.py` cover SSD-to-SysML synthesis
 - Follows a one-model-per-behavior style where practical, to keep test intent explicit
 - Keeps generated artifacts inside pytest temporary directories
 - Treats readability of tests as a primary concern because this repo is used for experimentation as well as regression coverage

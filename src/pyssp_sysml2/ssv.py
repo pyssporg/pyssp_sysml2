@@ -6,6 +6,7 @@ from typing import Iterable
 
 from pyssp_standard.ssv import SSV
 
+from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.fmi_helpers import format_value
 from pyssp_sysml2.parameters import (
     fixed_count,
@@ -15,7 +16,6 @@ from pyssp_sysml2.parameters import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_directory, ensure_parent_dir
-from pyssp_sysml2.sysml import is_control_attribute
 from pyssp_sysml2.sysml_model import Attribute, AttributeDefinition, load
 
 

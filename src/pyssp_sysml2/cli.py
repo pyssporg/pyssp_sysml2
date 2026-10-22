@@ -62,6 +62,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_false",
         help="avoid typecheck during connection link",
     )
+    ssd_parser.add_argument(
+        "--parameter-set-prefix",
+        default="parameter_sets",
+        help=(
+            "Relative directory used in SSD ParameterBinding sources, "
+            "e.g. 'parameter_sets' -> 'parameter_sets/<Set>.ssv'."
+        ),
+    )
 
     ssv_parser = generate_subparsers.add_parser("ssv", help="Generate parameter .ssv")
     _add_common_architecture_args(ssv_parser)
@@ -164,7 +172,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         if args.command == "generate" and args.artifact == "ssd":
             output = generate_ssd(
-                args.architecture, args.output, args.composition, args.skip_type_check
+                args.architecture,
+                args.output,
+                args.composition,
+                args.skip_type_check,
+                parameter_set_prefix=args.parameter_set_prefix,
             )
             print(f"SSD written to {output}")
             return 0

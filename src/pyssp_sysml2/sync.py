@@ -7,6 +7,8 @@ from typing import Dict, Iterable, Mapping, Tuple
 from pyssp_standard.ssd import Component
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
+from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
+from pyssp_sysml2.parameters import has_parameter_dialect
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.sysml import (
     SCALAR_ATTRIBUTE_NAME,
@@ -294,11 +296,17 @@ def sync_sysml_from_ssd(
 ) -> list[Path]:
     """Apply SSD composition edits to a SysML architecture and write updated .sysml files."""
     ssd_system = load_ssd_system(ssd_path)
+    loaded = True
     try:
         architecture = _load_architecture(architecture_path)
         system = architecture.get_part_def(composition)
     except FileNotFoundError:
-        architecture, system = build_architecture_from_ssd(ssd_system, composition)
+        architecture, system = build_architecture_from_ssd(
+            ssd_system, composition, ssd_path=ssd_path
+        )
+        loaded = False
+
+    parameter_dialect = loaded and has_parameter_dialect(architecture, system)
 
     target_parts = _derive_target_parts(
         architecture,
@@ -309,6 +317,15 @@ def sync_sysml_from_ssd(
     target_connections = _derive_port_connections_from_ssd(target_parts, ssd_system, architecture)
     _replace_system_parts(system, target_parts)
     _replace_system_connections(system, target_connections)
+    if parameter_dialect:
+        synthesize_parameter_dialect(
+            architecture,
+            system,
+            ssd_system,
+            ssd_path,
+            source_file="parameter_sets.sysml",
+            sync=True,
+        )
 
     written: list[Path] = []
     output_root = output_architecture_dir or (

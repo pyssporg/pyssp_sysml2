@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
+from pyssp_standard.ssd import SSD
 from pyssp_standard.ssm import SSM
 from pyssp_standard.ssv import SSV
 
+from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.parameters import (
     mapping_specs,
     parameter_declarations,
@@ -218,14 +221,108 @@ def test_whole_object_bind_is_identity_and_needs_no_ssm(tmp_path) -> None:
     ) == []
 
 
-def test_generate_ssd_rejects_parameter_sets_until_supported(tmp_path) -> None:
-    """SSD/FMI generation fails fast instead of emitting bogus parameters."""
+def test_generate_ssd_emits_interface_parameter_connectors(tmp_path) -> None:
+    """SSD connectors come from the interface and carry an inline SSM mapping."""
     architecture_dir = _write(tmp_path, _model())
+    output_path = tmp_path / "SystemStructure.ssd"
 
-    with pytest.raises(ValueError, match="does not support parameter interfaces"):
-        generate_ssd(
-            architecture_dir, tmp_path / "SystemStructure.ssd", COMPOSITION_NAME
-        )
+    generate_ssd(
+        architecture_dir,
+        output_path,
+        COMPOSITION_NAME,
+        parameter_set_prefix="sets",
+    )
+
+    with SSD(output_path, mode="r") as ssd:
+        component = ssd.xml.system.elements[0]
+        assert sorted(
+            (connector.name, connector.kind, connector.type_name)
+            for connector in component.connectors
+        ) == [
+            ("waypointCount", "parameter", "Integer"),
+            ("waypointX_km[0]", "parameter", "Real"),
+            ("waypointX_km[1]", "parameter", "Real"),
+            ("waypointX_km[2]", "parameter", "Real"),
+        ]
+
+        [binding] = ssd.xml.system.parameter_bindings
+        assert binding.source == "sets/NominalSet.ssv"
+        assert binding.prefix is None
+        assert binding.parameter_mapping is not None
+        assert binding.parameter_mapping.mapping is not None
+        assert [
+            (mapping.source, mapping.target)
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [
+            ("n_waypoints", "autopilot.waypointCount"),
+            ("waypoints_x_km[0]", "autopilot.waypointX_km[0]"),
+            ("waypoints_x_km[1]", "autopilot.waypointX_km[1]"),
+            ("waypoints_x_km[2]", "autopilot.waypointX_km[2]"),
+        ]
+
+
+def test_generate_ssd_identity_binding_uses_prefix(tmp_path) -> None:
+    """A whole-object bind becomes ParameterBinding/@prefix with no SSM."""
+    model = _model(
+        sets="""
+        attribute def NominalSet :> ParameterSet {
+          attribute waypointCount = 10;
+          attribute waypointX_km = (0.0, 10.0, 20.0);
+        }
+        """,
+        composition="""
+        attribute nominal : NominalSet;
+        bind nominal = autopilot.parameters;
+        """,
+    )
+    architecture_dir = _write(tmp_path, model)
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+    with SSD(output_path, mode="r") as ssd:
+        [binding] = ssd.xml.system.parameter_bindings
+        assert binding.source == "parameter_sets/NominalSet.ssv"
+        assert binding.prefix == "autopilot"
+        assert binding.parameter_mapping is None
+
+
+def test_generate_model_descriptions_uses_interface_defaults(tmp_path) -> None:
+    """FMI start values come from interface defaults, never from an applied set."""
+    model = _model(
+        interface_members=(
+            "attribute waypointCount : Integer = 7;\n"
+            "    attribute waypointX_km : Real[2] = (1.0, 2.0);"
+        ),
+        sets="""
+        attribute def NominalSet :> ParameterSet {
+          attribute n_waypoints = 99;
+          attribute waypoints_x_km = (9.0, 9.0);
+        }
+        """,
+        composition="""
+        attribute nominal : NominalSet;
+        bind nominal.n_waypoints = autopilot.parameters.waypointCount;
+        bind nominal.waypoints_x_km = autopilot.parameters.waypointX_km;
+        """,
+    )
+    architecture_dir = _write(tmp_path, model)
+    output_dir = tmp_path / "model_descriptions"
+
+    written = generate_model_descriptions(
+        architecture_dir, output_dir, COMPOSITION_NAME
+    )
+
+    root = ET.parse(written[0]).getroot()
+    starts = {
+        variable.get("name"): next(iter(variable)).get("start")
+        for variable in root.findall(".//ScalarVariable")
+    }
+    assert starts == {
+        "waypointCount": "7",
+        "waypointX_km[0]": "1",
+        "waypointX_km[1]": "2",
+    }
 
 
 def test_whole_object_bind_requires_matching_names(tmp_path) -> None:
@@ -419,3 +516,40 @@ def test_unbound_set_member_warns(tmp_path) -> None:
         generate_parameter_sets(
             architecture_dir, tmp_path / "sets", COMPOSITION_NAME
         )
+
+
+def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
+    """Interfaces without an applied set still define SSD parameter connectors."""
+    model = f"""
+    package Example {{
+      attribute def ParameterInterface;
+      attribute def ParameterSet;
+      attribute def AutopilotParameters :> ParameterInterface {{
+        attribute waypointCount : Integer;
+        attribute waypointX_km : Real[3];
+      }}
+      part def AutopilotModule {{
+        attribute parameters : AutopilotParameters;
+      }}
+      part def {COMPOSITION_NAME} {{
+        part autopilot : AutopilotModule;
+      }}
+    }}
+    """
+    architecture_dir = _write(tmp_path, model)
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+    with SSD(output_path, mode="r") as ssd:
+        assert ssd.xml.system.parameter_bindings == []
+        component = ssd.xml.system.elements[0]
+        assert sorted(
+            (connector.name, connector.kind, connector.type_name)
+            for connector in component.connectors
+        ) == [
+            ("waypointCount", "parameter", "Integer"),
+            ("waypointX_km[0]", "parameter", "Real"),
+            ("waypointX_km[1]", "parameter", "Real"),
+            ("waypointX_km[2]", "parameter", "Real"),
+        ]

@@ -8,10 +8,10 @@ from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
+from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
-from pyssp_sysml2.parameters import reject_parameter_model
+from pyssp_sysml2.parameters import parameter_declarations, parameter_items
 from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
-from pyssp_sysml2.sysml import is_control_attribute
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
 CO_SIMULATION_ATTRS = {
@@ -64,49 +64,36 @@ def _port_attribute_variables(
 
 
 def _parameter_variables(
-    part: PartDefinition, starting_ref: int, starting_index: int
+    part: PartDefinition,
+    architecture: Architecture,
+    starting_ref: int,
+    starting_index: int,
 ) -> tuple[list[VariableSpec], int, int]:
     variables: list[VariableSpec] = []
     value_ref = starting_ref
     value_index = starting_index
 
-    for _attr_name, attr in part.attributes.items():
-        if is_control_attribute(attr.name):
-            continue
-        if attr.is_list:
-            list_item_type = map_fmi_type(attr.effective_type_name)
-            for idx, item in enumerate(attr.value, start=0):
-                variables.append(
-                    VariableSpec(
-                        name=f"{attr.name}[{idx}]",
-                        causality="parameter",
-                        value_reference=value_ref,
-                        fmi_type=list_item_type,
-                        variability="fixed",
-                        description=attr.doc,
-                        start_value=format_value(list_item_type, item),
-                        index=value_index,
-                    )
+    for attribute in parameter_declarations(architecture, part):
+        fmi_type = map_fmi_type(attribute.primitive_type_str())
+        for item in parameter_items(attribute):
+            variables.append(
+                VariableSpec(
+                    name=item.name,
+                    causality="parameter",
+                    value_reference=value_ref,
+                    fmi_type=fmi_type,
+                    variability="fixed",
+                    description=attribute.doc,
+                    start_value=(
+                        format_value(fmi_type, item.value)
+                        if item.value is not None
+                        else None
+                    ),
+                    index=value_index,
                 )
-                value_ref += 1
-                value_index += 1
-            continue
-
-        fmi_type = map_fmi_type(attr.effective_type_name)
-        variables.append(
-            VariableSpec(
-                name=attr.name,
-                causality="parameter",
-                value_reference=value_ref,
-                fmi_type=fmi_type,
-                variability="fixed",
-                description=attr.doc,
-                start_value=format_value(fmi_type, attr.value),
-                index=value_index,
             )
-        )
-        value_ref += 1
-        value_index += 1
+            value_ref += 1
+            value_index += 1
 
     return variables, value_ref, value_index
 
@@ -117,7 +104,9 @@ def _get_variables(
     value_ref = 0
     index = 1
 
-    parameter_vars, value_ref, index = _parameter_variables(part, value_ref, index)
+    parameter_vars, value_ref, index = _parameter_variables(
+        part, architecture, value_ref, index
+    )
     port_vars, value_ref, index = _port_attribute_variables(
         part, architecture, value_ref, index
     )
@@ -201,7 +190,6 @@ def generate_model_descriptions(
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
-    reject_parameter_model(architecture, system, "generate fmi")
 
     written: list[Path] = []
     for part_inst_name, part_usage in system.parts.items():
