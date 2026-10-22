@@ -57,7 +57,7 @@ pip install -e .
 `pyssp` exposes two command families:
 
 ```bash
-pyssp generate <ssp|ssd|ssv|ssm|fmi|sysml> [options]
+pyssp generate <ssp|ssd|ssv|ssm|study|fmi|sysml> [options]
 pyssp sync ssd [options]
 ```
 
@@ -121,6 +121,46 @@ pyssp generate ssm \
 `generate ssd` inlines the mapping into the SSD `ParameterBinding`, so a
 separate `.ssm` file is optional. `generate ssm` remains useful for external
 SSM artifacts or inspection.
+
+### Study
+
+A `part def ... :> Study` composes one exportable `part def ... :> SspModel`
+through a single part usage, conventionally named `sut`. The study applies one
+parameter set and declares one `Experiment` attribute:
+
+```sysml
+part def SspModel;
+part def Study;
+
+attribute def Experiment {
+  attribute startTime : Real;
+  attribute stopTime : Real;
+  attribute stepSize : Real;
+  attribute tolerance : Real;
+}
+
+part def test_baseline :> Study {
+  attribute experiment_baseline : BaselineExperiment;
+  attribute scenario : ScenarioSet;
+  part sut : System;
+  bind sut.step.parameters.height = scenario.height;
+}
+```
+
+Generate study artifacts:
+
+```bash
+pyssp generate study \
+  --architecture models/ssp/signal_step_gain/architecture \
+  --composition test_baseline \
+  --model signal_step_gain \
+  --output-dir artifacts/studies/signal_step_gain/test_baseline
+```
+
+The command writes the applied scenario SSV, one `<Study>.ssm` with targets
+relative to the exported model root (the `sut.` prefix is stripped), and
+`study.json` with the experiment window and scenario paths. It never writes an
+SSD or an SSP. `generate ssp` rejects a `:> Study` composition.
 
 ### Parameter Sets
 

@@ -220,6 +220,7 @@ class PartDefinition(Definition):
     parts: dict[str, PartUsage] = field(default_factory=dict)
     connections: dict[str, Connection] = field(default_factory=dict)
     bindings: list[Binding] = field(default_factory=list)
+    specializes: tuple[str, ...] = ()
 
 
 @dataclass

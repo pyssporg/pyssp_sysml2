@@ -186,7 +186,12 @@ def _part_definition(element, file: Path) -> PartDefinition:
     written above a member to the owning definition, so per-member docs are
     not recoverable from a parsed model (sysmlpy_api.md §3).
     """
-    part_def = PartDefinition(name=element.name, doc=element.doc, source_file=file.name)
+    part_def = PartDefinition(
+        name=element.name,
+        doc=element.doc,
+        source_file=file.name,
+        specializes=_specializes(element),
+    )
     for attribute in element.attributes:
         part_def.attributes[attribute.name] = _attribute(attribute)
     for port in element.ports:

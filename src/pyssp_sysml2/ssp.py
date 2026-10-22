@@ -32,6 +32,7 @@ from pyssp_sysml2.parameters import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.roles import is_study, validate_role_markers
 from pyssp_sysml2.ssd import build_ssd
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
@@ -253,6 +254,13 @@ def generate_ssp(
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    validate_role_markers(architecture)
+    if is_study(architecture, system):
+        raise ValueError(
+            f"Composition '{composition}' is a Study; studies are not "
+            "exportable as SSPs. Export its 'part sut : <SspModel>' model "
+            "instead."
+        )
     validate_parameter_dialect(architecture, system)
 
     fmu_resources = _collect_fmu_resources(architecture, system, fmu_root)

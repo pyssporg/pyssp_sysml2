@@ -36,6 +36,7 @@ from pyssp_sysml2.parameters import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_parent_dir
+from pyssp_sysml2.roles import is_study, validate_role_markers
 from pyssp_sysml2.sysml import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
@@ -236,6 +237,12 @@ def build_ssd(
     type_check=True,
     parameter_set_prefix: str = "parameter_sets",
 ) -> None:
+    validate_role_markers(architecture)
+    if is_study(architecture, system):
+        raise ValueError(
+            f"Composition '{system.name}' is a Study; studies generate scenario "
+            "data and are never exported as an SSD or SSP"
+        )
     ssd.xml.name = system.name
     ssd.xml.version = "1.0"
 

@@ -108,7 +108,10 @@ def _port_usage_lines(port: PortUsage, indent: str = _MEMBER_INDENT) -> list[str
 
 
 def _part_definition_lines(part_def: PartDefinition) -> list[str]:
-    lines = [f"{_DEFINITION_INDENT}part def {part_def.name} {{"]
+    suffix = ""
+    if part_def.specializes:
+        suffix = f" :> {', '.join(part_def.specializes)}"
+    lines = [f"{_DEFINITION_INDENT}part def {part_def.name}{suffix} {{"]
     if part_def.doc:
         lines.extend(_doc_line(part_def.doc, _MEMBER_INDENT))
 

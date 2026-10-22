@@ -16,6 +16,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssp import DEFAULT_PARAMETER_SET_PREFIX, generate_ssp
 from pyssp_sysml2.ssv import generate_parameter_sets
+from pyssp_sysml2.study import generate_study
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
@@ -153,6 +154,27 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Output directory for .ssm parameter mapping files.",
     )
 
+    study_parser = generate_subparsers.add_parser(
+        "study", help="Generate study scenario SSV, SSM, and descriptor"
+    )
+    _add_common_architecture_args(study_parser)
+    study_parser.add_argument(
+        "--output-dir",
+        type=Path,
+        required=True,
+        help="Output directory for study artifacts.",
+    )
+    study_parser.add_argument(
+        "--model",
+        required=True,
+        help="Exported model name recorded in study.json.",
+    )
+    study_parser.add_argument(
+        "--target-ssd",
+        default="SystemStructure.ssd",
+        help="SSD name the study targets inside the exported SSP.",
+    )
+
     fmi_parser = generate_subparsers.add_parser(
         "fmi", help="Generate FMI model descriptions"
     )
@@ -263,6 +285,19 @@ def main(argv: Optional[list[str]] = None) -> int:
                 return 0
             for path in written:
                 print(f"Wrote {path}")
+            return 0
+
+        if args.command == "generate" and args.artifact == "study":
+            artifacts = generate_study(
+                args.architecture,
+                args.output_dir,
+                args.composition,
+                model_name=args.model,
+                target_ssd=args.target_ssd,
+            )
+            print(f"SSV written to {artifacts.ssv}")
+            print(f"SSM written to {artifacts.ssm}")
+            print(f"Study descriptor written to {artifacts.descriptor}")
             return 0
 
         if args.command == "generate" and args.artifact == "fmi":
