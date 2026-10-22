@@ -151,16 +151,19 @@ Generate study artifacts:
 
 ```bash
 pyssp generate study \
-  --architecture models/ssp/signal_step_gain/architecture \
+  --architecture examples/study \
   --composition test_baseline \
-  --model signal_step_gain \
-  --output-dir artifacts/studies/signal_step_gain/test_baseline
+  --model position_servo \
+  --output-dir build/generated/studies/test_baseline
 ```
 
 The command writes the applied scenario SSV, one `<Study>.ssm` with targets
 relative to the exported model root (the `sut.` prefix is stripped), and
 `study.json` with the experiment window and scenario paths. It never writes an
 SSD or an SSP. `generate ssp` rejects a `:> Study` composition.
+
+A complete two-study example over one `SspModel` is in
+[`examples/study/`](examples/study/README.md).
 
 ### Parameter Sets
 
@@ -474,6 +477,7 @@ PYTHONPATH=src python3 examples/module_usage.py
 
 - CLI workflow: [`examples/cli_usage.sh`](examples/cli_usage.sh)
 - Python module workflow: [`examples/module_usage.py`](examples/module_usage.py)
+- Study / `SspModel` workflow: [`examples/study/README.md`](examples/study/README.md)
 
 ## Help / Discovery
 
