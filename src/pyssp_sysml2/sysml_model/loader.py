@@ -210,7 +210,12 @@ def _part_definition(element, file: Path) -> PartDefinition:
 
 def _port_definition(element, file: Path) -> PortDefinition:
     """Repo PortDefinition from a sysmlpy port definition."""
-    port_def = PortDefinition(name=element.name, doc=element.doc, source_file=file.name)
+    port_def = PortDefinition(
+        name=element.name,
+        doc=element.doc,
+        source_file=file.name,
+        specializes=_specializes(element),
+    )
     for attribute in element.attributes:
         port_def.attributes[attribute.name] = _attribute(attribute)
     return port_def

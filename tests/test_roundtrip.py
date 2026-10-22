@@ -71,7 +71,7 @@ def test_ssd_sysml_ssd_preserves_metadata(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, generated)
 
     generated_text = generated.read_text()
-    assert "attribute def GainParameters :> ParameterInterface" in generated_text
+    assert "port def GainParameters :> ParameterInterface" in generated_text
     assert "attribute def parameters :> ParameterSet" in generated_text
     assert "attribute parameters_set : parameters;" in generated_text
     assert "bind gain.parameters = parameters_set;" in generated_text
@@ -103,10 +103,10 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
         architecture_dir / "model.sysml",
         """
         package Example {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def Params :> ParameterInterface {
+          port def Params :> ParameterInterface {
             attribute count : Integer;
             attribute xs : Real[2];
           }
@@ -117,7 +117,7 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
           }
 
           part def Comp {
-            attribute parameters : Params;
+            in port parameters : Params;
           }
 
           part def SystemComposition {
@@ -173,10 +173,10 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
         architecture_dir / "model.sysml",
         """
         package Example {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def InnerParams :> ParameterInterface {
+          port def InnerParams :> ParameterInterface {
             attribute k : Real = 1.0;
           }
 
@@ -185,7 +185,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
           }
 
           part def Inner {
-            attribute parameters : InnerParams;
+            in port parameters : InnerParams;
           }
 
           part def Outer {
@@ -232,7 +232,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     generated = roundtrip_arch / "architecture.sysml"
     generate_sysml_from_ssd(first_ssd, generated)
     text = generated.read_text()
-    assert "attribute def InnerParameters :> ParameterInterface" in text
+    assert "port def InnerParameters :> ParameterInterface" in text
     assert "part def outer" in text
     assert "part inner : Inner;" in text
     assert "bind outer.inner.parameters.k = Nom.k;" in text
@@ -263,10 +263,10 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
         architecture_dir / "model.sysml",
         """
         package Example {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def InnerParams :> ParameterInterface {
+          port def InnerParams :> ParameterInterface {
             attribute count : Integer;
             attribute gain : Real;
           }
@@ -280,7 +280,7 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
           }
 
           part def Inner {
-            attribute parameters : InnerParams;
+            in port parameters : InnerParams;
           }
 
           part def Outer {
@@ -344,21 +344,21 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
     assert binding_summary(second_ssd) == binding_summary(first_ssd)
 
 
-def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
+def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
     """A nested system can own a parameter interface alongside subparts."""
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
         """
         package Example {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def InnerParams :> ParameterInterface {
+          port def InnerParams :> ParameterInterface {
             attribute k : Real;
           }
 
-          attribute def OuterParams :> ParameterInterface {
+          port def OuterParams :> ParameterInterface {
             attribute gain : Real = 2.0;
           }
 
@@ -371,11 +371,11 @@ def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
           }
 
           part def Inner {
-            attribute parameters : InnerParams;
+            in port parameters : InnerParams;
           }
 
           part def Outer {
-            attribute parameters : OuterParams;
+            in port parameters : OuterParams;
             part inner : Inner;
           }
 
@@ -420,7 +420,7 @@ def test_nested_system_parameter_bag_roundtrip(tmp_path: Path) -> None:
     generate_sysml_from_ssd(first_ssd, generated)
     text = generated.read_text()
     assert "part def outer" in text
-    assert "attribute parameters : outerParameters;" in text
+    assert "in port parameters : outerParameters;" in text
     assert "bind outer.parameters.gain = OuterSet.g;" in text
     assert "bind outer.inner.parameters.k = InnerSet.k;" in text
 

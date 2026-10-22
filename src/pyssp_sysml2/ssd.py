@@ -23,6 +23,7 @@ from pyssp_sysml2.fmi_helpers import fmu_resource_path, to_fmi_direction_definit
 from pyssp_sysml2.parameters import (
     MappingSpec,
     has_parameter_dialect,
+    is_parameter_interface,
     mapping_specs,
     parameter_declarations,
     parameter_interface,
@@ -58,6 +59,11 @@ def _endpoint_port_def(
     port_def = architecture.resolve_port(port_usage)
     if port_def is None:
         raise ValueError("Port definition not connected")
+    if is_parameter_interface(port_def):
+        raise ValueError(
+            f"Parameter port '{part_name}.{port_name}' cannot be connected; "
+            "apply a parameter set with 'bind'"
+        )
     return port_def
 
 
@@ -98,6 +104,9 @@ def _add_part_connectors(
                 f"Unresolved port definition for "
                 f"{part_def.name}.{port_usage.name}"
             )
+        if is_parameter_interface(port_def):
+            # Emitted by the parameter branch below, flattened to member names.
+            continue
         flat = bool(port_def.attributes.get(FLAT_CONNECTOR_ATTR))
         for attribute in port_def.attributes.values():
             if is_control_attribute(attribute.name):

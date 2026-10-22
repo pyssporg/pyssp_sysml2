@@ -25,7 +25,7 @@ sets.
 
 | Object | SysML form | SSP consequence |
 | --- | --- | --- |
-| Parameter interface | `attribute def X :> ParameterInterface` | SSD parameter connectors and FMI parameter variables |
+| Parameter interface | `port def X :> ParameterInterface` | SSD parameter connectors and FMI parameter variables |
 | Parameter set | `attribute def Y :> ParameterSet` | one SSV file named after the set |
 | Set application | `attribute s : Y;` plus `bind ...` in a composition | one SSD `ParameterBinding`, plus an SSM for explicit mappings |
 
@@ -33,8 +33,9 @@ A set is **not** a component. It is a value bundle that is applied to a
 component usage.
 
 > **Design note.** `ParameterInterface` and `ParameterSet` are project markers,
-> not standard SysML v2 library types. They are ordinary empty `attribute def`s
-> whose meaning comes from this dialect. SysML v2 has no built-in parameter-set
+> not standard SysML v2 library types. They are ordinary empty defs — a `port
+> def` for the interface marker, an `attribute def` for the set marker — whose
+> meaning comes from this dialect. SysML v2 has no built-in parameter-set
 > construct; `bind` is used here as a mapping declaration. In SysML itself,
 > `bind` is an equality constraint, not an assignment or override.
 >
@@ -47,10 +48,10 @@ component usage.
 
 ```sysml
 package ParameterDemo {
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def AutopilotParameters :> ParameterInterface {
+  port def AutopilotParameters :> ParameterInterface {
     attribute waypointCount : Integer;
     attribute waypointX_km : Real[3];
   }
@@ -61,7 +62,7 @@ package ParameterDemo {
   }
 
   part def AutopilotModule {
-    attribute parameters : AutopilotParameters;
+    in port parameters : AutopilotParameters;
   }
 
   part def AircraftComposition {
@@ -76,13 +77,13 @@ package ParameterDemo {
 
 What each piece means:
 
-- `attribute def ParameterInterface;` and `attribute def ParameterSet;` are
+- `port def ParameterInterface;` and `attribute def ParameterSet;` are
   **marker definitions**. They must exist in the package. They have no members.
 - `AutopilotParameters` is the **interface** of `AutopilotModule`. Its members
   are the parameter names the component understands.
 - `NominalSet` is a reusable **set** of values. Its member names are SSV
   parameter names.
-- `attribute parameters : AutopilotParameters;` is the **fixed bag** that
+- `in port parameters : AutopilotParameters;` is the **fixed port** that
   connects a part definition to its parameter interface.
 - `attribute nominal : NominalSet;` declares a **set usage** in the
   composition.
@@ -116,7 +117,7 @@ There are three names to keep apart:
 ```text
 bind autopilot.parameters.waypointCount = nominal.n_waypoints
      ^^^^^^^^^ ^^^^^^^^^^ ^^^^^^^^^^^^^   ^^^^^^^ ^^^^^^^^^^^
-     component bag        interface      set      set member
+     component port        interface      set      set member
      path                 member         usage
 ```
 
@@ -149,7 +150,7 @@ An identity bind requires the names to be the same.
 An identity bind applies a whole set by matching member names:
 
 ```sysml
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointCount : Integer;
   attribute waypointX_km : Real[3];
 }
@@ -230,7 +231,7 @@ Use an explicit bind for differently named parameters.
 Explicit binds are one bind per set member:
 
 ```sysml
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointCount : Integer;
   attribute waypointX_km : Real[3];
 }
@@ -315,7 +316,7 @@ These are rejected:
 
 ```sysml
 bind autopilot.parameters.count = nominal;        // whole set into one member
-bind autopilot.parameters = nominal.n_waypoints;  // whole bag from one member
+bind autopilot.parameters = nominal.n_waypoints;  // whole port from one member
 bind autopilot.parameters.count = nominal.a.b;    // set path deeper than one
 bind autopilot.parameters.a.b = nominal.n_waypoints; // parameter path deeper than one
 ```
@@ -335,7 +336,7 @@ A component may have several applied sets, provided their target members are
 **disjoint**.
 
 ```sysml
-attribute def Params :> ParameterInterface {
+port def Params :> ParameterInterface {
   attribute count : Integer;
   attribute gain : Real;
 }
@@ -349,7 +350,7 @@ attribute def Gains :> ParameterSet {
 }
 
 part def Comp {
-  attribute parameters : Params;
+  in port parameters : Params;
 }
 
 part def Composition {
@@ -431,10 +432,10 @@ Set targets use the component hierarchy, not a separate parameter namespace:
 
 ```sysml
 package NestedDemo {
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def InnerParameters :> ParameterInterface {
+  port def InnerParameters :> ParameterInterface {
     attribute k : Real;
   }
 
@@ -443,7 +444,7 @@ package NestedDemo {
   }
 
   part def Inner {
-    attribute parameters : InnerParameters;
+    in port parameters : InnerParameters;
   }
 
   part def Outer {
@@ -523,7 +524,7 @@ This produces two bindings with targets `outer.inner.count` and
 A nested system is also a parameterable element:
 
 ```sysml
-attribute def OuterParameters :> ParameterInterface {
+port def OuterParameters :> ParameterInterface {
   attribute gain : Real = 2.0;
 }
 
@@ -532,7 +533,7 @@ attribute def OuterSet :> ParameterSet {
 }
 
 part def Outer {
-  attribute parameters : OuterParameters;
+  in port parameters : OuterParameters;
   part inner : Inner;
 }
 
@@ -552,7 +553,7 @@ Parameter lists use declared multiplicity on the interface and a tuple value
 on the set:
 
 ```sysml
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointX_km : Real[3];
 }
 
@@ -640,15 +641,15 @@ SSV would not contain the source parameter.
 
 ## 11. Naming rules and reserved names
 
-### The parameter bag is named `parameters`
+### The parameter port is named `parameters`
 
 ```sysml
-attribute parameters : AutopilotParameters;
+in port parameters : AutopilotParameters;
 ```
 
 Only this fixed name is recognized. A part definition may have at most one
-bag. A bag on the composition root is rejected; attach interfaces to component
-or nested-system usages instead.
+`parameters` port. A `parameters` port on the composition root is rejected;
+attach interfaces to component or nested-system usages instead.
 
 ### `pyssp_` is reserved for control metadata
 
@@ -685,19 +686,19 @@ side of the bind.
 When `generate sysml` synthesizes a model from an SSD, it derives a usage name
 from the SSV/set name. If that name collides with an existing attribute or
 part in the composition, it appends a numeric suffix. If the set name is
-`parameters`, it uses `parameters_set` to avoid the reserved bag name.
+`parameters`, it uses `parameters_set` to avoid the reserved port name.
 
 ## 12. Interface-only models
 
 A component can declare an interface without applying a set:
 
 ```sysml
-attribute def Params :> ParameterInterface {
+port def Params :> ParameterInterface {
   attribute count : Integer = 10;
 }
 
 part def Comp {
-  attribute parameters : Params;
+  in port parameters : Params;
 }
 
 part def Composition {
@@ -731,7 +732,7 @@ still works for `generate ssd` and `generate fmi`.
 
 Limits:
 
-- A part definition cannot mix a `parameters` bag with flat parameter
+- A part definition cannot mix a `parameters` port with flat parameter
   attributes.
 - Flat attributes on the **top composition** are not parameters; only leaf
   component definitions are parameterized.
@@ -744,7 +745,7 @@ Invalid mixing:
 
 ```sysml
 part def Comp {
-  attribute parameters : Params;
+  in port parameters : Params;
   attribute gain : Real;  // error: mixed dialects
 }
 ```
@@ -763,7 +764,7 @@ These are intentional current limits, not parser accidents:
 | Bindings inside a nested part definition | Apply sets at the composition root and target nested usages from there. |
 | Unbounded multiplicity | SSP parameters need a fixed length. |
 | SSM transformations or unit conversion | Only identity and plain source→target mapping are generated. |
-| Multiple `parameters` bags | The bag name is fixed and unique per part definition. |
+| Multiple `parameters` ports | The port name is fixed and unique per part definition. |
 | Dotted parameter names | Not representable as SysML feature names in the current dialect. |
 
 ## 15. Bind-shape cheat sheet
@@ -773,7 +774,7 @@ These are intentional current limits, not parser accidents:
 | Apply a set by matching names | `bind autopilot.parameters = nominal;` | `ParameterBinding` + prefix |
 | Apply one member with a rename | `bind autopilot.parameters.count = nominal.n;` | inline mapping / SSM |
 | Apply to a nested component | `bind outer.inner.parameters.k = nominal.k;` | target `outer.inner.k` |
-| Apply to a nested system bag | `bind outer.parameters.gain = nominal.g;` | target `outer.gain` |
+| Apply to a nested system port | `bind outer.parameters.gain = nominal.g;` | target `outer.gain` |
 | Apply two disjoint sets | `bind comp.parameters.count = counts.n;` plus `bind comp.parameters.gain = gains.k;` | two SSVs and two bindings |
 | Apply a list | `bind comp.parameters.xs = nominal.xs;` | element-wise `xs[i]` mappings |
 | Declare only an interface | no bind | connectors and FMI defaults only |

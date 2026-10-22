@@ -1,10 +1,10 @@
 package ExplicitExample {
   doc /* Explicit binds rename study-side set members to interface members. */
 
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def AutopilotParameters :> ParameterInterface {
+  port def AutopilotParameters :> ParameterInterface {
     attribute waypointCount : Integer;
     attribute waypointX_km : Real[3];
   }
@@ -15,7 +15,7 @@ package ExplicitExample {
   }
 
   part def AutopilotModule {
-    attribute parameters : AutopilotParameters;
+    in port parameters : AutopilotParameters;
   }
 
   part def ExplicitComposition {

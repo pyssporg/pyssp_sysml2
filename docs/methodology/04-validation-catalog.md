@@ -21,18 +21,18 @@ The first error usually tells you which layer rejected the model.
 
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
-| Marker definitions must exist in the package | `missing marker definition(s) ...` | Add `attribute def ParameterInterface;` and `attribute def ParameterSet;` |
-| A parameter bag must be typed by a marked interface | `... is not marked ':> ParameterInterface'` | Add `:> ParameterInterface` to the bag's type |
+| Marker definitions must exist in the package | `missing marker definition(s) ...` | Add `port def ParameterInterface;` and `attribute def ParameterSet;` |
+| A parameter port must be typed by a marked interface | `... is not marked ':> ParameterInterface'` | Add `:> ParameterInterface` to the port's type |
 | A set usage must be typed by a marked set | `... is not marked ':> ParameterSet'` | Add `:> ParameterSet` to the set definition |
 | A set and an interface are different roles | `... is not marked ':> ...'` | Do not use an interface as a set or vice versa |
 
 Valid:
 
 ```sysml
-attribute def ParameterInterface;
+port def ParameterInterface;
 attribute def ParameterSet;
 
-attribute def P :> ParameterInterface { attribute x : Real; }
+port def P :> ParameterInterface { attribute x : Real; }
 attribute def S :> ParameterSet { attribute x = 1.0; }
 ```
 
@@ -45,29 +45,29 @@ Invalid:
 
 ```sysml
 attribute def P { attribute x : Real; }
-part def Comp { attribute parameters : P; }
+part def Comp { in port parameters : P; }
 ```
 
 ```text
-Parameter bag Comp.parameters is typed by 'P', which is not marked
+Parameter port Comp.parameters is typed by 'P', which is not marked
 ':> ParameterInterface'
 ```
 
-## 3. Parameter bag and mixing
+## 3. Parameter port and mixing
 
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
-| At most one `parameters` bag per part | Duplicate attribute / model error | Rename or remove the extra bag |
-| A part with a bag may not also have flat parameter attributes | `mixes a 'parameters' bag with flat parameter attributes: ...` | Move flat attributes into the interface |
-| A composition may not mix bagged and legacy components | `Composition mixes parameter interfaces/sets (...) with flat parameter attributes (...)` | Use one dialect per composition |
-| The composition root is not a parameter target | `Top-level composition parameter interfaces are not supported` | Attach the bag to a component or nested-system usage |
-| A synthesized bag cannot collide with a port/subpart | `already has a port or subpart named 'parameters'` | Rename the port/subpart |
+| At most one `parameters` port per part | Duplicate port / model error | Rename or remove the extra port |
+| A part with a port may not also have flat parameter attributes | `mixes a 'parameters' port with flat parameter attributes: ...` | Move flat attributes into the interface |
+| A composition may not mix parameter ports and legacy components | `Composition mixes parameter interfaces/sets (...) with flat parameter attributes (...)` | Use one dialect per composition |
+| The composition root is not a parameter target | `Top-level composition parameter interfaces are not supported` | Attach the port to a component or nested-system usage |
+| A synthesized parameter port cannot reuse a subpart name | `already has a subpart named 'parameters'` | Rename the subpart |
 
 Valid leaf component:
 
 ```sysml
 part def Comp {
-  attribute parameters : CompParameters;
+  in port parameters : CompParameters;
 }
 ```
 
@@ -75,20 +75,20 @@ Invalid mixed leaf:
 
 ```sysml
 part def Comp {
-  attribute parameters : CompParameters;
+  in port parameters : CompParameters;
   attribute gain : Real;
 }
 ```
 
 ```text
-Comp mixes a 'parameters' bag with flat parameter attributes: gain
+Comp mixes a 'parameters' port with flat parameter attributes: gain
 ```
 
-Invalid top-level bag:
+Invalid top-level port:
 
 ```sysml
 part def Composition {
-  attribute parameters : CompositionParameters;
+  in port parameters : CompositionParameters;
 }
 ```
 
@@ -104,11 +104,11 @@ attach parameter interfaces to component usages
 | A bind must name a set usage in the composition | `... references 'x', which is not a composition attribute` | Declare `attribute x : SomeSet;` |
 | A bind target component path must resolve | `Parameter bind target '...' does not resolve to a component usage` | Fix the component path or add the part usage |
 | A bind target must put the parameter port on the left | `must be written with the parameter port on the left` | Swap the two sides |
-| A bind target must use the `parameters` bag | `Parameter bind targets must be '<component>.parameters' ...` | Add `.parameters` and optionally one member |
+| A bind target must use the `parameters` port | `Parameter bind targets must be '<component>.parameters' ...` | Add `.parameters` and optionally one member |
 | A bind must pair whole set with whole port, or member with member | `Parameter binds must bind a whole set to ... or one set member to ...` | Match the shapes on both sides |
 | A per-member bind must use `<set>.<member>` | `Parameter bind sources must be '<set>' or '<set>.<member>'` | Use exactly one set member |
 | A set usage must not mix identity and per-member binds | `mixes whole-object and per-member parameter binds for set ...` | Choose one form |
-| A bound component must have an interface | `... declares no parameter interface` | Add a bag or remove the bind |
+| A bound component must have an interface | `... declares no parameter interface` | Add a port or remove the bind |
 | Identity bind members must exist in the interface | `Whole-object bind ... cannot map set members ...` | Rename members or use explicit binds |
 | A per-member bind must name a set member | `Parameter set 'S' has no member 'x'` | Fix the set member name |
 | A per-member bind must name an interface member | `Parameter interface 'P' has no member 'x'` | Fix the port member name |
@@ -199,7 +199,7 @@ invent a declaration order. Disjoint targets are the deterministic choice.
 Valid:
 
 ```sysml
-attribute def P :> ParameterInterface {
+port def P :> ParameterInterface {
   attribute xs : Real[3];
 }
 attribute def S :> ParameterSet {
@@ -239,7 +239,7 @@ attribute def S :> ParameterSet {
 | SysML keywords are rejected | `uses reserved SysML keyword 'part'` | Rename the parameter |
 | SSD parameter names must be flat | `Parameter connector '...' cannot be represented as a SysML attribute name` | Use a flat name; nested parameter groups are unsupported |
 | Generated set names must not collide | Synthesized `_2` suffix | Rename the set for a stable model |
-| `parameters` is reserved for the bag | Set usage may be renamed to `parameters_set` | Avoid naming a set `parameters` if stable names matter |
+| `parameters` is reserved for the port | Set usage may be renamed to `parameters_set` | Avoid naming a set `parameters` if stable names matter |
 | Nested component paths are allowed in targets | — | Use `outer.inner.parameters.k` |
 | Dotted parameter names are not allowed | `cannot be represented` / bind shape error | Keep parameter names flat |
 
@@ -275,7 +275,7 @@ attribute name
 | A system cannot also be an FMU | `has both subparts and 'pyssp_implementation'` | Remove the implementation or the subparts |
 | Nested SSD systems are supported recursively | — | Use nested part definitions/usages |
 | Bind targets may use nested part paths | — | `outer.inner.parameters.k` |
-| A nested system may own an interface | — | Put a bag on the nested system part definition |
+| A nested system may own an interface | — | Put a port on the nested system part definition |
 | Top-level SSD system parameter connectors are rejected | `Top-level SSD system parameter connectors are not supported` | Attach connectors to a component/nested-system element |
 
 Invalid recursive parts:
@@ -345,14 +345,14 @@ These are intentional:
 Before running a generator:
 
 - [ ] Markers exist.
-- [ ] Every bag is typed by a marked interface.
+- [ ] Every port is typed by a marked interface.
 - [ ] Every set usage is typed by a marked set.
-- [ ] No part mixes a bag with flat attributes.
-- [ ] No composition mixes bagged and legacy components.
-- [ ] The composition has no `parameters` bag.
+- [ ] No part mixes a port with flat attributes.
+- [ ] No composition mixes parameter ports and legacy components.
+- [ ] The composition has no `parameters` port.
 - [ ] All binds are at the composition root.
 - [ ] Every bind target is a declared set usage/member.
-- [ ] Every bind source names a component parameter bag.
+- [ ] Every bind source names a component parameter port.
 - [ ] Multiple sets have disjoint effective targets.
 - [ ] List multiplicities are fixed and lengths match.
 - [ ] Parameter names avoid `pyssp_` and SysML keywords.

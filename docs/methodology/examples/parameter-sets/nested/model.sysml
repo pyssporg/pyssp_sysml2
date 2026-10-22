@@ -1,10 +1,10 @@
 package NestedPathExample {
   doc /* A set applied to a component below a nested system usage. */
 
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def InnerParameters :> ParameterInterface {
+  port def InnerParameters :> ParameterInterface {
     attribute k : Real;
   }
 
@@ -13,7 +13,7 @@ package NestedPathExample {
   }
 
   part def Inner {
-    attribute parameters : InnerParameters;
+    in port parameters : InnerParameters;
   }
 
   part def Outer {

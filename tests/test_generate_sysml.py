@@ -264,9 +264,9 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "attribute def GainParameters :> ParameterInterface {" in text
+    assert "port def GainParameters :> ParameterInterface {" in text
     assert "attribute k : Real;" in text
-    assert "attribute parameters : GainParameters;" in text
+    assert "in port parameters : GainParameters;" in text
     assert "attribute def parameters :> ParameterSet {" in text
     assert "attribute k : Real = 3.0;" in text
     assert "attribute parameters_set : parameters;" in text
@@ -314,7 +314,7 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "attribute def CompParameters :> ParameterInterface {" in text
+    assert "port def CompParameters :> ParameterInterface {" in text
     assert "attribute count : Integer;" in text
     assert "attribute xs : Real[2];" in text
     assert "attribute def Nom :> ParameterSet {" in text
@@ -374,8 +374,8 @@ def test_generate_sysml_from_ssd_keeps_interface_without_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "attribute def GainParameters :> ParameterInterface {" in text
-    assert "attribute parameters : GainParameters;" in text
+    assert "port def GainParameters :> ParameterInterface {" in text
+    assert "in port parameters : GainParameters;" in text
     assert "ParameterSet {" not in text
     assert "bind " not in text
 

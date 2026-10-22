@@ -40,7 +40,7 @@ package Demo {
 // part_definitions.sysml
 package Demo {
   part def AutopilotModule {
-    attribute parameters : AutopilotParameters;
+    in port parameters : AutopilotParameters;
   }
 }
 ```
@@ -112,7 +112,7 @@ Example — a leaf component:
 
 ```sysml
 part def AutopilotModule {
-  attribute parameters : AutopilotParameters;
+  in port parameters : AutopilotParameters;
 }
 ```
 
@@ -355,7 +355,7 @@ Rejected:
 
 ```sysml
 part def Composition {
-  attribute parameters : SomeInterface;  // top-level parameter bag
+  in port parameters : SomeInterface;  // top-level parameter port
   part comp : Comp;
 }
 ```
@@ -391,7 +391,7 @@ Rules:
 - Only **leaf component definitions** treat non-control attributes as
   parameters.
 - The composition's own flat attributes are not parameter declarations.
-- A leaf component may not mix flat attributes with a `parameters` bag.
+- A leaf component may not mix flat attributes with a `parameters` port.
 - Legacy architectures are still supported by `generate ssd` and
   `generate fmi`.
 - `sync ssd` preserves a legacy architecture; it does not migrate it to
@@ -423,13 +423,13 @@ Use this when adding a new model pattern:
 - [ ] Are all files in the same package?
 - [ ] Are list values written as tuples?
 - [ ] Are marker definitions present (`ParameterInterface`, `ParameterSet`)?
-- [ ] Does each parameterized part have at most one `parameters` bag?
-- [ ] Does a leaf component avoid flat attributes when it has a bag?
+- [ ] Does each parameterized part have at most one `parameters` port?
+- [ ] Does a leaf component avoid flat attributes when it has a port?
 - [ ] Is a part with subparts intended as a system, not an FMU?
 - [ ] Does a connection use compatible port definitions?
 - [ ] Are parameter binds at the composition root, not inside nested part
       definitions?
-- [ ] Is the top composition free of a parameter bag?
+- [ ] Is the top composition free of a parameter port?
 - [ ] Are names free of `pyssp_` and SysML keywords when they become features?
 - [ ] Are all list multiplicities fixed?
 - [ ] Are parameter targets disjoint when several sets apply to one component?

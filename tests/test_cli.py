@@ -47,10 +47,10 @@ def write_parameter_cli_architecture(root: Path) -> Path:
         root / "model.sysml",
         f"""
         package Example {{
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def Parameters :> ParameterInterface {{
+          port def Parameters :> ParameterInterface {{
             attribute gain : Real;
           }}
 
@@ -59,7 +59,7 @@ def write_parameter_cli_architecture(root: Path) -> Path:
           }}
 
           part def Source {{
-            attribute parameters : Parameters;
+            in port parameters : Parameters;
             out port outSig : Signal;
           }}
 

@@ -14,6 +14,7 @@ from pyssp_sysml2.control import (
     is_control_attribute,
 )
 from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
+from pyssp_sysml2.parameters import is_parameter_interface
 from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
 from pyssp_sysml2.sysml_model import (
     Architecture,
@@ -143,6 +144,8 @@ def _port_def_for(
     if port_def is not None:
         return port_def
     for existing in architecture.port_definitions.values():
+        if is_parameter_interface(existing):
+            continue
         if (
             _port_def_signature(existing) == signature
             and bool(existing.attributes.get(FLAT_CONNECTOR_ATTR)) == flat

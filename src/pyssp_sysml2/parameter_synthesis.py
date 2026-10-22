@@ -6,9 +6,10 @@ The SSD is the source of truth here:
 - ``ssd:ParameterBinding`` entries (system or component level) point at an
   SSV and optionally carry an inline or external SSM mapping.
 
-This module turns that into ``attribute def ... :> ParameterInterface`` /
-``:> ParameterSet`` definitions, a ``parameters`` bag on each component part
-definition, composition set usages, and explicit ``bind`` statements.
+This module turns that into ``port def ... :> ParameterInterface`` and
+``attribute def ... :> ParameterSet`` definitions, an ``in port parameters``
+on each component part definition, composition set usages, and explicit
+``bind`` statements.
 
 Nested SSD systems become nested part paths (``outer.inner``). Several sets
 may be applied to one parameterable element as long as their target members
@@ -33,7 +34,7 @@ from pyssp_sysml2.control import (
     is_control_attribute,
 )
 from pyssp_sysml2.parameters import (
-    PARAMETERS_BAG_NAME,
+    PARAMETERS_PORT_NAME,
     PARAMETER_INTERFACE_MARKER,
     PARAMETER_SET_MARKER,
     coerce_parameter_value,
@@ -51,6 +52,8 @@ from pyssp_sysml2.sysml_model import (
     Binding,
     PartDefinition,
     PartUsage,
+    PortDefinition,
+    PortUsage,
 )
 
 SSP_TYPES = {"Real", "Integer", "Boolean", "String"}
@@ -352,7 +355,7 @@ def component_parameter_attributes(
 
 
 def _reconcile_interface(
-    interface: AttributeDefinition, attributes: list[Attribute]
+    interface: AttributeDefinition | PortDefinition, attributes: list[Attribute]
 ) -> None:
     """Replace interface members, keeping defaults for unchanged signatures."""
     existing = interface.attributes
@@ -377,7 +380,10 @@ def _interface_name(
     base = _identifier(f"{part_def.name}Parameters", "Parameters")
     candidate = base
     counter = 2
-    while candidate in architecture.attribute_definitions:
+    while (
+        candidate in architecture.attribute_definitions
+        or candidate in architecture.port_definitions
+    ):
         candidate = f"{base}_{counter}"
         counter += 1
     return candidate
@@ -389,23 +395,35 @@ def ensure_component_interface(
     component: Component | System,
     *,
     source_file: str,
-) -> AttributeDefinition | None:
-    """Create/update the component interface and its ``parameters`` bag."""
+) -> PortDefinition | None:
+    """Create/update the component interface and its ``parameters`` port."""
     attributes = component_parameter_attributes(component)
     if not attributes:
         return None
 
-    bag = part_def.attributes.get(PARAMETERS_BAG_NAME)
-    if bag is not None:
-        interface = architecture.resolve_attribute_def(bag)
+    if PARAMETERS_PORT_NAME in part_def.attributes:
+        raise ValueError(
+            f"{part_def.name}.{PARAMETERS_PORT_NAME} is an attribute bag; parameter "
+            "interfaces are port defs. Use "
+            f"'in port {PARAMETERS_PORT_NAME} : <PortDef>;' instead."
+        )
+
+    port_usage = part_def.ports.get(PARAMETERS_PORT_NAME)
+    if port_usage is not None:
+        interface = architecture.resolve_port(port_usage)
         if interface is None:
             raise ValueError(
-                f"{part_def.name}.parameters is not typed by an attribute definition"
+                f"{part_def.name}.parameters is not typed by a port definition"
             )
         if not is_parameter_interface(interface):
             raise ValueError(
-                f"Parameter bag {part_def.name}.parameters is typed by "
+                f"Parameter port {part_def.name}.parameters is typed by "
                 f"'{interface.name}', which is not marked ':> {PARAMETER_INTERFACE_MARKER}'"
+            )
+        if port_usage.direction not in (None, "in"):
+            raise ValueError(
+                f"Parameter port {part_def.name}.parameters must be "
+                f"undirected or 'in', got '{port_usage.direction}'"
             )
         _reconcile_interface(interface, attributes)
         return interface
@@ -413,39 +431,44 @@ def ensure_component_interface(
     flat = [
         name
         for name in part_def.attributes
-        if name != PARAMETERS_BAG_NAME and not is_control_attribute(name)
+        if not is_control_attribute(name)
     ]
     if flat:
         raise ValueError(
             f"{part_def.name} mixes flat parameter attributes "
             f"({', '.join(sorted(flat))}) with a synthesized parameter interface"
         )
-    if PARAMETERS_BAG_NAME in part_def.ports or PARAMETERS_BAG_NAME in part_def.parts:
+    if PARAMETERS_PORT_NAME in part_def.parts:
         raise ValueError(
-            f"{part_def.name} already has a port or subpart named "
-            f"'{PARAMETERS_BAG_NAME}'"
+            f"{part_def.name} already has a subpart named "
+            f"'{PARAMETERS_PORT_NAME}'"
         )
 
     interface_name = _interface_name(architecture, part_def)
-    interface = AttributeDefinition(
+    interface = PortDefinition(
         name=interface_name,
         source_file=source_file,
         specializes=(PARAMETER_INTERFACE_MARKER,),
     )
     interface.attributes.update({attribute.name: attribute for attribute in attributes})
-    architecture.add_attribute_def(interface)
-    part_def.attributes[PARAMETERS_BAG_NAME] = Attribute(
-        name=PARAMETERS_BAG_NAME, type_name=interface_name
+    architecture.add_port_def(interface)
+    part_def.ports[PARAMETERS_PORT_NAME] = PortUsage(
+        name=PARAMETERS_PORT_NAME,
+        direction="in",
+        type_name=interface_name,
     )
     return interface
 
 
 def ensure_marker_definitions(architecture: Architecture, source_file: str) -> None:
-    for marker in (PARAMETER_INTERFACE_MARKER, PARAMETER_SET_MARKER):
-        if marker not in architecture.attribute_definitions:
-            architecture.add_attribute_def(
-                AttributeDefinition(name=marker, source_file=source_file)
-            )
+    if PARAMETER_INTERFACE_MARKER not in architecture.port_definitions:
+        architecture.add_port_def(
+            PortDefinition(name=PARAMETER_INTERFACE_MARKER, source_file=source_file)
+        )
+    if PARAMETER_SET_MARKER not in architecture.attribute_definitions:
+        architecture.add_attribute_def(
+            AttributeDefinition(name=PARAMETER_SET_MARKER, source_file=source_file)
+        )
 
 
 # -- bindings to sets -------------------------------------------------------
@@ -591,7 +614,7 @@ def _component_name(path: tuple[str, ...]) -> str:
 def _infer_component(
     values: dict[str, tuple[str, object]],
     components: set[tuple[str, ...]],
-    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
+    interfaces: dict[tuple[str, ...], PortDefinition | None],
     owner_path: tuple[str, ...] = (),
 ) -> tuple[str, ...]:
     matches: list[tuple[str, ...]] = []
@@ -624,7 +647,7 @@ def _infer_component(
 def _check_pair_shape(
     pair: MappingPair,
     normalized: dict[str, tuple[str, object]],
-    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
+    interfaces: dict[tuple[str, ...], PortDefinition | None],
 ) -> None:
     _, source_value = normalized[pair.source]
     interface = interfaces.get(pair.component_path)
@@ -721,7 +744,7 @@ def _applications_for_binding(
     binding,
     values: dict[str, tuple[str, object]],
     components: set[tuple[str, ...]],
-    interfaces: dict[tuple[str, ...], AttributeDefinition | None],
+    interfaces: dict[tuple[str, ...], PortDefinition | None],
     ssd_path: Path | None,
 ) -> list[SetApplication]:
     if not binding.prefix:
@@ -878,8 +901,8 @@ def _remove_parameter_usage(
     system.bindings = [
         binding
         for binding in system.bindings
-        if PARAMETERS_BAG_NAME not in binding.source
-        and PARAMETERS_BAG_NAME not in binding.target
+        if PARAMETERS_PORT_NAME not in binding.source
+        and PARAMETERS_PORT_NAME not in binding.target
     ]
     for name, attribute in list(system.attributes.items()):
         if is_control_attribute(name):
@@ -964,12 +987,12 @@ def synthesize_parameter_dialect(
                     architecture, system, component_path
                 )
                 if part_def is not None:
-                    part_def.attributes.pop(PARAMETERS_BAG_NAME, None)
+                    part_def.ports.pop(PARAMETERS_PORT_NAME, None)
         return
 
     ensure_marker_definitions(architecture, source_file)
 
-    interfaces: dict[tuple[str, ...], AttributeDefinition | None] = {}
+    interfaces: dict[tuple[str, ...], PortDefinition | None] = {}
     for component_path in sorted(components):
         part_usage, part_def = _part_at_path(
             architecture, system, component_path
@@ -984,7 +1007,7 @@ def synthesize_parameter_dialect(
         )
         interfaces[component_path] = interface
         if interface is None and sync:
-            part_def.attributes.pop(PARAMETERS_BAG_NAME, None)
+            part_def.ports.pop(PARAMETERS_PORT_NAME, None)
 
     if sync:
         _remove_parameter_usage(architecture, system)
@@ -1071,7 +1094,7 @@ def synthesize_parameter_dialect(
     for set_name in sorted(set_builds):
         build = set_builds[set_name]
         usage_base = (
-            f"{set_name}_set" if set_name == PARAMETERS_BAG_NAME else set_name
+            f"{set_name}_set" if set_name == PARAMETERS_PORT_NAME else set_name
         )
         usage_name = _unique_name(
             usage_base, set(system.attributes) | set(system.parts)
@@ -1084,7 +1107,7 @@ def synthesize_parameter_dialect(
                 bindings = [
                     Binding(
                         source=application.component_path
-                        + (PARAMETERS_BAG_NAME,),
+                        + (PARAMETERS_PORT_NAME,),
                         target=(usage_name,),
                     )
                 ]
@@ -1092,7 +1115,7 @@ def synthesize_parameter_dialect(
                 bindings = [
                     Binding(
                         source=application.component_path
-                        + (PARAMETERS_BAG_NAME, pair.target),
+                        + (PARAMETERS_PORT_NAME, pair.target),
                         target=(usage_name, pair.source),
                     )
                     for pair in application.pairs

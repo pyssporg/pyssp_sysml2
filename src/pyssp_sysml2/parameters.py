@@ -2,11 +2,11 @@
 
 The dialect this module implements:
 
-- a **parameter interface** is an ``attribute def`` marked ``:>
+- a **parameter interface** is a ``port def`` marked ``:>
   ParameterInterface``;
 - a parameter **set** is an ``attribute def`` marked ``:> ParameterSet``;
 - a component or nested system exposes an interface through a single
-  fixed-name bag, ``attribute parameters : <Interface>;``;
+  fixed-name port, ``in port parameters : <Interface>;``;
 - a composition applies one or more sets per component usage with ``bind``:
   either a whole-object bind (identity mapping) or one bind per member
   (explicit mapping);
@@ -22,7 +22,7 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 
-from pyssp_sysml2.control import is_control_attribute
+from pyssp_sysml2.control import FLAT_CONNECTOR_ATTR, is_control_attribute
 from pyssp_sysml2.sysml_model import (
     Architecture,
     Attribute,
@@ -30,14 +30,16 @@ from pyssp_sysml2.sysml_model import (
     Binding,
     PartDefinition,
     PartUsage,
+    PortDefinition,
+    PortUsage,
     load,
 )
 
-PARAMETERS_BAG_NAME = "parameters"
+PARAMETERS_PORT_NAME = "parameters"
 
 # Marker definitions the dialect relies on. Models declare them as ordinary
-# (empty) attribute definitions; the last qualified-name segment is matched so
-# ``Pyssp::ParameterSet`` works as well as the bare name.
+# (empty) port or attribute definitions; the last qualified-name segment is
+# matched so ``Pyssp::ParameterSet`` works as well as the bare name.
 PARAMETER_INTERFACE_MARKER = "ParameterInterface"
 PARAMETER_SET_MARKER = "ParameterSet"
 
@@ -46,7 +48,7 @@ PARAMETER_SET_MARKER = "ParameterSet"
 
 
 def _specializes_marker(
-    definition: AttributeDefinition | None, marker: str
+    definition: AttributeDefinition | PortDefinition | None, marker: str
 ) -> bool:
     if definition is None:
         return False
@@ -55,8 +57,8 @@ def _specializes_marker(
     )
 
 
-def is_parameter_interface(definition: AttributeDefinition | None) -> bool:
-    """True when ``definition`` is marked ``:> ParameterInterface``."""
+def is_parameter_interface(definition: PortDefinition | None) -> bool:
+    """True when ``definition`` is a port def marked ``:> ParameterInterface``."""
     return _specializes_marker(definition, PARAMETER_INTERFACE_MARKER)
 
 
@@ -66,59 +68,145 @@ def is_parameter_set(definition: AttributeDefinition | None) -> bool:
 
 
 def validate_marker_definitions(architecture: Architecture) -> None:
-    """Require the marker defs used by ``:>`` to exist in the package."""
-    used = {
-        name.split("::")[-1]
+    """Require the marker defs used by ``:>`` to exist with the right kind."""
+    interface_users = [
+        definition.name
+        for definition in architecture.port_definitions.values()
+        if _specializes_marker(definition, PARAMETER_INTERFACE_MARKER)
+    ]
+    set_users = [
+        definition.name
         for definition in architecture.attribute_definitions.values()
-        for name in definition.specializes
-        if name.split("::")[-1]
-        in (PARAMETER_INTERFACE_MARKER, PARAMETER_SET_MARKER)
-    }
-    defined = {
-        name.split("::")[-1] for name in architecture.attribute_definitions
-    }
-    missing = sorted(used - defined)
+        if _specializes_marker(definition, PARAMETER_SET_MARKER)
+    ]
+    attribute_interfaces = [
+        definition.name
+        for definition in architecture.attribute_definitions.values()
+        if _specializes_marker(definition, PARAMETER_INTERFACE_MARKER)
+    ]
+    port_sets = [
+        definition.name
+        for definition in architecture.port_definitions.values()
+        if _specializes_marker(definition, PARAMETER_SET_MARKER)
+    ]
+
+    if attribute_interfaces:
+        raise ValueError(
+            "Parameter interfaces must be port defs; these attribute defs "
+            f"specialize '{PARAMETER_INTERFACE_MARKER}': "
+            f"{', '.join(sorted(attribute_interfaces))}. Use "
+            f"'port def <name> :> {PARAMETER_INTERFACE_MARKER} {{ ... }}'."
+        )
+    if port_sets:
+        raise ValueError(
+            "Parameter sets must be attribute defs; these port defs specialize "
+            f"'{PARAMETER_SET_MARKER}': {', '.join(sorted(port_sets))}. Use "
+            f"'attribute def <name> :> {PARAMETER_SET_MARKER} {{ ... }}'."
+        )
+
+    if (
+        interface_users
+        and PARAMETER_INTERFACE_MARKER in architecture.attribute_definitions
+        and PARAMETER_INTERFACE_MARKER not in architecture.port_definitions
+    ):
+        raise ValueError(
+            f"'{PARAMETER_INTERFACE_MARKER}' is defined as an attribute def, but "
+            "parameter interfaces are port defs. Replace "
+            f"'attribute def {PARAMETER_INTERFACE_MARKER};' with "
+            f"'port def {PARAMETER_INTERFACE_MARKER};'."
+        )
+    if (
+        set_users
+        and PARAMETER_SET_MARKER in architecture.port_definitions
+        and PARAMETER_SET_MARKER not in architecture.attribute_definitions
+    ):
+        raise ValueError(
+            f"'{PARAMETER_SET_MARKER}' is defined as a port def, but parameter "
+            "sets are attribute defs. Replace "
+            f"'port def {PARAMETER_SET_MARKER};' with "
+            f"'attribute def {PARAMETER_SET_MARKER};'."
+        )
+
+    missing: list[tuple[str, str]] = []
+    if (
+        interface_users
+        and PARAMETER_INTERFACE_MARKER not in architecture.port_definitions
+    ):
+        missing.append((PARAMETER_INTERFACE_MARKER, "port def"))
+    if (
+        set_users
+        and PARAMETER_SET_MARKER not in architecture.attribute_definitions
+    ):
+        missing.append((PARAMETER_SET_MARKER, "attribute def"))
     if missing:
         definitions = ", ".join(
-            f"attribute def {marker};" for marker in missing
+            f"{kind} {marker};" for marker, kind in missing
         )
         raise ValueError(
-            "Parameter-set dialect uses missing marker definition(s) "
-            f"{', '.join(missing)}. Add {definitions} to the package."
+            "Parameter dialect uses missing marker definition(s) "
+            f"{', '.join(marker for marker, _ in missing)}. Add "
+            f"{definitions} to the package."
         )
 
 
 # -- interface and declaration resolution -----------------------------------
 
 
-def parameter_bag(
+def parameter_port(
     architecture: Architecture, part_def: PartDefinition
-) -> Attribute | None:
-    """The ``parameters`` bag of a part def, when its type is an attribute def."""
-    bag = part_def.attributes.get(PARAMETERS_BAG_NAME)
-    if bag is None or architecture.resolve_attribute_def(bag) is None:
+) -> PortUsage | None:
+    """The ``parameters`` port of a part def, when its type is a port def.
+
+    An attribute bag is the retired carrier and is rejected with a migration
+    hint, so the two carriers never coexist silently.
+    """
+    if PARAMETERS_PORT_NAME in part_def.attributes:
+        raise ValueError(
+            f"{part_def.name}.{PARAMETERS_PORT_NAME} is an attribute bag; "
+            "parameter interfaces are port defs. Use "
+            f"'in port {PARAMETERS_PORT_NAME} : <PortDef>;' instead."
+        )
+    port_usage = part_def.ports.get(PARAMETERS_PORT_NAME)
+    if port_usage is None:
         return None
-    return bag
+    if architecture.resolve_port(port_usage) is None:
+        raise ValueError(
+            f"Unresolved port definition for "
+            f"{part_def.name}.{PARAMETERS_PORT_NAME}"
+        )
+    return port_usage
 
 
 def parameter_interface(
     architecture: Architecture, part_def: PartDefinition
-) -> AttributeDefinition | None:
+) -> PortDefinition | None:
     """Resolve and validate the parameter interface of a part def.
 
     ``None`` means the part uses the legacy flat-attribute dialect. A
-    ``parameters`` bag typed by an unmarked attribute def is an error: the
-    dialect requires the marker so role confusion is caught early.
+    ``parameters`` port typed by an unmarked port def is an error: the dialect
+    requires the marker so role confusion is caught early. Parameter ports are
+    undirected or ``in``; other directions are rejected because the SSP/FMI
+    role is ``parameter``, not an input/output signal.
     """
-    bag = parameter_bag(architecture, part_def)
-    if bag is None:
+    port_usage = parameter_port(architecture, part_def)
+    if port_usage is None:
         return None
-    definition = architecture.resolve_attribute_def(bag)
-    assert definition is not None  # parameter_bag already resolved it
+    definition = architecture.resolve_port(port_usage)
+    assert definition is not None  # parameter_port already resolved it
     if not is_parameter_interface(definition):
         raise ValueError(
-            f"Parameter bag {part_def.name}.{PARAMETERS_BAG_NAME} is typed by "
+            f"Parameter port {part_def.name}.{PARAMETERS_PORT_NAME} is typed by "
             f"'{definition.name}', which is not marked ':> {PARAMETER_INTERFACE_MARKER}'"
+        )
+    if port_usage.direction not in (None, "in"):
+        raise ValueError(
+            f"Parameter port {part_def.name}.{PARAMETERS_PORT_NAME} must be "
+            f"undirected or 'in', got '{port_usage.direction}'"
+        )
+    if FLAT_CONNECTOR_ATTR in definition.attributes:
+        raise ValueError(
+            f"Parameter interface '{definition.name}' cannot declare "
+            f"'{FLAT_CONNECTOR_ATTR}'; parameter members are emitted by name"
         )
     return definition
 
@@ -129,7 +217,7 @@ def parameter_declarations(
     """Ordered parameter declarations for a component.
 
     New dialect: the members of the part's parameter interface. Legacy
-    dialect: the part's own non-control attributes. Mixing a parameter bag
+    dialect: the part's own non-control attributes. Mixing a parameter port
     with flat parameter attributes is rejected so the two dialects never blur.
     """
     interface = parameter_interface(architecture, part_def)
@@ -137,11 +225,11 @@ def parameter_declarations(
         flat = [
             name
             for name in part_def.attributes
-            if name != PARAMETERS_BAG_NAME and not is_control_attribute(name)
+            if not is_control_attribute(name)
         ]
         if flat:
             raise ValueError(
-                f"{part_def.name} mixes a '{PARAMETERS_BAG_NAME}' bag with flat "
+                f"{part_def.name} mixes a '{PARAMETERS_PORT_NAME}' port with flat "
                 f"parameter attributes: {', '.join(sorted(flat))}"
             )
         return [
@@ -238,7 +326,7 @@ class ParameterBind:
 
     def port_reference(self) -> str:
         """The left-hand feature chain, for error messages."""
-        parts = self.port_path + (PARAMETERS_BAG_NAME,)
+        parts = self.port_path + (PARAMETERS_PORT_NAME,)
         if self.port_member is not None:
             parts += (self.port_member,)
         return ".".join(parts)
@@ -376,10 +464,10 @@ def parameter_bind(binding: Binding) -> ParameterBind | None:
     left = list(binding.source)
     right = list(binding.target)
     left_indexes = [
-        index for index, name in enumerate(left) if name == PARAMETERS_BAG_NAME
+        index for index, name in enumerate(left) if name == PARAMETERS_PORT_NAME
     ]
     right_indexes = [
-        index for index, name in enumerate(right) if name == PARAMETERS_BAG_NAME
+        index for index, name in enumerate(right) if name == PARAMETERS_PORT_NAME
     ]
 
     if not left_indexes and not right_indexes:
@@ -398,7 +486,7 @@ def parameter_bind(binding: Binding) -> ParameterBind | None:
     if len(left_indexes) > 1:
         raise ValueError(
             "Parameter bind target contains more than one "
-            f"'{PARAMETERS_BAG_NAME}' segment: '{'.'.join(left)}'"
+            f"'{PARAMETERS_PORT_NAME}' segment: '{'.'.join(left)}'"
         )
 
     index = left_indexes[0]
@@ -444,7 +532,7 @@ def has_parameter_dialect(
     ):
         return True
     return any(
-        parameter_bag(architecture, ref.part_def) is not None
+        parameter_port(architecture, ref.part_def) is not None
         for ref in component_refs(architecture, system)
     )
 
@@ -769,18 +857,18 @@ def validate_parameter_dialect(
     architecture: Architecture, system: PartDefinition
 ) -> None:
     """Reject a composition that mixes parameter interfaces and flat attributes."""
-    bagged: list[str] = []
+    ported: list[str] = []
     legacy: list[str] = []
     for part_def in component_definitions(architecture, system):
-        if parameter_bag(architecture, part_def) is not None:
-            bagged.append(part_def.name)
+        if parameter_port(architecture, part_def) is not None:
+            ported.append(part_def.name)
         elif any(
             not is_control_attribute(name) for name in part_def.attributes
         ):
             legacy.append(part_def.name)
     has_sets = bool(set_usages(architecture, system))
-    if legacy and (bagged or has_sets):
-        dialect_parts = bagged or ["parameter set usages"]
+    if legacy and (ported or has_sets):
+        dialect_parts = ported or ["parameter set usages"]
         raise ValueError(
             "Composition mixes parameter interfaces/sets "
             f"({', '.join(sorted(dialect_parts))}) with flat parameter attributes "

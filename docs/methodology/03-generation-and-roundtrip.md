@@ -176,7 +176,7 @@ pyssp generate ssd \
 Parameter connectors come from the interface:
 
 ```sysml
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointCount : Integer;
   attribute waypointX_km : Real[3];
 }
@@ -292,7 +292,7 @@ Behavior:
 Example:
 
 ```sysml
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointCount : Integer = 10;
   attribute waypointX_km : Real[3];
 }
@@ -352,14 +352,14 @@ The generated model:
 - synthesizes marker definitions if they are missing;
 - synthesizes parameter interfaces from `kind="parameter"` connectors;
 - synthesizes parameter sets from SSV names and values;
-- synthesizes `parameters` bags and `bind` statements;
+- synthesizes `parameters` ports and `bind` statements;
 - recursively synthesizes nested systems, parts, ports, and connections;
 - writes everything to `architecture.sysml` by default.
 
 Example identity synthesis:
 
 ```sysml
-attribute def GainParameters :> ParameterInterface {
+port def GainParameters :> ParameterInterface {
   attribute k : Real;
 }
 
@@ -368,7 +368,7 @@ attribute def parameters :> ParameterSet {
 }
 
 part def Gain {
-  attribute parameters : GainParameters;
+  in port parameters : GainParameters;
 }
 
 part def ParamDemo {
@@ -379,7 +379,7 @@ part def ParamDemo {
 ```
 
 Set name `parameters` is special: the set usage becomes `parameters_set` to
-avoid the reserved bag name.
+avoid the reserved port name.
 
 Explicit mapping synthesis:
 
@@ -419,8 +419,8 @@ component-level binding is treated as relative to that component.
 - Reserved SysML keywords in parameter names are rejected.
 - Parameter connectors that cannot be represented as flat SysML feature names
   (for example, dotted names) are rejected.
-- A parameter interface/bag is not created for the top composition.
-- Mixing a bag with flat attributes is rejected.
+- A parameter interface/port is not created for the top composition.
+- Mixing a port with flat attributes is rejected.
 
 ## 8. Sync
 
@@ -466,7 +466,7 @@ If the existing model uses interfaces/sets, sync:
   model;
 - updates set values;
 - preserves interface defaults and docs when the signature is unchanged;
-- removes a bag when the SSD no longer has parameter connectors.
+- removes a port when the SSD no longer has parameter connectors.
 
 If the existing model is legacy flat-attribute, sync does **not** migrate it to
 interfaces/sets.

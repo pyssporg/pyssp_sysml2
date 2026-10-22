@@ -354,17 +354,17 @@ def test_requirement_definition_text(tmp_path) -> None:
 # -- connections ---------------------------------------------------------------
 
 
-def test_attribute_definitions_and_specialization(tmp_path) -> None:
-    """Package attribute defs keep members, markers, and source files."""
+def test_definition_specialization(tmp_path) -> None:
+    """Package defs keep members, markers, and source files."""
     model_file = tmp_path / "values.sysml"
     write_model(
         model_file,
         """
         package Values {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def Interface :> ParameterInterface {
+          port def Interface :> ParameterInterface {
             attribute gain : Real;
             attribute count : Integer;
           }
@@ -378,13 +378,15 @@ def test_attribute_definitions_and_specialization(tmp_path) -> None:
 
     architecture = load(model_file)
 
-    assert list(architecture.attribute_definitions) == [
+    assert list(architecture.port_definitions) == [
         "ParameterInterface",
-        "ParameterSet",
         "Interface",
+    ]
+    assert list(architecture.attribute_definitions) == [
+        "ParameterSet",
         "NominalSet",
     ]
-    interface = architecture.attribute_definitions["Interface"]
+    interface = architecture.port_definitions["Interface"]
     assert interface.specializes == ("ParameterInterface",)
     assert interface.source_file == "values.sysml"
     assert list(interface.attributes) == ["gain", "count"]
@@ -436,7 +438,7 @@ def test_bindings_loaded_with_feature_chains(tmp_path) -> None:
           }
 
           part def Component {
-            attribute parameters : Interface;
+            in port parameters : Interface;
           }
 
           part def SystemComposition {
@@ -698,10 +700,10 @@ def test_export_round_trip(tmp_path) -> None:
         source_dir / "model.sysml",
         """
         package RoundTrip {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def Measurements :> ParameterInterface {
+          port def Measurements :> ParameterInterface {
             attribute temperature : Real[2];
           }
 
@@ -730,7 +732,7 @@ def test_export_round_trip(tmp_path) -> None:
           }
 
           part def Measured {
-            attribute parameters : Measurements;
+            in port parameters : Measurements;
           }
 
           part def SystemComposition {

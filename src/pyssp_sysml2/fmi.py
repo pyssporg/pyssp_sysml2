@@ -12,6 +12,7 @@ from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.parameters import (
     component_definitions,
+    is_parameter_interface,
     parameter_declarations,
     parameter_items,
 )
@@ -49,6 +50,9 @@ def _port_attribute_variables(
         port_def = architecture.resolve_port(port_usage)
         if port_def is None:
             raise ValueError(f"Unresolved port definition for {part.name}.{port_usage.name}")
+        if is_parameter_interface(port_def):
+            # Emitted as parameter variables, not as input/output ports.
+            continue
         for attr in port_def.attributes.values():
             if is_control_attribute(attr.name):
                 continue

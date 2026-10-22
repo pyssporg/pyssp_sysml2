@@ -58,7 +58,7 @@ Examples follow a simple convention:
 
 | Term | Meaning |
 | --- | --- |
-| **Parameter interface** | An `attribute def` marked `:> ParameterInterface`. It defines the component's parameter surface: names, types, multiplicities, optional defaults. |
+| **Parameter interface** | A `port def` marked `:> ParameterInterface`. It defines the component's parameter surface: names, types, multiplicities, optional defaults. |
 | **Parameter set** | An `attribute def` marked `:> ParameterSet`. It holds named values that can be applied to a component. |
 | **Set usage** | A composition attribute typed by a parameter set, e.g. `attribute nominal : NominalSet;`. |
 | **Set member** | An attribute of a parameter set, e.g. `n_waypoints = 10`. The member name is the SSV parameter name. |

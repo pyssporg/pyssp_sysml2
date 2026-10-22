@@ -639,10 +639,10 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
         source_arch / "model.sysml",
         """
         package Example {
-          attribute def ParameterInterface;
+          port def ParameterInterface;
           attribute def ParameterSet;
 
-          attribute def InnerParams :> ParameterInterface {
+          port def InnerParams :> ParameterInterface {
             attribute k : Real = 1.0;
           }
 
@@ -651,7 +651,7 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
           }
 
           part def Inner {
-            attribute parameters : InnerParams;
+            in port parameters : InnerParams;
           }
 
           part def Outer {

@@ -10,7 +10,7 @@ Format (2-space indent, one blank line between definitions, trailing newline):
 .. code-block:: text
 
     package Example {
-      attribute def Parameters :> ParameterInterface {
+      port def Parameters :> ParameterInterface {
         attribute gain : Real[3];
       }
 
@@ -138,7 +138,13 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
 
 
 def _port_definition_lines(port_def: PortDefinition) -> list[str]:
-    lines = [f"{_DEFINITION_INDENT}port def {port_def.name} {{"]
+    suffix = ""
+    if port_def.specializes:
+        suffix = f" :> {', '.join(port_def.specializes)}"
+    if not port_def.doc and not port_def.attributes:
+        return [f"{_DEFINITION_INDENT}port def {port_def.name}{suffix};"]
+
+    lines = [f"{_DEFINITION_INDENT}port def {port_def.name}{suffix} {{"]
     if port_def.doc:
         lines.extend(_doc_line(port_def.doc, _MEMBER_INDENT))
     for attribute in sorted(port_def.attributes.values(), key=lambda a: a.name):

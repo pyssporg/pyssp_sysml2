@@ -51,17 +51,17 @@ def _model(
         """
     return f"""
     package Example {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
 
-      attribute def AutopilotParameters {interface_marker} {{
+      port def AutopilotParameters {interface_marker} {{
         {interface_members}
       }}
 
       {sets}
 
       part def AutopilotModule {{
-        attribute parameters : AutopilotParameters;
+        in port parameters : AutopilotParameters;
       }}
 
       part def {COMPOSITION_NAME} {{
@@ -93,7 +93,7 @@ def _ssm_summary(path: Path) -> list[tuple[str, str]]:
 
 
 def test_parameter_interface_members_are_declarations(tmp_path) -> None:
-    """A typed parameter bag exposes the interface members as declarations."""
+    """A typed parameter port exposes the interface members as declarations."""
     architecture_dir = _write(tmp_path, _model())
     architecture = load(architecture_dir)
     system = architecture.get_part_def(COMPOSITION_NAME)
@@ -367,14 +367,14 @@ def test_multiple_sets_binding_same_member_are_rejected(tmp_path) -> None:
     """Disjoint multiple sets are allowed; overlapping targets are not."""
     model = f"""
     package Example {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
-      attribute def Params :> ParameterInterface {{
+      port def Params :> ParameterInterface {{
         attribute count : Integer;
       }}
       attribute def CountsA :> ParameterSet {{ attribute n = 10; }}
       attribute def CountsB :> ParameterSet {{ attribute m = 20; }}
-      part def Comp {{ attribute parameters : Params; }}
+      part def Comp {{ in port parameters : Params; }}
       part def {COMPOSITION_NAME} {{
         part comp : Comp;
         attribute counts_a : CountsA;
@@ -400,15 +400,15 @@ def test_multiple_disjoint_sets_for_one_component_are_supported(
     """Multiple sets may target different members of the same component."""
     model = f"""
     package Example {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
-      attribute def Params :> ParameterInterface {{
+      port def Params :> ParameterInterface {{
         attribute count : Integer;
         attribute gain : Real;
       }}
       attribute def Counts :> ParameterSet {{ attribute n = 10; }}
       attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
-      part def Comp {{ attribute parameters : Params; }}
+      part def Comp {{ in port parameters : Params; }}
       part def {COMPOSITION_NAME} {{
         part comp : Comp;
         attribute counts : Counts;
@@ -443,7 +443,7 @@ def test_multiple_disjoint_sets_for_one_component_are_supported(
 
 def test_missing_marker_definitions_are_rejected(tmp_path) -> None:
     """The marker defs themselves must exist in the package."""
-    model = _model().replace("attribute def ParameterInterface;\n", "").replace(
+    model = _model().replace("port def ParameterInterface;\n", "").replace(
         "attribute def ParameterSet;\n", ""
     )
     architecture_dir = _write(tmp_path, model)
@@ -455,7 +455,7 @@ def test_missing_marker_definitions_are_rejected(tmp_path) -> None:
 
 
 def test_unmarked_interface_is_rejected(tmp_path) -> None:
-    """A parameters bag typed by an unmarked attribute def fails validation."""
+    """A parameters port typed by an unmarked port def fails validation."""
     architecture_dir = _write(tmp_path, _model(interface_marker=""))
 
     with pytest.raises(ValueError, match="not marked ':> ParameterInterface'"):
@@ -483,7 +483,7 @@ def test_unmarked_set_is_rejected(tmp_path) -> None:
 
 
 def test_mixed_parameter_dialects_are_rejected(tmp_path) -> None:
-    """A composition cannot mix a parameter bag with legacy flat attributes."""
+    """A composition cannot mix a parameter port with legacy flat attributes."""
     model = _model(
         composition="""
         attribute nominal : NominalSet;
@@ -582,14 +582,14 @@ def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
     """Interfaces without an applied set still define SSD parameter connectors."""
     model = f"""
     package Example {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
-      attribute def AutopilotParameters :> ParameterInterface {{
+      port def AutopilotParameters :> ParameterInterface {{
         attribute waypointCount : Integer;
         attribute waypointX_km : Real[3];
       }}
       part def AutopilotModule {{
-        attribute parameters : AutopilotParameters;
+        in port parameters : AutopilotParameters;
       }}
       part def {COMPOSITION_NAME} {{
         part autopilot : AutopilotModule;
@@ -619,15 +619,15 @@ def test_generate_ssm_for_multiple_disjoint_sets(tmp_path) -> None:
     """Each applied set gets its own standalone SSM file."""
     model = f"""
     package Example {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
-      attribute def Params :> ParameterInterface {{
+      port def Params :> ParameterInterface {{
         attribute count : Integer;
         attribute gain : Real;
       }}
       attribute def Counts :> ParameterSet {{ attribute n = 10; }}
       attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
-      part def Comp {{ attribute parameters : Params; }}
+      part def Comp {{ in port parameters : Params; }}
       part def {COMPOSITION_NAME} {{
         part comp : Comp;
         attribute counts : Counts;

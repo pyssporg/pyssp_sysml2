@@ -138,10 +138,10 @@ nested-path patterns, is in
 [`docs/methodology/01-parameter-sets.md`](docs/methodology/01-parameter-sets.md).
 
 ```sysml
-attribute def ParameterInterface;
+port def ParameterInterface;
 attribute def ParameterSet;
 
-attribute def AutopilotParameters :> ParameterInterface {
+port def AutopilotParameters :> ParameterInterface {
   attribute waypointCount : Integer;
   attribute waypointX_km : Real[3];
 }
@@ -152,7 +152,7 @@ attribute def NominalSet :> ParameterSet {
 }
 
 part def AutopilotModule {
-  attribute parameters : AutopilotParameters;
+  in port parameters : AutopilotParameters;
 }
 
 part def AircraftComposition {
@@ -169,7 +169,7 @@ Mapping to SSP artifacts:
 
 | SysML | SSP |
 | --- | --- |
-| `attribute def <X> :> ParameterInterface` | parameter connectors in SSD and parameter variables in `modelDescription.xml` |
+| `port def <X> :> ParameterInterface` | parameter connectors in SSD and parameter variables in `modelDescription.xml` |
 | `attribute def <Set> :> ParameterSet` | one `<Set>.ssv` |
 | `bind path.parameters.member = set.member` | inline `ssm:MappingEntry source="member" target="path.member"` |
 | `bind path.parameters = set` | identity mapping → `ParameterBinding prefix="path."` |
@@ -177,10 +177,11 @@ Mapping to SSP artifacts:
 
 Rules:
 
-- Mark interfaces with `:> ParameterInterface` and sets with `:> ParameterSet`.
-  The marker definitions must exist in the same package.
+- Mark interfaces with `:> ParameterInterface` (a `port def` marker) and sets
+  with `:> ParameterSet` (an `attribute def` marker). The marker definitions
+  must exist in the same package.
 - A component or nested system has at most one
-  `attribute parameters : <Interface>;` bag.
+  `in port parameters : <Interface>;` declaration.
 - Write parameter binds with the parameter port on the left:
   `bind path.parameters.member = set.member;`. The reversed form is rejected
   with the rewritten bind in the error message.
@@ -203,7 +204,7 @@ Rules:
 - `generate ssd` emits parameter connectors from the interface and inlines
   explicit mappings; `generate fmi` emits interface parameters using interface
   defaults, never applied-set values.
-- `generate sysml` synthesizes interfaces, sets, bags, and binds from SSD
+- `generate sysml` synthesizes interfaces, sets, ports, and binds from SSD
   parameter connectors and `ParameterBinding` entries; `sync ssd` reconciles
   them when the SysML model already uses the parameter dialect.
 - SSM transformations and unit-conversion suppression are rejected: only
@@ -239,7 +240,7 @@ pyssp generate sysml \
 
 If `--composition` is omitted, the SSD system name is used. When the SSD
 contains parameter connectors or `ParameterBinding` entries, the generated
-model also gets parameter interfaces, sets, `parameters` bags, and `bind`
+model also gets parameter interfaces, sets, `parameters` ports, and `bind`
 statements.
 
 ## 3) Sync Back from SSD to SysML
@@ -305,7 +306,7 @@ equivalent as `pyssp_*` control attributes. They are preserved by
 | --- | --- |
 | `Component/@implementation` | `attribute pyssp_implementation : String` |
 | `ParameterBinding/@source` (legacy models) | `attribute pyssp_parameter_set : String` |
-| Parameter connectors / bindings | `attribute def` interfaces, sets, `parameters` bags, and `bind` |
+| Parameter connectors / bindings | `port def` interfaces, sets, `parameters` ports, and `bind` |
 | `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
 | Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
 

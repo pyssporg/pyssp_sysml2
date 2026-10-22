@@ -1,8 +1,8 @@
 package ParameterDemo {
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def AutopilotParameters :> ParameterInterface {
+  port def AutopilotParameters :> ParameterInterface {
     doc /* Parameters exposed by the autopilot FMU. */
     attribute waypointCount : Integer;
     attribute waypointX_km : Real[3];

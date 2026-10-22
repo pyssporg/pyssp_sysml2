@@ -17,15 +17,18 @@ from tests.test_utils import COMPOSITION_NAME, write_model
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BIND_LINE = re.compile(r"^\s*bind\s+(\S+)\s*=\s*(\S+?)\s*;")
+ATTRIBUTE_CARRIER = re.compile(
+    r"\battribute def \w+ :> ParameterInterface\b|\battribute parameters\s*:"
+)
 
 
 def _model(bind_line: str, *, parts: str = "part comp : Comp;") -> str:
     return f"""
     package Orientation {{
-      attribute def ParameterInterface;
+      port def ParameterInterface;
       attribute def ParameterSet;
 
-      attribute def Params :> ParameterInterface {{
+      port def Params :> ParameterInterface {{
         attribute count : Integer;
       }}
 
@@ -34,7 +37,7 @@ def _model(bind_line: str, *, parts: str = "part comp : Comp;") -> str:
       }}
 
       part def Comp {{
-        attribute parameters : Params;
+        in port parameters : Params;
       }}
 
       part def {COMPOSITION_NAME} {{
@@ -101,7 +104,7 @@ def test_port_to_port_bind_is_rejected(tmp_path) -> None:
 
 
 def test_non_parameter_bind_is_ignored(tmp_path) -> None:
-    """Binds without a parameter bag are ordinary SysML bindings."""
+    """Binds without a parameter port are ordinary SysML bindings."""
     _, system = _load(tmp_path, "bind comp.count = nominal.n;")
 
     assert parameter_bind(system.bindings[0]) is None
@@ -134,14 +137,33 @@ def _parameter_example_dirs() -> list[Path]:
     return sorted(dirs)
 
 
-def test_parameter_examples_use_canonical_bind_orientation() -> None:
-    """Keep the shipped examples and the library from diverging."""
-    offenders: list[str] = []
+def _example_sysml_files() -> list[Path]:
     roots = (
         REPO_ROOT / "examples",
         REPO_ROOT / "docs" / "methodology" / "examples",
     )
-    for path in sorted(file for root in roots for file in root.rglob("*.sysml")):
+    return sorted(file for root in roots for file in root.rglob("*.sysml"))
+
+
+def test_parameter_examples_use_port_interfaces() -> None:
+    """Keep the retired attribute carrier out of the shipped examples."""
+    offenders: list[str] = []
+    for path in _example_sysml_files():
+        for number, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            if ATTRIBUTE_CARRIER.search(line):
+                offenders.append(
+                    f"{path.relative_to(REPO_ROOT)}:{number}: {line.strip()}"
+                )
+
+    assert not offenders, "attribute parameter carriers:\n" + "\n".join(offenders)
+
+
+def test_parameter_examples_use_canonical_bind_orientation() -> None:
+    """Keep the shipped examples and the library from diverging."""
+    offenders: list[str] = []
+    for path in _example_sysml_files():
         for number, line in enumerate(
             path.read_text(encoding="utf-8").splitlines(), start=1
         ):

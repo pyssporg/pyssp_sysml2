@@ -68,27 +68,29 @@ were removed from this repo's models during the migration:
 
 The adapter also loads the parameter-set dialect:
 
-- `attribute def` definitions; members keep type, value, doc, and multiplicity;
+- `port def` and `attribute def` definitions; members keep type, value, doc,
+  and multiplicity;
 - specialization with `:>` (used for the `ParameterInterface` /
   `ParameterSet` markers);
 - `bind` statements with full feature chains, e.g.
   `bind component.parameters.member = set.member;`.
 
-The parameter tooling treats an `attribute def` as a parameter interface or
-parameter set only when it specializes the matching marker definition:
+The parameter tooling treats a `port def` as a parameter interface and an
+`attribute def` as a parameter set only when it specializes the matching marker
+definition:
 
 ```sysml
-attribute def ParameterInterface;
+port def ParameterInterface;
 attribute def ParameterSet;
 
-attribute def AutopilotParameters :> ParameterInterface { ... }
+port def AutopilotParameters :> ParameterInterface { ... }
 attribute def NominalSet :> ParameterSet { ... }
 ```
 
 The marker definitions themselves must exist in the package (the loader does
 not resolve imports across packages yet). A component or nested system
-exposes its interface through the fixed bag
-`attribute parameters : <Interface>;`. Only one bag per part is supported,
+exposes its interface through the fixed port
+`in port parameters : <Interface>;`. Only one port per part is supported,
 and mixing it with flat parameter attributes on the same part is rejected.
 
 `generate ssd` consumes this dialect; `generate sysml` and `sync ssd`

@@ -1,10 +1,10 @@
 package MultipleSetExample {
   doc /* Two disjoint sets applied to one component. */
 
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def ControllerParameters :> ParameterInterface {
+  port def ControllerParameters :> ParameterInterface {
     attribute count : Integer;
     attribute gain : Real;
   }
@@ -18,7 +18,7 @@ package MultipleSetExample {
   }
 
   part def Controller {
-    attribute parameters : ControllerParameters;
+    in port parameters : ControllerParameters;
   }
 
   part def MultipleSetComposition {

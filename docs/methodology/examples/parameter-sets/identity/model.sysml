@@ -1,10 +1,10 @@
 package IdentityExample {
   doc /* Identity bind: set member names match interface member names. */
 
-  attribute def ParameterInterface;
+  port def ParameterInterface;
   attribute def ParameterSet;
 
-  attribute def AutopilotParameters :> ParameterInterface {
+  port def AutopilotParameters :> ParameterInterface {
     doc /* Parameter surface of the autopilot FMU. */
     attribute waypointCount : Integer;
     attribute waypointX_km : Real[3];
@@ -17,7 +17,7 @@ package IdentityExample {
   }
 
   part def AutopilotModule {
-    attribute parameters : AutopilotParameters;
+    in port parameters : AutopilotParameters;
   }
 
   part def IdentityComposition {

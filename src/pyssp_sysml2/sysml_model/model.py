@@ -127,7 +127,7 @@ class PortUsage:
     """A port usage inside a part definition (``in port sig : Signal;``)."""
 
     name: str
-    direction: str  # "in" | "out" | "inout"
+    direction: str | None  # "in" | "out" | "inout" | None (undirected)
     type_name: str
     doc: str | None = None
 
@@ -192,9 +192,10 @@ class Definition:
 
 @dataclass
 class PortDefinition(Definition):
-    """A ``port def`` with ordered attributes."""
+    """A ``port def`` with ordered attributes and optional supertypes."""
 
     attributes: dict[str, Attribute] = field(default_factory=dict)
+    specializes: tuple[str, ...] = ()
 
 
 @dataclass
