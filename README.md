@@ -16,9 +16,10 @@ Typical workflow:
 3. Generate one SSV per parameter set (`pyssp generate ssv`); see “Parameter Sets” below.
 4. Generate SSM mapping files for explicit `bind` mappings (`pyssp generate ssm`).
 5. Generate FMI `modelDescription.xml` per component.
-6. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
-7. Optionally edit SSD wiring in an external tool.
-8. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
+6. Package the built FMUs, SSD, and SSVs into an `.ssp` archive (`pyssp generate ssp`).
+7. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
+8. Optionally edit SSD wiring in an external tool.
+9. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
 
 If no SysML files are available yet, `pyssp generate sysml` can bootstrap a minimal SysML architecture from an SSD.
 
@@ -56,11 +57,11 @@ pip install -e .
 `pyssp` exposes two command families:
 
 ```bash
-pyssp generate <ssd|ssv|fmi|sysml> [options]
+pyssp generate <ssp|ssd|ssv|ssm|fmi|sysml> [options]
 pyssp sync ssd [options]
 ```
 
-Common options for architecture-based generators (`ssd`, `ssv`, `fmi`):
+Common options for architecture-based generators (`ssp`, `ssd`, `ssv`, `ssm`, `fmi`):
 
 - `--architecture`: folder containing `.sysml` files (or a file inside that folder).
 - `--composition`: top-level part definition to generate from
@@ -243,11 +244,42 @@ part def AutopilotModule {
 
 `generate ssd` uses `resource_name` for `Component/@source` and
 `implementation` for `Component/@implementation`. `source` is authoring/build
-metadata and is not written to the SSD. If metadata is absent, the source
-defaults to `resources/<PartDef>.fmu` and no implementation is written.
+metadata, is not written to the SSD, and is consumed by `generate ssp`. If
+metadata is absent, the source defaults to `resources/<PartDef>.fmu` and no
+implementation is written.
 
 Metadata is only valid on leaf part definitions. Nested systems and the
 composition cannot declare it.
+
+### SSP archive
+
+Package the SSD, applied parameter sets, and built FMUs into an SSP archive:
+
+```bash
+pyssp generate ssp \
+  --architecture examples/aircraft_subset \
+  --composition AircraftComposition \
+  --output build/generated/AircraftComposition.ssp \
+  --fmu-root .
+```
+
+`generate ssp` always builds the SSD from SysML. If you edited an SSD in an
+external tool, run `sync ssd` first so the architecture reflects those edits.
+
+`generate ssp` requires `fmu_meta.source` on every leaf component. Each source
+may be a `.fmu` file or an extracted FMU directory. The archive contains:
+
+- `SystemStructure.ssd`
+- `resources/<resource_name>` for each FMU
+- `<parameter-set-prefix>/<Set>.ssv` for each applied set
+  (default prefix `resources/parameter_sets`)
+
+Explicit parameter mappings are inlined in the SSD, so the archive does not
+need separate `.ssm` files. By default the FMU `modelDescription.xml` is
+checked against the generated SSD connector names and
+`fmu_meta.implementation`. Use `--skip-fmu-validation` if the model
+deliberately uses different variable names. Relative `source` paths resolve
+against `--fmu-root` (default: current working directory).
 
 ### SysML from SSD
 
@@ -264,6 +296,11 @@ If `--composition` is omitted, the SSD system name is used. When the SSD
 contains parameter connectors or `ParameterBinding` entries, the generated
 model also gets parameter interfaces, sets, `parameters` ports, and `bind`
 statements.
+
+`Component/@source` and `implementation` become `fmu_meta` metadata when they
+differ from the defaults. The original build path cannot be recovered from an
+SSD, so add `source` to each leaf's `FmuMetadata` before running
+`generate ssp`.
 
 ## 3) Sync Back from SSD to SysML
 
@@ -352,6 +389,7 @@ from pathlib import Path
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.fmi import generate_model_descriptions
+from pyssp_sysml2.ssp import generate_ssp
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 
@@ -363,6 +401,13 @@ generate_parameter_sets(
     architecture, Path("build/generated/parameter_sets"), composition
 )
 generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
+# Requires the built FMUs at each leaf's fmu_meta.source.
+generate_ssp(
+    architecture,
+    Path("build/generated/AircraftComposition.ssp"),
+    composition,
+    fmu_root=Path("."),
+)
 generate_sysml_from_ssd(
     Path("build/generated/SystemStructure.ssd"),
     Path("build/generated/architecture.sysml"),
@@ -399,6 +444,7 @@ pyssp generate ssd --help
 pyssp generate ssv --help
 pyssp generate ssm --help
 pyssp generate fmi --help
+pyssp generate ssp --help
 pyssp generate sysml --help
 pyssp sync --help
 pyssp sync ssd --help
@@ -418,6 +464,7 @@ Typical generated structure:
 - `build/generated/parameter_sets/*.ssv`
 - `build/generated/parameter_mappings/*.ssm` (models with explicit binds)
 - `build/generated/model_descriptions/*/modelDescription.xml`
+- `build/generated/<Composition>.ssp` (when running `pyssp generate ssp`)
 - `build/generated/architecture.sysml` (when running `pyssp generate sysml`)
 - `build/synced_sysml/*.sysml` (when running `pyssp sync ssd --output-architecture-dir ...`)
 
@@ -427,6 +474,7 @@ Artifact purpose:
 - `parameter_sets/*.ssv`: one parameter set, referenced by SSD parameter bindings.
 - `parameter_mappings/*.ssm`: optional standalone source→target mapping for explicit binds.
 - `modelDescription.xml`: FMI variable/interface declaration per component.
+- `<Composition>.ssp`: packaged SSD, FMUs, and applied parameter sets.
 - `architecture.sysml`: minimal SysML architecture generated from an SSD.
 - `synced_sysml/*.sysml`: SysML files exported after applying SSD wiring updates.
 
@@ -442,6 +490,10 @@ Artifact purpose:
 | `[error] ... incompatible ports ...` during `sync ssd` | SSD connects ports of different definitions | Connect only compatible source/destination ports |
 | `[error] Multiple parameter sets bind '...'` | Two sets target the same component parameter | Make the target members disjoint, or use one set |
 | `[error] ... is a flat parameter attribute` | A component declares parameters directly | Move the members into a `port def :> ParameterInterface` and apply a `ParameterSet` with `bind` |
+| `[error] ... has no fmu_meta.source` | `generate ssp` cannot find the built FMU | Add `source` to the leaf component's `FmuMetadata` |
+| `[error] FMU source for ... does not exist` | `fmu_meta.source` points to a missing file/directory, or `--fmu-root` is wrong | Build the FMU first or fix the path/root |
+| `[error] ... is missing variable(s) used by the SSD` | SSD connector names do not match the FMU model description | Rename the SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
+| `[error] ... exposes '...'` | `fmu_meta.implementation` disagrees with the FMU interface type | Set it to `CoSimulation` or `ModelExchange` to match the FMU |
 | `[error] ... pyssp_implementation is no longer supported` | Legacy FMU implementation control attribute | Move `implementation` into `attribute fmu_meta : <Part>FmuMetadata` |
 | `[error] ... pyssp_parameter_set is no longer supported` | Legacy external SSV pointer | Define sets in SysML and bind them to component usages |
 | `pyssp: command not found` | Console script not installed on PATH | Use `PYTHONPATH=src python3 -m pyssp_sysml2.cli ...` or `pip install -e .` |

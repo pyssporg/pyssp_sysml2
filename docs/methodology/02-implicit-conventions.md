@@ -307,8 +307,9 @@ part def AutopilotModule {
 
 Metadata is recognized by type, not by the usage name, and is allowed only on
 leaf component definitions. `source` is the build artifact path and is not
-written to the SSD. `resource_name` and `implementation` map to
-`Component/@source` and `Component/@implementation`.
+written to the SSD; `generate ssp` reads it to add the FMU to the archive.
+`resource_name` and `implementation` map to `Component/@source` and
+`Component/@implementation`.
 
 The retired `pyssp_implementation` and `pyssp_parameter_set` attributes are
 rejected with a migration message.
@@ -441,7 +442,7 @@ a model:
 | Inline vs standalone SSM | no | `generate ssd` inlines explicit mappings; `generate ssm` writes a file |
 | FMU resource path | `fmu_meta.resource_name`, else part definition name | `generate ssd` |
 | Implementation string | `fmu_meta.implementation` | `generate ssd` |
-| Built FMU location | `fmu_meta.source` | future SSP packaging |
+| Built FMU location | `fmu_meta.source` | `generate ssp` |
 | Default experiment | control attributes | `generate ssd` |
 | FMU model name | composition + part definition | `generate fmi` |
 | FMU GUID | deterministic UUID | `generate fmi` |
@@ -456,6 +457,7 @@ Use this when adding a new model pattern:
 - [ ] Does each parameterized part have at most one `parameters` port?
 - [ ] Are all component parameters declared in a parameter interface?
 - [ ] Is FMU metadata (`fmu_meta`) only on leaf component definitions?
+- [ ] Does every leaf have `fmu_meta.source` before running `generate ssp`?
 - [ ] Is a part with subparts intended as a system, not an FMU?
 - [ ] Does a connection use compatible port definitions?
 - [ ] Are parameter binds at the composition root, not inside nested part
@@ -476,6 +478,8 @@ Use this when adding a new model pattern:
   systems;
 - `src/pyssp_sysml2/ssd.py` — port/parameter connectors and connections;
 - `src/pyssp_sysml2/fmu_metadata.py` — typed FMU metadata resolution;
+- `src/pyssp_sysml2/ssp.py` — SSP archive packaging;
 - `src/pyssp_sysml2/control.py` — control-attribute names;
 - `tests/test_sysml_model.py`, `tests/test_generate_sysml.py`,
-  `tests/test_fmu_metadata.py`, `tests/test_roundtrip.py`.
+  `tests/test_fmu_metadata.py`, `tests/test_generate_ssp.py`,
+  `tests/test_roundtrip.py`.

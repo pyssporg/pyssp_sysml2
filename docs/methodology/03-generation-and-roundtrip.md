@@ -43,6 +43,7 @@ mapping. `generate fmi` does not use applied set values; it uses the interface.
 | SSM | explicit binds | Source→target name mapping |
 | SSD | composition + parts + interfaces + binds + FMU metadata | Structure, connectors, connections, `ParameterBinding`s, component source/implementation |
 | FMI model description | leaf part definition + interface | Parameters, ports, types, defaults, model metadata |
+| SSP archive | SSD + `fmu_meta.source` + applied sets | Packaged structure, FMUs, SSVs |
 | SysML from SSD | SSD + referenced SSV/SSM | Synthesized model, sets, interfaces, binds |
 
 ## 3. SSV generation
@@ -342,6 +343,56 @@ If a system part definition also has an interface, it does not get an FMI
 model description because it has subparts and is not a leaf FMU. Its interface
 can still become SSD system connectors and be a parameter target.
 
+## 6.5 SSP packaging
+
+Command:
+
+```bash
+pyssp generate ssp \
+  --architecture examples/aircraft_subset \
+  --composition AircraftComposition \
+  --output build/generated/AircraftComposition.ssp \
+  --fmu-root .
+```
+
+`generate ssp` builds the SSD from SysML, writes applied SSVs, and packages the
+built FMUs into one archive. Sync externally edited SSDs back into SysML first.
+
+```text
+AircraftComposition.ssp
+├── SystemStructure.ssd
+└── resources/
+    ├── AutopilotModule.fmu
+    ├── Environment.fmu
+    ├── MissionComputer.fmu
+    └── parameter_sets/
+        └── NominalSet.ssv
+```
+
+Rules:
+
+- Every leaf component must have `fmu_meta.source`.
+- `source` may be a `.fmu` file or an extracted FMU directory. Directories are
+  packaged as `.fmu` entries on archive commit.
+- `resource_name` determines the bundled `resources/<name>`; the default is
+  `<PartDefinition>.fmu`.
+- The SSD `ParameterBinding` source and packaged SSV path share
+  `--parameter-set-prefix` (default `resources/parameter_sets`).
+- Explicit binds remain inline `ParameterMapping` entries in the SSD; separate
+  `.ssm` files are not required.
+- Relative `source` paths resolve against `--fmu-root` (default: current
+  working directory).
+- The FMU `modelDescription.xml` is checked against the generated SSD
+  connector names and `fmu_meta.implementation`. `--skip-fmu-validation`
+  bypasses the check.
+- Archive entries use fixed timestamps, so unchanged inputs produce
+  byte-identical `.ssp` files.
+
+The variable-name check is intentionally strict: an SSD connector that does
+not exist in the FMU would make the packaged system fail to instantiate. This
+is especially relevant for Modelica FMUs, whose record/array names can be
+flattened differently from the structured SysML port names.
+
 ## 7. SysML from SSD
 
 Command:
@@ -379,7 +430,12 @@ The generated model:
 - synthesizes parameter sets from SSV names and values;
 - synthesizes `parameters` ports and `bind` statements;
 - recursively synthesizes nested systems, parts, ports, and connections;
+- emits `fmu_meta` for non-default source/implementation values, but cannot
+  recover the original `source` path;
 - writes everything to `architecture.sysml` by default.
+
+Add `fmu_meta.source` to each leaf before running `generate ssp` on a
+bootstrapped model.
 
 Example identity synthesis:
 
@@ -546,6 +602,7 @@ through a parameter interface and SysML-defined sets.
 | Set inheritance/union | Not implemented; see proposal |
 | Original multi-file layout in `generate sysml` | It writes one synthesized file |
 | Distinction between an empty SSD `System` and a leaf component | No structural marker |
+| Built FMU path (`fmu_meta.source`) | SSD only stores the packaged resource name |
 | Exact source formatting/docs | Synthesis produces a repo-owned model |
 
 ## 10. Practical ordering
@@ -565,11 +622,15 @@ pyssp generate fmi --architecture arch --composition Composition \
 pyssp generate ssm --architecture arch --composition Composition \
   --output-dir build/parameter_mappings
 
-# 3. Edit the SSD externally, then bring structural changes back
+# 3. Package the built FMUs, SSD, and applied sets as an SSP
+pyssp generate ssp --architecture arch --composition Composition \
+  --output build/Composition.ssp --fmu-root .
+
+# 4. Edit the SSD externally, then bring structural changes back
 pyssp sync ssd --architecture arch --ssd build/SystemStructure.ssd \
   --composition Composition --output build/synced
 
-# 4. Or synthesize a fresh SysML model from the SSD
+# 5. Or synthesize a fresh SysML model from the SSD
 pyssp generate sysml --ssd build/SystemStructure.ssd \
   --output build/recovered.sysml
 ```
@@ -583,12 +644,14 @@ Keep the parameter directory next to the SSD or preserve the relative paths.
 - `src/pyssp_sysml2/ssm.py`
 - `src/pyssp_sysml2/ssd.py`
 - `src/pyssp_sysml2/fmi.py`
+- `src/pyssp_sysml2/ssp.py`
 - `src/pyssp_sysml2/fmu_metadata.py`
 - `src/pyssp_sysml2/sysml.py`
 - `src/pyssp_sysml2/parameter_synthesis.py`
 - `src/pyssp_sysml2/sync.py`
 - `tests/test_parameter_sets.py`
 - `tests/test_fmu_metadata.py`
+- `tests/test_generate_ssp.py`
 - `tests/test_generate_sysml.py`
 - `tests/test_roundtrip.py`
 - `tests/test_sync.py`

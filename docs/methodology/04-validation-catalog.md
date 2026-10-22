@@ -368,6 +368,21 @@ pyssp sync ssd ... --no-synthesize
 references unknown part source 'resources/ExternalSink.fmu'
 ```
 
+## 9.5 SSP packaging
+
+| Rule | Diagnostic | Fix |
+| --- | --- | --- |
+| Every leaf component must carry `fmu_meta.source` | `... has no fmu_meta.source` | Add the built FMU path to the metadata |
+| The FMU source must exist | `FMU source for ... does not exist` | Build the FMU or fix the path / `--fmu-root` |
+| A file source must be an FMU archive | `must be a .fmu file or an extracted FMU directory` | Pass a `.fmu` file or extracted directory |
+| An extracted source must be readable as an FMU | FMU/modelDescription error | Add `modelDescription.xml` or fix the directory |
+| Two part definitions cannot share a resource name with different sources | `FMU resource name '...' is used by ... and another part definition` | Set distinct `resource_name`s |
+| SSD connector names must exist in the FMU | `... is missing variable(s) used by the SSD` | Rename SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
+| Component implementation must match the FMU interface | `component implementation is '...', but ... exposes '...'` | Set `CoSimulation` or `ModelExchange` to match the FMU |
+
+`--skip-fmu-validation` bypasses the model-description name and implementation
+checks. It still requires every source to exist and packages the FMUs.
+
 ## 10. Warnings
 
 Warnings do not stop generation.
@@ -398,6 +413,8 @@ Before running a generator:
 - [ ] Every set usage is typed by a marked set.
 - [ ] No part or composition declares flat parameter attributes.
 - [ ] FMU metadata is only on leaf components and uses known members.
+- [ ] Every leaf has an existing `fmu_meta.source` before `generate ssp`.
+- [ ] SSD connector names exist in each FMU's `modelDescription.xml`.
 - [ ] Retired `pyssp_implementation` / `pyssp_parameter_set` attributes are absent.
 - [ ] The composition has no `parameters` port.
 - [ ] All binds are at the composition root.
@@ -415,10 +432,12 @@ Before running a generator:
 - `src/pyssp_sysml2/parameters.py`
 - `src/pyssp_sysml2/parameter_synthesis.py`
 - `src/pyssp_sysml2/fmu_metadata.py`
+- `src/pyssp_sysml2/ssp.py`
 - `src/pyssp_sysml2/ssd.py`
 - `src/pyssp_sysml2/sysml.py`
 - `src/pyssp_sysml2/sync.py`
 - `tests/test_parameter_sets.py`
 - `tests/test_fmu_metadata.py`
+- `tests/test_generate_ssp.py`
 - `tests/test_generate_sysml.py`
 - `tests/test_sync.py`

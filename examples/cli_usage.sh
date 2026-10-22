@@ -57,6 +57,14 @@ mkdir -p "$BOOTSTRAP_DIR"
   --ssd "$OUT_DIR/SystemStructure.ssd" \
   --output-architecture-dir "$OUT_DIR/synced_sysml"
 
+# Optional: package the built FMUs, SSD, and applied parameter sets.
+# Build the FMUs at their fmu_meta.source paths first, then run:
+# "${RUNNER[@]}" generate ssp \
+#   --architecture "$ARCH" \
+#   --composition "$COMP" \
+#   --output "$OUT_DIR/$COMP.ssp" \
+#   --fmu-root .
+
 printf "\nGenerated artifacts:\n"
 printf "%s\n" "- $OUT_DIR/SystemStructure.ssd"
 printf "%s\n" "- $OUT_DIR/parameter_sets"

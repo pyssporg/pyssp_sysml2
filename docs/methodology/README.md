@@ -29,7 +29,7 @@ Every chapter or major section carries one of these labels:
 | --- | --- | --- |
 | [01 — Parameter sets](01-parameter-sets.md) | Implemented | Interfaces, sets, identity/explicit binds, multiple disjoint sets, nested part paths, lists, retired flat parameters |
 | [02 — Implicit modeling conventions](02-implicit-conventions.md) | Convention | Files/packages, parts vs systems vs FMUs, ports/connections, control attributes, naming |
-| [03 — Generation and round-trip](03-generation-and-roundtrip.md) | Implemented | SSV/SSM/SSD/FMI generation, SSD→SysML synthesis, `sync ssd`, fidelity limits |
+| [03 — Generation and round-trip](03-generation-and-roundtrip.md) | Implemented | SSV/SSM/SSD/FMI generation, SSP packaging, SSD→SysML synthesis, `sync ssd`, fidelity limits |
 | [04 — Validation catalog](04-validation-catalog.md) | Implemented | Valid/invalid rules, diagnostics, fixes |
 | [Proposal — Parameter-set reuse](proposals/parameter-set-reuse.md) | Proposed | Inheritance/union methodology for reusable sets; not implemented |
 | [Runnable examples](examples/parameter-sets/README.md) | Implemented | Self-contained parameter-set models used by this handbook |
@@ -95,6 +95,8 @@ Examples follow a simple convention:
 | SSD generation | `src/pyssp_sysml2/ssd.py` | `tests/test_parameter_sets.py`, `tests/test_roundtrip.py` |
 | SSV/SSM generation | `src/pyssp_sysml2/ssv.py`, `src/pyssp_sysml2/ssm.py` | `tests/test_parameter_sets.py` |
 | FMI model descriptions | `src/pyssp_sysml2/fmi.py` | `tests/test_parameter_sets.py`, `tests/test_roundtrip.py` |
+| FMU metadata | `src/pyssp_sysml2/fmu_metadata.py` | `tests/test_fmu_metadata.py` |
+| SSP packaging | `src/pyssp_sysml2/ssp.py` | `tests/test_generate_ssp.py` |
 | SSD→SysML model synthesis | `src/pyssp_sysml2/sysml.py` | `tests/test_generate_sysml.py` |
 | Sync | `src/pyssp_sysml2/sync.py` | `tests/test_sync.py` |
 | Control attributes | `src/pyssp_sysml2/control.py` | — |

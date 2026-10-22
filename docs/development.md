@@ -22,6 +22,8 @@ Core modules:
 - `src/pyssp_sysml2/fmu_metadata.py`: resolves typed `FmuMetadata` definitions
   and maps them to SSD component source/implementation
 - `src/pyssp_sysml2/fmi.py`: generates `modelDescription.xml` files
+- `src/pyssp_sysml2/ssp.py`: packages the SSD, built FMUs, and applied SSVs
+  into an `.ssp` archive
 - `src/pyssp_sysml2/sysml.py`: generates a minimal SysML model from SSD
 - `src/pyssp_sysml2/sync.py`: syncs SSD composition edits back into SysML
 - `src/pyssp_sysml2/cli.py`: CLI entrypoint (`pyssp`)
@@ -80,8 +82,9 @@ Behavior:
 - Uses small explicit SysML snippets written per test case under `tmp_path`
 - `tests/test_parameter_sets.py` covers SSV/SSM and SSD/FMI parameter output,
   identity bindings, multiple disjoint sets, and dialect validation;
-  `test_generate_sysml.py`, `test_sync.py`, and `test_roundtrip.py` cover
-  SSD-to-SysML synthesis, nested part paths, nested SSD systems, and round-trips
+  `test_generate_sysml.py`, `test_generate_ssp.py`, `test_sync.py`, and
+  `test_roundtrip.py` cover SSD-to-SysML synthesis, SSP packaging, nested part
+  paths, nested SSD systems, and round-trips
 - Follows a one-model-per-behavior style where practical, to keep test intent explicit
 - Keeps generated artifacts inside pytest temporary directories
 - Treats readability of tests as a primary concern because this repo is used for experimentation as well as regression coverage
@@ -108,6 +111,7 @@ Subcommands:
 - `pyssp generate ssv`
 - `pyssp generate ssm`
 - `pyssp generate fmi`
+- `pyssp generate ssp`
 - `pyssp generate sysml`
 - `pyssp sync ssd`
 
