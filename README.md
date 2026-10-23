@@ -315,7 +315,10 @@ pyssp generate ssp \
 external tool, run `sync ssd` first so the architecture reflects those edits.
 
 `generate ssp` requires `fmu_meta.source` on every leaf component. Each source
-may be a `.fmu` file or an extracted FMU directory. The archive contains:
+may be a `.fmu` file or an extracted FMU directory. `--allow-missing-fmus`
+exports the same structure while a source is missing or not built yet; the
+archive then references `resources/<name>` without packaging it and must be
+populated (`SSP.attach_fmu`) before it can run. The archive contains:
 
 - `SystemStructure.ssd`
 - `resources/<resource_name>` for each FMU
@@ -539,8 +542,8 @@ Artifact purpose:
 | `[error] ... incompatible ports ...` during `sync ssd` | SSD connects ports of different definitions | Connect only compatible source/destination ports |
 | `[error] Multiple parameter sets bind '...'` | Two sets target the same component parameter | Make the target members disjoint, or use one set |
 | `[error] ... is a flat parameter attribute` | A component declares parameters directly | Move the members into a `port def :> ParameterInterface` and apply a `ParameterSet` with `bind` |
-| `[error] ... has no fmu_meta.source` | `generate ssp` cannot find the built FMU | Add `source` to the leaf component's `FmuMetadata` |
-| `[error] FMU source for ... does not exist` | `fmu_meta.source` points to a missing file/directory, or `--fmu-root` is wrong | Build the FMU first or fix the path/root |
+| `[error] ... has no fmu_meta.source` | `generate ssp` cannot find the built FMU | Add `source` to the leaf component's `FmuMetadata`, or export the structure with `--allow-missing-fmus` and populate it later |
+| `[error] FMU source for ... does not exist` | `fmu_meta.source` points to a missing file/directory, or `--fmu-root` is wrong | Build the FMU first, fix the path/root, or use `--allow-missing-fmus` |
 | `[error] ... is missing variable(s) used by the SSD` | SSD connector names do not match the FMU model description | Rename the SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
 | `[error] ... exposes '...'` | `fmu_meta.implementation` disagrees with the FMU interface type | Set it to `CoSimulation` or `ModelExchange` to match the FMU |
 | `[error] ... pyssp_implementation is no longer supported` | Legacy FMU implementation control attribute | Move `implementation` into `attribute fmu_meta : <Part>FmuMetadata` |

@@ -384,10 +384,15 @@ references unknown part source 'resources/ExternalSink.fmu'
 | An extracted source must be readable as an FMU | FMU/modelDescription error | Add `modelDescription.xml` or fix the directory |
 | Two part definitions cannot share a resource name with different sources | `FMU resource name '...' is used by ... and another part definition` | Set distinct `resource_name`s |
 | SSD connector names must exist in the FMU | `... is missing variable(s) used by the SSD` | Rename SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
+| SSD connector kinds must match the FMU causality | `connector '...' is '...' in the SSD but '...' in ...` | Fix the port direction in SysML or use the matching FMU variable |
 | Component implementation must match the FMU interface | `component implementation is '...', but ... exposes '...'` | Set `CoSimulation` or `ModelExchange` to match the FMU |
+| Missing FMUs are allowed only in design-first export | `... has no fmu_meta.source` / `FMU source for ... does not exist` | Add the source, or pass `--allow-missing-fmus` and populate the archive later |
 
-`--skip-fmu-validation` bypasses the model-description name and implementation
-checks. It still requires every source to exist and packages the FMUs.
+`--skip-fmu-validation` bypasses the model-description name, connector-kind,
+and implementation checks. It still requires every source to exist and packages
+the FMUs. `--allow-missing-fmus` additionally tolerates missing metadata,
+sources, and files; pending components are exported without a resource and are
+reported as warnings.
 
 ## 10. Warnings
 

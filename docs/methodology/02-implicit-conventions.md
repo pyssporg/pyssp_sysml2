@@ -489,7 +489,8 @@ Use this when adding a new model pattern:
 - [ ] Does each parameterized part have at most one `parameters` port?
 - [ ] Are all component parameters declared in a parameter interface?
 - [ ] Is FMU metadata (`fmu_meta`) only on leaf component definitions?
-- [ ] Does every leaf have `fmu_meta.source` before running `generate ssp`?
+- [ ] Does every leaf have `fmu_meta.source`, or is the model exported with
+      `--allow-missing-fmus` and populated later?
 - [ ] Is a part with subparts intended as a system, not an FMU?
 - [ ] Does a connection use compatible port definitions?
 - [ ] Are parameter binds at the composition root, not inside nested part

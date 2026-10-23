@@ -434,3 +434,64 @@ def test_pyssp_generate_ssp_cli(tmp_path: Path) -> None:
     assert code == 0
     assert output_path.exists()
     assert _component(output_path).source == "resources/Comp.fmu"
+
+
+def test_generate_ssp_allows_missing_source_metadata(tmp_path: Path) -> None:
+    """Design-first export keeps the component and expects its resource."""
+    architecture_dir = _write_architecture(tmp_path / "arch", source=None)
+    output_path = tmp_path / "model.ssp"
+
+    with pytest.warns(UserWarning, match="Comp: FMU source is missing"):
+        generate_ssp(
+            architecture_dir,
+            output_path,
+            COMPOSITION_NAME,
+            allow_missing_fmus=True,
+        )
+
+    with zipfile.ZipFile(output_path, "r") as archive:
+        assert set(archive.namelist()) == {
+            "SystemStructure.ssd",
+            "resources/parameter_sets/NominalSet.ssv",
+        }
+
+    component = _component(output_path)
+    assert component.source == "resources/Comp.fmu"
+    assert component.implementation == "CoSimulation"
+
+
+def test_generate_ssp_allows_missing_fmu_file(tmp_path: Path) -> None:
+    architecture_dir = _write_architecture(
+        tmp_path / "arch", source=str(tmp_path / "Missing.fmu")
+    )
+    output_path = tmp_path / "model.ssp"
+
+    with pytest.warns(UserWarning, match="FMU source is missing"):
+        generate_ssp(
+            architecture_dir,
+            output_path,
+            COMPOSITION_NAME,
+            allow_missing_fmus=True,
+        )
+
+    with zipfile.ZipFile(output_path, "r") as archive:
+        assert "resources/Comp.fmu" not in archive.namelist()
+
+    assert _component(output_path).source == "resources/Comp.fmu"
+
+
+def test_generate_ssp_still_validates_present_fmus_in_design_mode(
+    tmp_path: Path,
+) -> None:
+    architecture_dir = _write_architecture(
+        tmp_path / "arch", source=str(tmp_path / "Comp.fmu")
+    )
+    _write_mismatched_fmu(tmp_path / "Comp.fmu")
+
+    with pytest.raises(ValueError, match="missing variable"):
+        generate_ssp(
+            architecture_dir,
+            tmp_path / "model.ssp",
+            COMPOSITION_NAME,
+            allow_missing_fmus=True,
+        )

@@ -371,7 +371,8 @@ AircraftComposition.ssp
 
 Rules:
 
-- Every leaf component must have `fmu_meta.source`.
+- Every leaf component must have `fmu_meta.source`, unless
+  `--allow-missing-fmus` exports a design whose FMUs are not built yet.
 - `source` may be a `.fmu` file or an extracted FMU directory. Directories are
   packaged as `.fmu` entries on archive commit.
 - `resource_name` determines the bundled `resources/<name>`; the default is
@@ -392,6 +393,41 @@ The variable-name check is intentionally strict: an SSD connector that does
 not exist in the FMU would make the packaged system fail to instantiate. This
 is especially relevant for Modelica FMUs, whose record/array names can be
 flattened differently from the structured SysML port names.
+
+### Design-first export
+
+A design often exists before the FMUs do. `--allow-missing-fmus` exports that
+design as an SSP:
+
+```bash
+pyssp generate ssp \
+  --architecture architecture \
+  --composition System \
+  --output build/design.ssp \
+  --allow-missing-fmus
+```
+
+A leaf whose `fmu_meta` is missing, has no `source`, or points at a path that
+does not exist is *pending*: its SSD component and connectors are written, its
+`source` is `resources/<resource_name>` (default `<PartDefinition>.fmu`), no
+resource is packaged, and FMU validation skips it. Present FMUs are still
+packaged and validated, and a warning names each pending component.
+
+The result is a structurally complete design artifact, not a runnable SSP.
+Populate it with the built binaries and check the result:
+
+```python
+from pyssp_standard import SSP
+
+with SSP("build/design.ssp", mode="a") as ssp:
+    ssp.attach_fmu("source", "build/CsvSource.fmu")
+    ssp.validate_fmu_interfaces()
+```
+
+`attach_fmu` copies the FMU into `resources/`, points the component's
+`source` at it, and checks connector names, connector kinds, and the
+implementation by default. Once populated, the archive is an ordinary SSP: it
+can be simulated, reopened, or unpacked to use the FMUs individually.
 
 ## 7. SysML from SSD
 

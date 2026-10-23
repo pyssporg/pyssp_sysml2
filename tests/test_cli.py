@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import zipfile
 from pathlib import Path
 
+import pytest
 from pyssp_standard.ssd import SSD
 
 from pyssp_sysml2.cli import main
@@ -261,3 +263,28 @@ def test_pyssp_generate_ssd_cli_parameter_set_prefix(tmp_path: Path) -> None:
     with SSD(output, mode="r") as ssd:
         [binding] = ssd.xml.system.parameter_bindings
         assert binding.source == "custom_sets/NominalSet.ssv"
+
+
+def test_pyssp_generate_ssp_cli_allows_missing_fmus(tmp_path: Path) -> None:
+    """CLI generate ssp exports a design structure without built FMUs."""
+    architecture_dir = write_cli_architecture(tmp_path / "arch")
+    output = tmp_path / "design.ssp"
+
+    with pytest.warns(UserWarning, match="FMU source is missing"):
+        code = main(
+            [
+                "generate",
+                "ssp",
+                "--architecture",
+                str(architecture_dir),
+                "--composition",
+                COMPOSITION_NAME,
+                "--output",
+                str(output),
+                "--allow-missing-fmus",
+            ]
+        )
+
+    assert code == 0
+    with zipfile.ZipFile(output, "r") as archive:
+        assert set(archive.namelist()) == {"SystemStructure.ssd"}

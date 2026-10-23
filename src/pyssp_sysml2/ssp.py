@@ -15,12 +15,16 @@ inputs produce byte-identical ``.ssp`` archives.
 from __future__ import annotations
 
 import tempfile
+import warnings
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
 from pyssp_standard import FMU, copy_resource_directory
 from pyssp_standard.ssd import Component, SSD, System
 from pyssp_standard.ssp import SSP
+from pyssp_standard.standard.ssp1.validation.ssd_fmu_validation import (
+    validate_component_fmu,
+)
 
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
 from pyssp_sysml2.fmu_metadata import fmu_metadata
@@ -41,7 +45,7 @@ DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
 @dataclass(frozen=True)
 class _FmuResource:
     part_def: PartDefinition
-    source: Path
+    source: Path | None
     resource_name: str
 
 
@@ -60,6 +64,8 @@ def _collect_fmu_resources(
     architecture: Architecture,
     system: PartDefinition,
     fmu_root: Path | None,
+    *,
+    allow_missing: bool = False,
 ) -> list[_FmuResource]:
     resources: list[_FmuResource] = []
     for part_def in component_definitions(architecture, system):
@@ -67,17 +73,28 @@ def _collect_fmu_resources(
             continue
 
         metadata = fmu_metadata(architecture, part_def)
+        resource_name = (
+            metadata.resource_name
+            if metadata is not None and metadata.resource_name
+            else _default_resource_name(part_def)
+        )
         if metadata is None or not metadata.source:
-            raise ValueError(
-                f"{part_def.name} has no fmu_meta.source; generate ssp requires "
-                "the built FMU path in typed FMU metadata"
-            )
+            if not allow_missing:
+                raise ValueError(
+                    f"{part_def.name} has no fmu_meta.source; generate ssp "
+                    "requires the built FMU path in typed FMU metadata"
+                )
+            resources.append(_FmuResource(part_def, None, resource_name))
+            continue
 
         source = _resolve_fmu_source(metadata.source, fmu_root)
         if not source.exists():
-            raise FileNotFoundError(
-                f"FMU source for {part_def.name} does not exist: {source}"
-            )
+            if not allow_missing:
+                raise FileNotFoundError(
+                    f"FMU source for {part_def.name} does not exist: {source}"
+                )
+            resources.append(_FmuResource(part_def, None, resource_name))
+            continue
         if source.is_file() and source.suffix.lower() != ".fmu":
             raise ValueError(
                 f"FMU source for {part_def.name} must be a .fmu file or an "
@@ -93,37 +110,10 @@ def _collect_fmu_resources(
             _FmuResource(
                 part_def=part_def,
                 source=source,
-                resource_name=(
-                    metadata.resource_name or _default_resource_name(part_def)
-                ),
+                resource_name=resource_name,
             )
         )
     return resources
-
-
-def _interface_types(model_description) -> set[str]:
-    interface_type = getattr(model_description, "interface_type", None)
-    if interface_type:
-        return {interface_type}
-
-    # FMI 3 describes the supported interfaces with child elements instead of
-    # a single interfaceType attribute.
-    interfaces: set[str] = set()
-    if getattr(model_description, "co_simulation", None) is not None:
-        interfaces.add("CoSimulation")
-    if getattr(model_description, "model_exchange", None) is not None:
-        interfaces.add("ModelExchange")
-    if getattr(model_description, "scheduled_execution", None) is not None:
-        interfaces.add("ScheduledExecution")
-    return interfaces
-
-
-def _open_fmu(source: Path) -> tuple[set[str], set[str]]:
-    with FMU(source, mode="r") as fmu:
-        with fmu.model_description as model_description:
-            names = {variable.name for variable in model_description.xml.variables}
-            interfaces = _interface_types(model_description.xml)
-    return names, interfaces
 
 
 def _iter_components(system: System):
@@ -136,57 +126,42 @@ def _iter_components(system: System):
 
 def _validate_ssd_components(
     system: System,
-    resources: dict[str, Path],
+    resources: dict[str, Path | None],
 ) -> None:
     resources_by_source = {
         f"resources/{resource_name}": source
         for resource_name, source in resources.items()
     }
-    fmu_info: dict[Path, tuple[set[str], set[str]]] = {}
+    model_descriptions: dict[Path, object] = {}
 
     for component in _iter_components(system):
-        source = resources_by_source.get(component.source)
-        if source is None:
+        if component.source not in resources_by_source:
             raise ValueError(
                 f"SSD component '{component.name}' references unknown FMU "
                 f"resource '{component.source}'"
             )
-        if source not in fmu_info:
-            fmu_info[source] = _open_fmu(source)
-        variable_names, interface_types = fmu_info[source]
-
-        expected_names = {connector.name for connector in component.connectors}
-        missing = sorted(expected_names - variable_names)
-        if missing:
-            preview = ", ".join(missing[:8])
-            if len(missing) > 8:
-                preview = f"{preview}, ..."
-            raise ValueError(
-                f"{component.name}: FMU {source} is missing variable(s) used "
-                f"by the SSD: {preview}. SSD connector names must match the "
-                "FMU modelDescription; rename the SysML ports/parameters or "
-                "the FMU variables, or skip FMU validation."
-            )
-
-        implementation = component.implementation
-        if (
-            implementation
-            and interface_types
-            and implementation.lower()
-            not in {item.lower() for item in interface_types}
-        ):
-            exposed = ", ".join(sorted(interface_types))
-            raise ValueError(
-                f"{component.name}: component implementation is "
-                f"'{implementation}', but {source} exposes '{exposed}'"
-            )
+        source = resources_by_source[component.source]
+        if source is None:
+            # Design-first export: the resource is intentionally not packaged.
+            continue
+        if source not in model_descriptions:
+            with FMU(source, mode="r") as fmu:
+                with fmu.model_description as md:
+                    model_descriptions[source] = md.xml
+        validate_component_fmu(
+            component,
+            model_descriptions[source],
+            source=str(source),
+        )
 
 
-def _unique_resources(resources: list[_FmuResource]) -> dict[str, Path]:
-    unique: dict[str, Path] = {}
+def _unique_resources(resources: list[_FmuResource]) -> dict[str, Path | None]:
+    unique: dict[str, Path | None] = {}
     for resource in resources:
-        existing = unique.get(resource.resource_name)
-        if existing is not None and existing != resource.source:
+        if (
+            resource.resource_name in unique
+            and unique[resource.resource_name] != resource.source
+        ):
             raise ValueError(
                 f"FMU resource name '{resource.resource_name}' is used by "
                 f"{resource.part_def.name} and another part definition with a "
@@ -238,6 +213,7 @@ def generate_ssp(
     fmu_root: Path | None = None,
     type_check: bool = True,
     validate_fmus: bool = True,
+    allow_missing_fmus: bool = False,
 ) -> Path:
     """Build an ``.ssp`` archive from a SysML architecture and its built FMUs.
 
@@ -248,6 +224,12 @@ def generate_ssp(
     When ``validate_fmus`` is true (the default), each FMU's
     ``modelDescription.xml`` is checked against the generated SSD connector
     names and the requested ``fmu_meta.implementation``.
+
+    When ``allow_missing_fmus`` is true, leaf components whose FMU metadata or
+    source is missing are exported with their SSD component and expected
+    ``resources/<name>`` source, but their FMU is not packaged. The archive is
+    then a design artifact until the FMUs are attached with
+    ``SSP.attach_fmu``.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
@@ -261,7 +243,17 @@ def generate_ssp(
         )
     validate_parameter_dialect(architecture, system)
 
-    fmu_resources = _collect_fmu_resources(architecture, system, fmu_root)
+    fmu_resources = _collect_fmu_resources(
+        architecture, system, fmu_root, allow_missing=allow_missing_fmus
+    )
+    for resource in fmu_resources:
+        if resource.source is None:
+            warnings.warn(
+                f"{resource.part_def.name}: FMU source is missing; the SSD "
+                f"references 'resources/{resource.resource_name}' without "
+                "packaging it",
+                stacklevel=2,
+            )
     set_definitions = parameter_sets_for_generation(architecture, system)
     unique_resources = _unique_resources(fmu_resources)
 
@@ -292,6 +284,8 @@ def generate_ssp(
         with SSP(output_path, mode="w") as archive:
             archive.runtime.add_file(ssd_path, target_name="SystemStructure.ssd")
             for resource_name, source in sorted(unique_resources.items()):
+                if source is None:
+                    continue
                 _add_fmu_resource(archive, source, resource_name)
             for definition, ssv_path in ssv_paths:
                 archive.runtime.add_file(

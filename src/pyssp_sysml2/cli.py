@@ -109,6 +109,15 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="Package FMUs without checking modelDescription names/implementation.",
     )
     ssp_parser.add_argument(
+        "--allow-missing-fmus",
+        action="store_true",
+        dest="allow_missing_fmus",
+        help=(
+            "Export the SSP structure when an FMU source is missing or not "
+            "built yet. Populate the archive later with SSP.attach_fmu."
+        ),
+    )
+    ssp_parser.add_argument(
         "--skip_type_check",
         action="store_false",
         help="Avoid type checking during connection linking.",
@@ -243,6 +252,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 fmu_root=args.fmu_root,
                 type_check=args.skip_type_check,
                 validate_fmus=args.validate_fmus,
+                allow_missing_fmus=args.allow_missing_fmus,
             )
             print(f"SSP written to {output}")
             return 0
