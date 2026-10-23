@@ -173,6 +173,116 @@ def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) 
     }
 
 
+MODEL_OWNED_SCENARIO_ARCHITECTURE = """\
+package ModelOwnedStudy {
+  part def SspModel;
+  part def Study;
+
+  port def ParameterInterface;
+  attribute def ParameterSet;
+
+  port def LeafParameters :> ParameterInterface {
+    attribute k : Real;
+  }
+
+  attribute def ScenarioSet :> ParameterSet {
+    attribute k = 2.0;
+  }
+
+  attribute def Experiment {
+    attribute startTime : Real;
+    attribute stopTime : Real;
+    attribute stepSize : Real;
+  }
+
+  attribute def BaselineExperiment :> Experiment {
+    attribute startTime = 0.0;
+    attribute stopTime = 1.0;
+    attribute stepSize = 0.1;
+  }
+
+  part def Leaf {
+    in port parameters : LeafParameters;
+  }
+
+  part def System :> SspModel {
+    attribute scenario : ScenarioSet;
+    part leaf : Leaf;
+    bind leaf.parameters.k = scenario.k;
+  }
+
+  part def baseline :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    part sut : System;
+  }
+}
+"""
+
+
+def test_generate_study_with_model_owned_scenario_writes_experiment_only(
+    tmp_path: Path,
+) -> None:
+    architecture = tmp_path / "model_owned.sysml"
+    architecture.write_text(MODEL_OWNED_SCENARIO_ARCHITECTURE, encoding="utf-8")
+    output = tmp_path / "study"
+
+    artifacts = generate_study(
+        architecture,
+        output,
+        "baseline",
+        model_name="model_owned",
+    )
+
+    assert artifacts.ssv is None
+    assert artifacts.ssm is None
+    assert artifacts.scenario_set is None
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert "scenario" not in descriptor
+
+
+def test_generate_study_rejects_study_scenario_when_model_owns_one(
+    tmp_path: Path,
+) -> None:
+    architecture = tmp_path / "conflict.sysml"
+    architecture.write_text(
+        MODEL_OWNED_SCENARIO_ARCHITECTURE.replace(
+            """  part def baseline :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    part sut : System;
+  }""",
+            """  part def baseline :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    attribute scenario : ScenarioSet;
+    part sut : System;
+    bind sut.leaf.parameters.k = scenario.k;
+  }""",
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="already applies one"):
+        generate_study(
+            architecture,
+            tmp_path / "study",
+            "baseline",
+            model_name="model_owned",
+        )
+
+
+def test_generate_ssd_emits_model_owned_parameter_binding(tmp_path: Path) -> None:
+    from pyssp_sysml2.ssd import generate_ssd
+
+    architecture = tmp_path / "model_owned.sysml"
+    architecture.write_text(MODEL_OWNED_SCENARIO_ARCHITECTURE, encoding="utf-8")
+    output = tmp_path / "SystemStructure.ssd"
+
+    generate_ssd(architecture, output, "System")
+
+    text = output.read_text(encoding="utf-8")
+    assert 'ParameterBinding source="parameter_sets/ScenarioSet.ssv"' in text
+    assert 'MappingEntry source="k" target="leaf.k"' in text
+
+
 def test_generate_ssp_rejects_study(tmp_path: Path) -> None:
     from pyssp_sysml2.ssp import generate_ssp
 

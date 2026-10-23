@@ -29,7 +29,7 @@ from pyssp_sysml2.fmu_metadata import (
     is_fmu_metadata_definition,
     validate_retired_control_attributes,
 )
-from pyssp_sysml2.roles import is_study
+from pyssp_sysml2.roles import is_ssp_model, is_study
 from pyssp_sysml2.ssp_metadata import (
     is_ssp_metadata_definition,
     ssp_metadata,
@@ -637,6 +637,9 @@ def applied_sets(
         if ref.part_def.name in seen_definitions:
             continue
         seen_definitions.add(ref.part_def.name)
+        if is_ssp_model(architecture, ref.part_def):
+            # Model-owned bindings belong to the exported model, not the study.
+            continue
         if any(
             parameter_bind(binding) is not None
             for binding in ref.part_def.bindings
@@ -878,6 +881,11 @@ def _reject_flat_attributes(
             continue
         if _is_ssp_metadata_attribute(architecture, attribute):
             ssp_metadata(architecture, part_def)
+            continue
+        definition = architecture.resolve_attribute_def(attribute)
+        if is_parameter_set(definition):
+            # A model-owned scenario set usage; applied sets are validated by
+            # mapping_specs and the exporting generator.
             continue
         if name == FMU_METADATA_ATTR:
             raise ValueError(

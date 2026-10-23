@@ -18,6 +18,7 @@ from pathlib import Path
 from pyssp_standard.ssm import SSM
 
 from pyssp_sysml2.parameters import (
+    applied_sets,
     mapping_specs,
     parameter_sets_for_generation,
     validate_marker_definitions,
@@ -83,6 +84,15 @@ def generate_study(
         raise ValueError(
             f"Study '{composition}' must apply at most one scenario parameter "
             f"set; found {names}"
+        )
+
+    model_applications = applied_sets(architecture, model_definition)
+    if model_applications and sets:
+        raise ValueError(
+            f"Study '{composition}' applies a scenario set, but its sut "
+            f"'{model_definition.name}' already applies one. A model-owned "
+            "scenario is fixed for all studies; remove the study set or move "
+            "the scenario to the study."
         )
 
     experiment = read_experiment(architecture, study)
