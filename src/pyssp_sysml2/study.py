@@ -111,7 +111,6 @@ def generate_study(
             "start_time": experiment.start_time,
             "stop_time": experiment.stop_time,
             "step_size": experiment.step_size,
-            "tolerance": experiment.tolerance,
         },
         "scenario": {
             "set": set_definition.name,

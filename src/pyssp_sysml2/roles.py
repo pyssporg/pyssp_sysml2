@@ -33,18 +33,21 @@ SSP_MODEL_MARKER = "SspModel"
 STUDY_MARKER = "Study"
 EXPERIMENT_MARKER = "Experiment"
 
-EXPERIMENT_FIELDS = ("startTime", "stopTime", "stepSize", "tolerance")
+EXPERIMENT_FIELDS = ("startTime", "stopTime", "stepSize")
 
 
 @dataclass(frozen=True)
 class Experiment:
-    """One resolved study experiment."""
+    """One resolved study experiment.
+
+    Tolerance is not part of the experiment: it is a property of the composed
+    FMUs and is read from their model descriptions by the simulation stage.
+    """
 
     name: str
     start_time: float
     stop_time: float
     step_size: float
-    tolerance: float
 
 
 def _short_name(name: str) -> str:
@@ -219,13 +222,10 @@ def read_experiment(
         )
     if values["stepSize"] <= 0:
         raise ValueError(f"Experiment '{definition.name}' stepSize must be positive")
-    if values["tolerance"] <= 0:
-        raise ValueError(f"Experiment '{definition.name}' tolerance must be positive")
 
     return Experiment(
         name=name,
         start_time=values["startTime"],
         stop_time=values["stopTime"],
         step_size=values["stepSize"],
-        tolerance=values["tolerance"],
     )
