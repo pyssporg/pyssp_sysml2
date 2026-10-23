@@ -4,7 +4,6 @@ package Aircraft {
 
   attribute def FmuMetadata {
     attribute source : String;
-    attribute resource_name : String;
     attribute implementation : String;
   }
 
@@ -22,7 +21,6 @@ package Aircraft {
 
   attribute def AutopilotFmu :> FmuMetadata {
     attribute source = "build/fmus/AutopilotModule.fmu";
-    attribute resource_name = "AutopilotModule.fmu";
     attribute implementation = "CoSimulation";
   }
 

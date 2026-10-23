@@ -149,9 +149,9 @@ becomes:
 ```
 
 The **usage name** is the SSD element name (`controller`, `src`, `dst`). The
-**definition name** determines the default FMU resource stem (`Source.fmu`,
-`Sink.fmu`); `fmu_meta.resource_name` can override it. Dots in a definition
-name become underscores in the default FMU filename.
+**definition name** determines the FMU resource stem (`Source.fmu`,
+`Sink.fmu`) when the leaf declares `fmu_meta.source`. Dots in a definition
+name become underscores in the FMU filename.
 
 ### A nested system cannot also be an FMU
 
@@ -322,13 +322,11 @@ Structured FMU metadata uses a typed value definition instead:
 ```sysml
 attribute def FmuMetadata {
   attribute source : String;
-  attribute resource_name : String;
   attribute implementation : String;
 }
 
 attribute def AutopilotFmu :> FmuMetadata {
   attribute source = "build/fmus/AutopilotModule.fmu";
-  attribute resource_name = "AutopilotModule.fmu";
   attribute implementation = "CoSimulation";
 }
 
@@ -340,8 +338,10 @@ part def AutopilotModule {
 Metadata is recognized by type, not by the usage name, and is allowed only on
 leaf component definitions. `source` is the build artifact path and is not
 written to the SSD; `generate ssp` reads it to add the FMU to the archive.
-`resource_name` and `implementation` map to `Component/@source` and
-`Component/@implementation`.
+When a source is declared, `generate ssd` writes
+`Component/@source="resources/<PartDefinition>.fmu"`; `implementation` maps to
+`Component/@implementation`. Without a source the component is exported with an
+empty `source`.
 
 The retired `pyssp_implementation` and `pyssp_parameter_set` attributes are
 rejected with a migration message.
@@ -472,7 +472,7 @@ a model:
 | Parameter values | set | `generate ssv` |
 | SSV file path prefix | no | CLI `--parameter-set-prefix` |
 | Inline vs standalone SSM | no | `generate ssd` inlines explicit mappings; `generate ssm` writes a file |
-| FMU resource path | `fmu_meta.resource_name`, else part definition name | `generate ssd` |
+| FMU resource path | presence via `fmu_meta.source`; name from part definition | `generate ssd` |
 | Implementation string | `fmu_meta.implementation` | `generate ssd` |
 | Built FMU location | `fmu_meta.source` | `generate ssp` |
 | Default experiment | control attributes | `generate ssd` |
@@ -489,8 +489,8 @@ Use this when adding a new model pattern:
 - [ ] Does each parameterized part have at most one `parameters` port?
 - [ ] Are all component parameters declared in a parameter interface?
 - [ ] Is FMU metadata (`fmu_meta`) only on leaf component definitions?
-- [ ] Does every leaf have `fmu_meta.source`, or is the model exported with
-      `--allow-missing-fmus` and populated later?
+- [ ] Does every leaf that must run have `fmu_meta.source`, or is it exported
+      as a design placeholder and populated later?
 - [ ] Is a part with subparts intended as a system, not an FMU?
 - [ ] Does a connection use compatible port definitions?
 - [ ] Are parameter binds at the composition root, not inside nested part

@@ -113,8 +113,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         dest="allow_missing_fmus",
         help=(
-            "Export the SSP structure when an FMU source is missing or not "
-            "built yet. Populate the archive later with SSP.attach_fmu."
+            "Export the SSP structure when a declared FMU source is not built "
+            "yet. Populate the archive later with SSP.attach_fmu. A part "
+            "without fmu_meta.source always exports with an empty source."
         ),
     )
     ssp_parser.add_argument(

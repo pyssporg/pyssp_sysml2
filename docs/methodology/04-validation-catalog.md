@@ -275,9 +275,8 @@ attribute name
 | The marker definition must exist | `missing marker definition 'FmuMetadata'` | Add `attribute def FmuMetadata { ... }` |
 | At most one metadata attribute per part | `declares multiple FMU metadata attributes` | Keep one |
 | Metadata is only allowed on leaf parts | `has both subparts and 'fmu_meta' metadata` | Remove the metadata or the subparts |
-| Only known members are allowed | `declares unsupported member(s): ...` | Use `source`, `resource_name`, `implementation` |
+| Only known members are allowed | `declares unsupported member(s): ...` | Use `source`, `implementation` |
 | Member values must be strings | `must be a String` | Quote the value |
-| `resource_name` must be flat | `must be a flat resource name` | Remove directory separators |
 | `pyssp_implementation` is retired | `pyssp_implementation is no longer supported` | Move it into `fmu_meta` |
 | `pyssp_parameter_set` is retired | `pyssp_parameter_set is no longer supported` | Define a set in SysML and bind it |
 
@@ -286,13 +285,11 @@ Valid metadata:
 ```sysml
 attribute def FmuMetadata {
   attribute source : String;
-  attribute resource_name : String;
   attribute implementation : String;
 }
 
 attribute def CompFmu :> FmuMetadata {
   attribute source = "build/fmus/Comp.fmu";
-  attribute resource_name = "Comp.fmu";
   attribute implementation = "CoSimulation";
 }
 
@@ -360,6 +357,7 @@ Recursive part hierarchy at 'a.b' (A)
 | Boundary ports have a fixed direction | `... is declared as '...' but is used as the start/end of a connection` | Declare it `in` at the start and `out` at the end |
 | Boundary-to-boundary connections are rejected | `... links two boundary ports of ...` | Connect a subpart to the boundary instead |
 | Unknown sources can be rejected | `references unknown part source '...'` | Add the part definition or allow synthesis |
+| An empty component source must match an existing part | `... has no source, so its SysML part definition cannot be resolved` | Name the component after an existing part or give it an FMU source |
 | Unknown ports can be rejected | `Unknown source port ...` / `Unknown destination ...` | Fix the SSD or the model |
 | The composition must exist | `Part not found: ...` | Fix `--composition` |
 
@@ -378,20 +376,20 @@ references unknown part source 'resources/ExternalSink.fmu'
 
 | Rule | Diagnostic | Fix |
 | --- | --- | --- |
-| Every leaf component must carry `fmu_meta.source` | `... has no fmu_meta.source` | Add the built FMU path to the metadata |
-| The FMU source must exist | `FMU source for ... does not exist` | Build the FMU or fix the path / `--fmu-root` |
+| A declared FMU source must exist | `FMU source for ... does not exist` | Build the FMU or fix the path / `--fmu-root`; use `--allow-missing-fmus` to export the design anyway |
 | A file source must be an FMU archive | `must be a .fmu file or an extracted FMU directory` | Pass a `.fmu` file or extracted directory |
 | An extracted source must be readable as an FMU | FMU/modelDescription error | Add `modelDescription.xml` or fix the directory |
-| Two part definitions cannot share a resource name with different sources | `FMU resource name '...' is used by ... and another part definition` | Set distinct `resource_name`s |
+| Two part definitions cannot map to the same resource name with different sources | `FMU resource name '...' is used by ... and another part definition` | Rename one part definition; resource names are derived from it |
 | SSD connector names must exist in the FMU | `... is missing variable(s) used by the SSD` | Rename SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
 | SSD connector kinds must match the FMU causality | `connector '...' is '...' in the SSD but '...' in ...` | Fix the port direction in SysML or use the matching FMU variable |
 | Component implementation must match the FMU interface | `component implementation is '...', but ... exposes '...'` | Set `CoSimulation` or `ModelExchange` to match the FMU |
-| Missing FMUs are allowed only in design-first export | `... has no fmu_meta.source` / `FMU source for ... does not exist` | Add the source, or pass `--allow-missing-fmus` and populate the archive later |
+| A leaf without `fmu_meta.source` is a design placeholder | `...: FMU source is missing; ...` (warning) | Add `source` when the FMU is available; no flag is needed |
 
 `--skip-fmu-validation` bypasses the model-description name, connector-kind,
-and implementation checks. It still requires every source to exist and packages
-the FMUs. `--allow-missing-fmus` additionally tolerates missing metadata,
-sources, and files; pending components are exported without a resource and are
+and implementation checks. It still requires every declared source to exist and
+packages the FMUs. `--allow-missing-fmus` additionally tolerates a declared
+source that does not exist on disk; those components keep
+`resources/<PartDefinition>.fmu`, are exported without a resource, and are
 reported as warnings.
 
 ## 10. Warnings
@@ -401,6 +399,7 @@ Warnings do not stop generation.
 | Warning | Meaning | Action |
 | --- | --- | --- |
 | `Parameter set 'S' members x are not bound to comp; SSP will ignore them` | An explicit-mapping set has valued members that are not part of this application | Expected for partial applications; bind them or ignore |
+| `...: FMU source is missing; ...` | A leaf has no `fmu_meta.source`, or its declared source is absent under `--allow-missing-fmus` | Add `source`, or populate the archive with `SSP.attach_fmu` |
 | DFA cache warning from sysmlpy | Parser cache save failed | Harmless; suppressed by the adapter at import |
 
 ## 11. Things that are valid but look suspicious
@@ -424,7 +423,8 @@ Before running a generator:
 - [ ] Every set usage is typed by a marked set.
 - [ ] No part or composition declares flat parameter attributes.
 - [ ] FMU metadata is only on leaf components and uses known members.
-- [ ] Every leaf has an existing `fmu_meta.source` before `generate ssp`.
+- [ ] Every leaf that must run has an existing `fmu_meta.source`; leaves without
+      one export as empty-source design placeholders.
 - [ ] SSD connector names exist in each FMU's `modelDescription.xml`.
 - [ ] Retired `pyssp_implementation` / `pyssp_parameter_set` attributes are absent.
 - [ ] The composition has no `parameters` port.

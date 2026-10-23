@@ -4,13 +4,11 @@ The dialect is a small value-definition hierarchy::
 
     attribute def FmuMetadata {
       attribute source : String;
-      attribute resource_name : String;
       attribute implementation : String;
     }
 
     attribute def AutopilotFmu :> FmuMetadata {
       attribute source = "build/fmus/Autopilot.fmu";
-      attribute resource_name = "Autopilot.fmu";
       attribute implementation = "CoSimulation";
     }
 
@@ -23,15 +21,16 @@ must be typed by an ``attribute def`` that specializes ``FmuMetadata``. At most
 one such attribute is allowed per part definition.
 
 ``source`` is the build artifact path (a ``.fmu`` file or an extracted FMU
-directory). It is authoring data and is never recovered from an SSD.
-``resource_name`` and ``implementation`` are the fields that map to
-``ssd:Component/@source`` and ``ssd:Component/@implementation``.
+directory). It is authoring data and is never recovered from an SSD. A part
+definition without ``source`` has no FMU yet: its SSD component is exported
+with an empty ``source``. ``implementation`` maps to
+``ssd:Component/@implementation``; the FMU resource name is always derived
+from the part definition name.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from pyssp_sysml2.control import RETIRED_CONTROL_ATTRS
 from pyssp_sysml2.fmi_helpers import fmu_resource_path
@@ -44,7 +43,7 @@ from pyssp_sysml2.sysml_model import (
 
 FMU_METADATA_ATTR = "fmu_meta"
 FMU_METADATA_MARKER = "FmuMetadata"
-FMU_METADATA_FIELDS = ("source", "resource_name", "implementation")
+FMU_METADATA_FIELDS = ("source", "implementation")
 
 
 @dataclass(frozen=True)
@@ -52,7 +51,6 @@ class FmuMetadata:
     """Effective metadata values for one FMU-backed part definition."""
 
     source: str | None = None
-    resource_name: str | None = None
     implementation: str | None = None
 
 
@@ -176,19 +174,6 @@ def _string_member(name: str, attribute: Attribute | None) -> str | None:
     return value
 
 
-def _normalize_resource_name(value: str | None) -> str | None:
-    if value is None:
-        return None
-    if not value or Path(value).name != value or "/" in value or "\\" in value:
-        raise ValueError(
-            f"FMU metadata resource_name '{value}' must be a flat resource "
-            "name without directory separators"
-        )
-    if not value.lower().endswith(".fmu"):
-        value = f"{value}.fmu"
-    return value
-
-
 def fmu_metadata(
     architecture: Architecture, part_def: PartDefinition
 ) -> FmuMetadata | None:
@@ -222,9 +207,6 @@ def fmu_metadata(
 
     return FmuMetadata(
         source=_string_member("source", members.get("source")),
-        resource_name=_normalize_resource_name(
-            _string_member("resource_name", members.get("resource_name"))
-        ),
         implementation=_string_member(
             "implementation", members.get("implementation")
         ),
@@ -232,9 +214,9 @@ def fmu_metadata(
 
 
 def component_source(part_def: PartDefinition, metadata: FmuMetadata | None) -> str:
-    """SSD component source for a part definition."""
-    if metadata is not None and metadata.resource_name:
-        return f"resources/{metadata.resource_name}"
+    """SSD component source; empty when no FMU is authored for the part."""
+    if metadata is None or not metadata.source:
+        return ""
     return fmu_resource_path(part_def.name)
 
 
@@ -286,7 +268,6 @@ def add_fmu_metadata(
     architecture: Architecture,
     part_def: PartDefinition,
     *,
-    resource_name: str | None = None,
     implementation: str | None = None,
     source_file: str,
 ) -> AttributeDefinition:
@@ -298,11 +279,6 @@ def add_fmu_metadata(
             "instead of adding a second metadata attribute"
         )
 
-    normalised_resource_name = _normalize_resource_name(resource_name)
-    default_resource_name = Path(fmu_resource_path(part_def.name)).name
-    if normalised_resource_name == default_resource_name:
-        normalised_resource_name = None
-
     name = _unique_definition_name(
         architecture, _metadata_definition_name(part_def)
     )
@@ -311,15 +287,10 @@ def add_fmu_metadata(
         source_file=source_file,
         specializes=(FMU_METADATA_MARKER,),
     )
-    values = {
-        "resource_name": normalised_resource_name,
-        "implementation": implementation,
-    }
-    for field, value in values.items():
-        if value is not None:
-            definition.attributes[field] = Attribute(
-                name=field, type_name="String", value=value
-            )
+    if implementation is not None:
+        definition.attributes["implementation"] = Attribute(
+            name="implementation", type_name="String", value=implementation
+        )
 
     architecture.add_attribute_def(definition)
     part_def.attributes[FMU_METADATA_ATTR] = Attribute(
@@ -382,26 +353,19 @@ def update_fmu_metadata_from_component(
     *,
     source_file: str,
 ) -> None:
-    """Reconcile ``resource_name`` and ``implementation`` with an SSD component.
+    """Reconcile ``implementation`` with an SSD component.
 
     ``source`` is authoring data and is preserved. No metadata is created when
-    the component carries only default information.
+    the component carries no implementation.
     """
-    resource_name = (
-        Path(component.source).name if getattr(component, "source", None) else None
-    )
     implementation = getattr(component, "implementation", None)
-    default_resource_name = Path(fmu_resource_path(part_def.name)).name
 
     usage = _metadata_usage(architecture, part_def)
     if usage is None:
-        if implementation or (
-            resource_name is not None and resource_name != default_resource_name
-        ):
+        if implementation:
             add_fmu_metadata(
                 architecture,
                 part_def,
-                resource_name=resource_name,
                 implementation=implementation,
                 source_file=source_file,
             )
@@ -411,15 +375,6 @@ def update_fmu_metadata_from_component(
     if _definition_is_shared(architecture, definition, part_def):
         definition = _clone_metadata_definition(
             architecture, definition, part_def, usage_name, source_file
-        )
-
-    if resource_name is None or resource_name == default_resource_name:
-        definition.attributes.pop("resource_name", None)
-    else:
-        definition.attributes["resource_name"] = Attribute(
-            name="resource_name",
-            type_name="String",
-            value=_normalize_resource_name(resource_name),
         )
 
     if implementation:

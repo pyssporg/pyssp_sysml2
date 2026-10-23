@@ -164,7 +164,7 @@ def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
         component = ssd.xml.system.elements[0]
         assert component.name == "src"
         assert component.component_type == "application/x-fmu-sharedlibrary"
-        assert component.source == "resources/Source.fmu"
+        assert component.source == ""
 
 
 def test_generate_ssd_rejects_retired_parameter_set_attribute(tmp_path: Path) -> None:

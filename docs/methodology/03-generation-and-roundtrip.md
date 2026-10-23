@@ -167,9 +167,9 @@ pyssp generate ssd \
 - A leaf part definition becomes an `ssd:Component`.
 - A part definition with subparts becomes a nested `ssd:System`.
 - The part **usage name** becomes the SSD element name.
-- The part **definition name** determines the default `resources/<Definition>.fmu`
-  for a leaf component.
-- `fmu_meta.resource_name` overrides the FMU resource name.
+- The part **definition name** determines `resources/<Definition>.fmu` for a
+  leaf component that declares `fmu_meta.source`.
+- A leaf without `fmu_meta.source` gets an empty `Component/@source`.
 - `fmu_meta.implementation` sets `Component/@implementation`.
 - Connections are written per system level.
 
@@ -178,13 +178,11 @@ pyssp generate ssd \
 ```sysml
 attribute def FmuMetadata {
   attribute source : String;
-  attribute resource_name : String;
   attribute implementation : String;
 }
 
 attribute def AutopilotFmu :> FmuMetadata {
   attribute source = "build/fmus/AutopilotModule.fmu";
-  attribute resource_name = "AutopilotModule.fmu";
   attribute implementation = "CoSimulation";
 }
 
@@ -193,9 +191,10 @@ part def AutopilotModule {
 }
 ```
 
-`generate ssd` writes `source="resources/<resource_name>"` and
-`implementation="<implementation>"`. `source` is authoring/build metadata and
-is not written to the SSD. Metadata on a nested system is rejected.
+`generate ssd` writes `source="resources/<Definition>.fmu"` when the metadata
+declares a source, and `implementation="<implementation>"`. `source` is
+authoring/build metadata and is not written to the SSD. Without a source the
+component is emitted with `source=""`. Metadata on a nested system is rejected.
 
 ### Parameter connectors
 
@@ -371,12 +370,14 @@ AircraftComposition.ssp
 
 Rules:
 
-- Every leaf component must have `fmu_meta.source`, unless
-  `--allow-missing-fmus` exports a design whose FMUs are not built yet.
+- A leaf without `fmu_meta.source` is a design placeholder: empty component
+  `source`, no packaged resource, and a warning. No flag is required.
+- A declared `source` must exist, unless `--allow-missing-fmus` exports the
+  design; the component then keeps `resources/<PartDefinition>.fmu` and nothing
+  is packaged.
 - `source` may be a `.fmu` file or an extracted FMU directory. Directories are
   packaged as `.fmu` entries on archive commit.
-- `resource_name` determines the bundled `resources/<name>`; the default is
-  `<PartDefinition>.fmu`.
+- The bundled resource is always `resources/<PartDefinition>.fmu`.
 - The SSD `ParameterBinding` source and packaged SSV path share
   `--parameter-set-prefix` (default `resources/parameter_sets`).
 - Explicit binds remain inline `ParameterMapping` entries in the SSD; separate
@@ -396,22 +397,22 @@ flattened differently from the structured SysML port names.
 
 ### Design-first export
 
-A design often exists before the FMUs do. `--allow-missing-fmus` exports that
-design as an SSP:
+A design often exists before the FMUs do. A leaf with no `fmu_meta.source`
+(or no metadata at all) is exported without any flag:
 
 ```bash
 pyssp generate ssp \
   --architecture architecture \
   --composition System \
-  --output build/design.ssp \
-  --allow-missing-fmus
+  --output build/design.ssp
 ```
 
-A leaf whose `fmu_meta` is missing, has no `source`, or points at a path that
-does not exist is *pending*: its SSD component and connectors are written, its
-`source` is `resources/<resource_name>` (default `<PartDefinition>.fmu`), no
-resource is packaged, and FMU validation skips it. Present FMUs are still
-packaged and validated, and a warning names each pending component.
+Its SSD component and connectors are written, its `source` is empty, no
+resource is packaged, and FMU validation skips it. A warning names each such
+component. A declared `source` that is not on disk is an error unless
+`--allow-missing-fmus` is passed; in that case the component keeps
+`resources/<PartDefinition>.fmu` as its source and no resource is packaged.
+Present FMUs are still packaged and validated.
 
 The result is a structurally complete design artifact, not a runnable SSP.
 Populate it with the built binaries and check the result:
@@ -466,12 +467,12 @@ The generated model:
 - synthesizes parameter sets from SSV names and values;
 - synthesizes `parameters` ports and `bind` statements;
 - recursively synthesizes nested systems, parts, ports, and connections;
-- emits `fmu_meta` for non-default source/implementation values, but cannot
-  recover the original `source` path;
+- emits `fmu_meta` for a non-default implementation, but cannot recover the
+  original `source` path;
 - writes everything to `architecture.sysml` by default.
 
-Add `fmu_meta.source` to each leaf before running `generate ssp` on a
-bootstrapped model.
+Add `fmu_meta.source` to each leaf before expecting a runnable SSP from a
+bootstrapped model; without it the leaves are exported with an empty source.
 
 Example identity synthesis:
 
@@ -613,7 +614,7 @@ through a parameter interface and SysML-defined sets.
 | Identity/explicit binding intent | Identity → prefix; explicit → mapping |
 | Nested system structure | Nested SSD `System` ↔ nested part definition/usage |
 | Connections | Per system level, including connections to the enclosing system's ports (bare-name ends) |
-| FMU metadata | `fmu_meta` resource name and implementation |
+| FMU metadata | `fmu_meta` implementation |
 | Control metadata | Default experiment |
 | Unrelated definitions and file layout | `sync` preserves them; `generate sysml` starts fresh |
 
@@ -638,7 +639,7 @@ through a parameter interface and SysML-defined sets.
 | Set inheritance/union | Not implemented; see proposal |
 | Original multi-file layout in `generate sysml` | It writes one synthesized file |
 | Distinction between an empty SSD `System` and a leaf component | No structural marker |
-| Built FMU path (`fmu_meta.source`) | SSD only stores the packaged resource name |
+| Built FMU path (`fmu_meta.source`) | SSD stores only the resource reference; a recovered model has no source, so regenerated components are exported with an empty `source` |
 | Exact source formatting/docs | Synthesis produces a repo-owned model |
 
 ## 10. Practical ordering

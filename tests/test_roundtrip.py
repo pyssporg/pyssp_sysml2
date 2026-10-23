@@ -236,9 +236,9 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     generated = roundtrip_arch / "architecture.sysml"
     generate_sysml_from_ssd(first_ssd, generated)
     text = generated.read_text()
-    assert "port def InnerParameters :> ParameterInterface" in text
+    assert "port def innerParameters :> ParameterInterface" in text
     assert "part def outer" in text
-    assert "part inner : Inner;" in text
+    assert "part inner : inner;" in text
     assert "bind outer.inner.parameters.k = Nom.k;" in text
 
     second_ssd = tmp_path / "regenerated.ssd"

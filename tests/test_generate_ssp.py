@@ -19,7 +19,6 @@ def _write_architecture(
     root: Path,
     *,
     source: str | None,
-    resource_name: str | None = "Comp.fmu",
     implementation: str | None = "CoSimulation",
     parameterized: bool = True,
     flat_connector: bool = False,
@@ -27,8 +26,6 @@ def _write_architecture(
     fields = []
     if source is not None:
         fields.append(f'attribute source = "{source}";')
-    if resource_name is not None:
-        fields.append(f'attribute resource_name = "{resource_name}";')
     if implementation is not None:
         fields.append(f'attribute implementation = "{implementation}";')
     metadata_fields = "\n    ".join(fields)
@@ -63,7 +60,6 @@ def _write_architecture(
 
           attribute def FmuMetadata {{
             attribute source : String;
-            attribute resource_name : String;
             attribute implementation : String;
           }}
 
@@ -238,15 +234,6 @@ def test_generate_ssp_without_parameter_sets(tmp_path: Path) -> None:
             assert ssd.xml.system.parameter_bindings == []
 
 
-def test_generate_ssp_requires_fmu_source_metadata(tmp_path: Path) -> None:
-    architecture_dir = _write_architecture(tmp_path / "arch", source=None)
-
-    with pytest.raises(ValueError, match="no fmu_meta.source"):
-        generate_ssp(
-            architecture_dir, tmp_path / "model.ssp", COMPOSITION_NAME
-        )
-
-
 def test_generate_ssp_rejects_missing_fmu_file(tmp_path: Path) -> None:
     architecture_dir = _write_architecture(
         tmp_path / "arch", source=str(tmp_path / "Missing.fmu")
@@ -315,27 +302,10 @@ def test_generate_ssp_rejects_implementation_mismatch(tmp_path: Path) -> None:
         )
 
 
-def test_generate_ssp_uses_resource_name_for_file_source(tmp_path: Path) -> None:
-    architecture_dir = _write_architecture(
-        tmp_path / "arch",
-        source=str(tmp_path / "Built.fmu"),
-        resource_name="Renamed.fmu",
-    )
-    _build_fmu(architecture_dir, tmp_path / "Built.fmu")
-    output_path = tmp_path / "model.ssp"
-
-    generate_ssp(architecture_dir, output_path, COMPOSITION_NAME)
-
-    with zipfile.ZipFile(output_path, "r") as archive:
-        assert "resources/Renamed.fmu" in archive.namelist()
-    assert _component(output_path).source == "resources/Renamed.fmu"
-
-
 def test_generate_ssp_packages_extracted_fmu_directory(tmp_path: Path) -> None:
     architecture_dir = _write_architecture(
         tmp_path / "arch",
         source=str(tmp_path / "extracted"),
-        resource_name="Renamed.fmu",
     )
     model_description_dir = tmp_path / "model_descriptions"
     generate_model_descriptions(
@@ -352,11 +322,11 @@ def test_generate_ssp_packages_extracted_fmu_directory(tmp_path: Path) -> None:
     generate_ssp(architecture_dir, output_path, COMPOSITION_NAME)
 
     with zipfile.ZipFile(output_path, "r") as archive:
-        assert "resources/Renamed.fmu" in archive.namelist()
+        assert "resources/Comp.fmu" in archive.namelist()
 
     with SSP(output_path, mode="r") as ssp:
-        assert "Renamed.fmu" in ssp.resources
-        assert ssp.runtime.resolve("resources/Renamed.fmu").is_file()
+        assert "Comp.fmu" in ssp.resources
+        assert ssp.runtime.resolve("resources/Comp.fmu").is_file()
 
 
 def test_generate_ssp_packages_nested_component(tmp_path: Path) -> None:
@@ -367,7 +337,6 @@ def test_generate_ssp_packages_nested_component(tmp_path: Path) -> None:
         package Example {{
           attribute def FmuMetadata {{
             attribute source : String;
-            attribute resource_name : String;
             attribute implementation : String;
           }}
 
@@ -436,18 +405,13 @@ def test_pyssp_generate_ssp_cli(tmp_path: Path) -> None:
     assert _component(output_path).source == "resources/Comp.fmu"
 
 
-def test_generate_ssp_allows_missing_source_metadata(tmp_path: Path) -> None:
-    """Design-first export keeps the component and expects its resource."""
+def test_generate_ssp_exports_design_without_fmu_source(tmp_path: Path) -> None:
+    """A part without fmu_meta.source needs no flag and gets an empty source."""
     architecture_dir = _write_architecture(tmp_path / "arch", source=None)
     output_path = tmp_path / "model.ssp"
 
     with pytest.warns(UserWarning, match="Comp: FMU source is missing"):
-        generate_ssp(
-            architecture_dir,
-            output_path,
-            COMPOSITION_NAME,
-            allow_missing_fmus=True,
-        )
+        generate_ssp(architecture_dir, output_path, COMPOSITION_NAME)
 
     with zipfile.ZipFile(output_path, "r") as archive:
         assert set(archive.namelist()) == {
@@ -456,7 +420,7 @@ def test_generate_ssp_allows_missing_source_metadata(tmp_path: Path) -> None:
         }
 
     component = _component(output_path)
-    assert component.source == "resources/Comp.fmu"
+    assert component.source == ""
     assert component.implementation == "CoSimulation"
 
 

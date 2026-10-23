@@ -275,13 +275,11 @@ schema is a normal `attribute def` hierarchy:
 ```sysml
 attribute def FmuMetadata {
   attribute source : String;         // built .fmu file or extracted FMU dir
-  attribute resource_name : String;  // name under resources/
   attribute implementation : String;
 }
 
 attribute def AutopilotFmu :> FmuMetadata {
   attribute source = "build/fmus/AutopilotModule.fmu";
-  attribute resource_name = "AutopilotModule.fmu";
   attribute implementation = "CoSimulation";
 }
 
@@ -290,11 +288,13 @@ part def AutopilotModule {
 }
 ```
 
-`generate ssd` uses `resource_name` for `Component/@source` and
-`implementation` for `Component/@implementation`. `source` is authoring/build
-metadata, is not written to the SSD, and is consumed by `generate ssp`. If
-metadata is absent, the source defaults to `resources/<PartDef>.fmu` and no
-implementation is written.
+When the metadata declares `source`, `generate ssd` writes
+`Component/@source="resources/<PartDef>.fmu"`; `implementation` becomes
+`Component/@implementation`. `source` is authoring/build metadata, is not
+written to the SSD, and is consumed by `generate ssp`. A leaf without
+`fmu_meta.source` (or without metadata at all) is a design placeholder: its
+component is exported with an empty `source`. A declared `implementation` is
+still written.
 
 Metadata is only valid on leaf part definitions. Nested systems and the
 composition cannot declare it.
@@ -314,14 +314,17 @@ pyssp generate ssp \
 `generate ssp` always builds the SSD from SysML. If you edited an SSD in an
 external tool, run `sync ssd` first so the architecture reflects those edits.
 
-`generate ssp` requires `fmu_meta.source` on every leaf component. Each source
-may be a `.fmu` file or an extracted FMU directory. `--allow-missing-fmus`
-exports the same structure while a source is missing or not built yet; the
-archive then references `resources/<name>` without packaging it and must be
-populated (`SSP.attach_fmu`) before it can run. The archive contains:
+Each `fmu_meta.source` may be a `.fmu` file or an extracted FMU directory. A
+leaf without `fmu_meta.source` needs no flag: it is exported with an empty
+`Component/@source`, no resource is packaged, and a warning names it. The
+archive is then a design artifact that must be populated (`SSP.attach_fmu`)
+before it can run. A *declared* source that does not exist on disk is an error
+unless `--allow-missing-fmus` is passed; that path keeps
+`resources/<PartDef>.fmu` as the component source without packaging it. The
+archive contains:
 
 - `SystemStructure.ssd`
-- `resources/<resource_name>` for each FMU
+- `resources/<PartDef>.fmu` for each packaged FMU
 - `<parameter-set-prefix>/<Set>.ssv` for each applied set
   (default prefix `resources/parameter_sets`)
 
@@ -348,9 +351,9 @@ contains parameter connectors or `ParameterBinding` entries, the generated
 model also gets parameter interfaces, sets, `parameters` ports, and `bind`
 statements.
 
-`Component/@source` and `implementation` become `fmu_meta` metadata when they
-differ from the defaults. The original build path cannot be recovered from an
-SSD, so add `source` to each leaf's `FmuMetadata` before running
+`Component/@implementation` becomes `fmu_meta` metadata when it is set. The
+original build path cannot be recovered from an SSD, so the recovered model has
+no `source`; add `source` to each leaf's `FmuMetadata` before running
 `generate ssp`.
 
 ## 3) Sync Back from SSD to SysML
@@ -421,9 +424,11 @@ preserved by `pyssp generate ssd` and skipped by the SSV/FMI generators:
 | `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
 | Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
 
-`Component/@source` is normally derived from the part definition name.
-`fmu_meta.resource_name` can override it in hand-authored models, and `sync`
-preserves that override.
+`Component/@source` is derived from the part definition name
+(`resources/<PartDef>.fmu`) when the leaf declares `fmu_meta.source`; with no
+source it is exported empty. `generate sysml` and `sync` cannot recover the
+build path, so add `fmu_meta.source` before regenerating an SSP from a
+recovered model.
 
 Parameter values are read from the bound SSV and written into synthesized set
 definitions. A generated architecture therefore shows the effective values
@@ -452,7 +457,7 @@ generate_parameter_sets(
     architecture, Path("build/generated/parameter_sets"), composition
 )
 generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
-# Requires the built FMUs at each leaf's fmu_meta.source.
+# Leaves without a built source are exported as design placeholders.
 generate_ssp(
     architecture,
     Path("build/generated/AircraftComposition.ssp"),
@@ -542,8 +547,7 @@ Artifact purpose:
 | `[error] ... incompatible ports ...` during `sync ssd` | SSD connects ports of different definitions | Connect only compatible source/destination ports |
 | `[error] Multiple parameter sets bind '...'` | Two sets target the same component parameter | Make the target members disjoint, or use one set |
 | `[error] ... is a flat parameter attribute` | A component declares parameters directly | Move the members into a `port def :> ParameterInterface` and apply a `ParameterSet` with `bind` |
-| `[error] ... has no fmu_meta.source` | `generate ssp` cannot find the built FMU | Add `source` to the leaf component's `FmuMetadata`, or export the structure with `--allow-missing-fmus` and populate it later |
-| `[error] FMU source for ... does not exist` | `fmu_meta.source` points to a missing file/directory, or `--fmu-root` is wrong | Build the FMU first, fix the path/root, or use `--allow-missing-fmus` |
+| `[error] FMU source for ... does not exist` | Declared `fmu_meta.source` points to a missing file/directory, or `--fmu-root` is wrong | Build the FMU first, fix the path/root, or use `--allow-missing-fmus` |
 | `[error] ... is missing variable(s) used by the SSD` | SSD connector names do not match the FMU model description | Rename the SysML ports/parameters or FMU variables, or use `--skip-fmu-validation` |
 | `[error] ... exposes '...'` | `fmu_meta.implementation` disagrees with the FMU interface type | Set it to `CoSimulation` or `ModelExchange` to match the FMU |
 | `[error] ... pyssp_implementation is no longer supported` | Legacy FMU implementation control attribute | Move `implementation` into `attribute fmu_meta : <Part>FmuMetadata` |

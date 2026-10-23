@@ -73,17 +73,10 @@ def _collect_fmu_resources(
             continue
 
         metadata = fmu_metadata(architecture, part_def)
-        resource_name = (
-            metadata.resource_name
-            if metadata is not None and metadata.resource_name
-            else _default_resource_name(part_def)
-        )
+        resource_name = _default_resource_name(part_def)
         if metadata is None or not metadata.source:
-            if not allow_missing:
-                raise ValueError(
-                    f"{part_def.name} has no fmu_meta.source; generate ssp "
-                    "requires the built FMU path in typed FMU metadata"
-                )
+            # No FMU authored yet: the design structure leaves the component
+            # unpopulated (empty SSD source).
             resources.append(_FmuResource(part_def, None, resource_name))
             continue
 
@@ -135,6 +128,9 @@ def _validate_ssd_components(
     model_descriptions: dict[Path, object] = {}
 
     for component in _iter_components(system):
+        if not component.source:
+            # Design-first export: the component has no FMU yet.
+            continue
         if component.source not in resources_by_source:
             raise ValueError(
                 f"SSD component '{component.name}' references unknown FMU "
@@ -225,11 +221,14 @@ def generate_ssp(
     ``modelDescription.xml`` is checked against the generated SSD connector
     names and the requested ``fmu_meta.implementation``.
 
-    When ``allow_missing_fmus`` is true, leaf components whose FMU metadata or
-    source is missing are exported with their SSD component and expected
-    ``resources/<name>`` source, but their FMU is not packaged. The archive is
-    then a design artifact until the FMUs are attached with
-    ``SSP.attach_fmu``.
+    A leaf component without ``fmu_meta.source`` has no FMU yet: it is exported
+    with an empty SSD ``source`` and no resource. The archive is then a design
+    artifact until the FMUs are attached with ``SSP.attach_fmu``.
+
+    When ``allow_missing_fmus`` is true, a component whose declared
+    ``fmu_meta.source`` does not exist on disk is exported the same way, with
+    its expected ``resources/<name>`` source and no packaged FMU. Without the
+    flag, a missing declared source is an error.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
@@ -249,9 +248,8 @@ def generate_ssp(
     for resource in fmu_resources:
         if resource.source is None:
             warnings.warn(
-                f"{resource.part_def.name}: FMU source is missing; the SSD "
-                f"references 'resources/{resource.resource_name}' without "
-                "packaging it",
+                f"{resource.part_def.name}: FMU source is missing; the "
+                "component is exported without its FMU (design structure)",
                 stacklevel=2,
             )
     set_definitions = parameter_sets_for_generation(architecture, system)

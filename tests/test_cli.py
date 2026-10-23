@@ -265,8 +265,10 @@ def test_pyssp_generate_ssd_cli_parameter_set_prefix(tmp_path: Path) -> None:
         assert binding.source == "custom_sets/NominalSet.ssv"
 
 
-def test_pyssp_generate_ssp_cli_allows_missing_fmus(tmp_path: Path) -> None:
-    """CLI generate ssp exports a design structure without built FMUs."""
+def test_pyssp_generate_ssp_cli_exports_design_without_fmu_source(
+    tmp_path: Path,
+) -> None:
+    """CLI generate ssp exports a design structure without a source or flag."""
     architecture_dir = write_cli_architecture(tmp_path / "arch")
     output = tmp_path / "design.ssp"
 
@@ -281,7 +283,6 @@ def test_pyssp_generate_ssp_cli_allows_missing_fmus(tmp_path: Path) -> None:
                 COMPOSITION_NAME,
                 "--output",
                 str(output),
-                "--allow-missing-fmus",
             ]
         )
 

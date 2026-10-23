@@ -145,11 +145,16 @@ def _resolve_component_part_definition(
     existing = system.parts.get(component.name)
     existing_part_def = None if existing is None else architecture.resolve_part(existing)
     if existing is not None and existing_part_def is not None:
-        existing_source = component_source(
-            existing_part_def,
-            fmu_metadata(architecture, existing_part_def),
-        )
-        if component.source is None or component.source == existing_source:
+        existing_metadata = fmu_metadata(architecture, existing_part_def)
+        existing_source = component_source(existing_part_def, existing_metadata)
+        # An empty SSD source, or an unauthored FMU source, places no
+        # constraint on the part: match by name so its metadata is not
+        # duplicated and an authored source is preserved.
+        if (
+            not component.source
+            or component.source == existing_source
+            or (existing_metadata is not None and not existing_metadata.source)
+        ):
             update_fmu_metadata_from_component(
                 architecture,
                 existing_part_def,
@@ -158,9 +163,10 @@ def _resolve_component_part_definition(
             )
             return existing.type_name, existing_part_def
 
-    if component.source is None:
+    if not component.source:
         raise ValueError(
-            f"SSD component '{component.name}' is missing a source, so its SysML part definition cannot be resolved"
+            f"SSD component '{component.name}' has no source, so its SysML part "
+            "definition cannot be resolved"
         )
 
     matches = [
