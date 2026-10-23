@@ -211,6 +211,29 @@ def test_value_normalization(tmp_path) -> None:
     assert attributes["declared"].type_name == "Real"
 
 
+def test_string_escapes_are_decoded(tmp_path) -> None:
+    """String literals decode the escapes the exporter can emit."""
+    model_file = tmp_path / "escapes.sysml"
+    write_model(
+        model_file,
+        r"""
+        package Escapes {
+          part def Text {
+            attribute lines = "one\ntwo";
+            attribute path = "C:\\temp\\new";
+            attribute quote = "say \"hi\" now";
+          }
+        }
+        """,
+    )
+
+    attributes = load(model_file).part_definitions["Text"].attributes
+
+    assert attributes["lines"].value == "one\ntwo"
+    assert attributes["path"].value == r"C:\temp\new"
+    assert attributes["quote"].value == 'say "hi" now'
+
+
 def test_negative_scalar_value_keeps_sign(tmp_path) -> None:
     """Negative number literals keep their sign.
 

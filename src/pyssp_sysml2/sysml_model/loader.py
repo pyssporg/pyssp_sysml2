@@ -425,13 +425,29 @@ def _parse_scalar(text: str):
     return text
 
 
-def _decode_escapes(text: str) -> str:
-    r"""Decode the two escapes the exporter emits: ``\\`` → ``\``, ``\"`` → ``"``.
+_STRING_ESCAPES = {
+    "\\": "\\",
+    '"': '"',
+    "'": "'",
+    "n": "\n",
+    "r": "\r",
+    "t": "\t",
+}
 
-    sysmlpy keeps string escape sequences raw, so without this the exporter
-    would re-escape them on every round trip.
+
+def _decode_escapes(text: str) -> str:
+    r"""Decode the escapes supported in SysML string literals.
+
+    sysmlpy keeps string escape sequences raw, so the adapter decodes them
+    without evaluating the literal as Python source. The set covers the escapes
+    the exporter emits plus the standard single-character escapes, so a value
+    round-trips on every pass.
     """
-    return re.sub(r'\\([\\"])', r"\1", text)
+    return re.sub(
+        r"\\([\\\"'nrt])",
+        lambda match: _STRING_ESCAPES[match.group(1)],
+        text,
+    )
 
 
 # -- grammar-layer walks (sysmlpy internals; swap here on a future release) --

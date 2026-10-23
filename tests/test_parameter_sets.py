@@ -656,3 +656,31 @@ def test_generate_ssm_for_multiple_disjoint_sets(tmp_path) -> None:
         assert [
             (mapping.source, mapping.target) for mapping in ssm.xml.mappings
         ] == [("k", "comp.gain")]
+
+
+def test_generate_ssv_decodes_string_escapes(tmp_path) -> None:
+    """A newline escape in a set value becomes a real newline in the SSV."""
+    model = _model(
+        interface_members="attribute text : String;",
+        sets=r"""
+        attribute def TextSet :> ParameterSet {
+          attribute text = "one\ntwo";
+        }
+        """,
+        composition="""
+        attribute text_set : TextSet;
+        bind autopilot.parameters.text = text_set.text;
+        """,
+    )
+    architecture_dir = _write(tmp_path, model)
+
+    written = generate_parameter_sets(
+        architecture_dir, tmp_path / "sets", COMPOSITION_NAME
+    )
+
+    assert [path.name for path in written] == ["TextSet.ssv"]
+    with SSV(written[0], mode="r") as ssv:
+        [parameter] = ssv.xml.parameters
+    assert parameter.name == "text"
+    assert parameter.type_name == "String"
+    assert parameter.attributes["value"] == "one\ntwo"

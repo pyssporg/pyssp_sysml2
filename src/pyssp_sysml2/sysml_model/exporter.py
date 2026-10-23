@@ -70,7 +70,14 @@ def _format_value(value) -> str:
 
 
 def _quote(text: str) -> str:
-    return '"' + text.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    escaped = (
+        text.replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+    )
+    return '"' + escaped + '"'
 
 
 def _doc_line(doc: str | None, indent: str = _MEMBER_INDENT) -> list[str]:

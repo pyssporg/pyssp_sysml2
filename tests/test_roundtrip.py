@@ -18,6 +18,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
+from pyssp_sysml2.sysml_model import load
 from tests.test_utils import write_model
 
 
@@ -520,3 +521,32 @@ def test_boundary_connections_roundtrip(tmp_path: Path) -> None:
     generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
 
     assert _wiring(second_ssd) == _wiring(first_ssd)
+
+
+def test_string_escapes_roundtrip(tmp_path: Path) -> None:
+    """Newlines and escapes survive SysML -> SysML without raw literals."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        r"""
+        package Example {
+          part def Text {
+            attribute lines = "one\ntwo";
+            attribute path = "C:\\temp\\new";
+          }
+        }
+        """,
+    )
+
+    architecture = load(architecture_dir)
+    exported = architecture.export_declared()["model.sysml"]
+    assert r'"one\ntwo"' in exported
+    assert r'"C:\\temp\\new"' in exported
+
+    generated = tmp_path / "generated.sysml"
+    generated.write_text(exported, encoding="utf-8")
+    reloaded = load(generated)
+
+    attributes = reloaded.part_definitions["Text"].attributes
+    assert attributes["lines"].value == "one\ntwo"
+    assert attributes["path"].value == r"C:\temp\new"
