@@ -173,6 +173,28 @@ def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) 
     }
 
 
+def test_generate_study_writes_study_doc_as_description(tmp_path: Path) -> None:
+    architecture = tmp_path / "described.sysml"
+    architecture.write_text(
+        EXPERIMENT_ONLY_ARCHITECTURE.replace(
+            "  part def baseline :> Study {",
+            "  part def baseline :> Study {\n"
+            "    doc /* Baseline body over the default window. */",
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "study"
+    artifacts = generate_study(
+        architecture,
+        output,
+        "baseline",
+        model_name="described_model",
+    )
+
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert descriptor["description"] == "Baseline body over the default window."
+
+
 MODEL_OWNED_SCENARIO_ARCHITECTURE = """\
 package ModelOwnedStudy {
   part def SspModel;

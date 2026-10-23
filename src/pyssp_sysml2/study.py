@@ -139,6 +139,8 @@ def generate_study(
             "step_size": experiment.step_size,
         },
     }
+    if study.doc:
+        descriptor["description"] = study.doc
     if scenario is not None:
         descriptor["scenario"] = scenario
     if model_metadata is not None and model_metadata.source is not None:
