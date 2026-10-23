@@ -306,8 +306,10 @@ def main(argv: Optional[list[str]] = None) -> int:
                 model_name=args.model,
                 target_ssd=args.target_ssd,
             )
-            print(f"SSV written to {artifacts.ssv}")
-            print(f"SSM written to {artifacts.ssm}")
+            if artifacts.ssv is not None:
+                print(f"SSV written to {artifacts.ssv}")
+            if artifacts.ssm is not None:
+                print(f"SSM written to {artifacts.ssm}")
             print(f"Study descriptor written to {artifacts.descriptor}")
             return 0
 

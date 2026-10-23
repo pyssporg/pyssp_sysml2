@@ -1,0 +1,106 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+
+from pyssp_sysml2.ssd import generate_ssd
+from pyssp_sysml2.ssp import generate_ssp
+from pyssp_sysml2.ssp_metadata import ssp_metadata
+from pyssp_sysml2.study import generate_study
+from pyssp_sysml2.sysml_model import load
+
+
+ARCHITECTURE = """\
+package LegacyModel {
+  part def SspModel;
+  part def Study;
+
+  attribute def SspMetadata {
+    attribute source : String;
+  }
+
+  attribute def LegacySsp :> SspMetadata {
+    attribute source = "models/ssp/example/ssp";
+  }
+
+  attribute def Experiment {
+    attribute startTime : Real;
+    attribute stopTime : Real;
+    attribute stepSize : Real;
+  }
+
+  attribute def BaselineExperiment :> Experiment {
+    attribute startTime = 0.0;
+    attribute stopTime = 1.0;
+    attribute stepSize = 0.001;
+  }
+
+  part def LegacyBody :> SspModel {
+    attribute ssp_meta : LegacySsp;
+  }
+
+  part def baseline :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    part sut : LegacyBody;
+  }
+}
+"""
+
+
+def _architecture(tmp_path: Path, text: str = ARCHITECTURE) -> Path:
+    path = tmp_path / "legacy.sysml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_generate_study_records_model_source(tmp_path: Path) -> None:
+    artifacts = generate_study(
+        _architecture(tmp_path),
+        tmp_path / "study",
+        "baseline",
+        model_name="legacy",
+    )
+
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert descriptor["model_source"] == "models/ssp/example/ssp"
+    assert "scenario" not in descriptor
+    assert artifacts.ssv is None
+    assert artifacts.ssm is None
+
+
+def test_model_source_is_omitted_when_unset(tmp_path: Path) -> None:
+    text = ARCHITECTURE.replace(
+        '    attribute source = "models/ssp/example/ssp";\n', ""
+    )
+    artifacts = generate_study(
+        _architecture(tmp_path, text),
+        tmp_path / "study",
+        "baseline",
+        model_name="legacy",
+    )
+
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert "model_source" not in descriptor
+
+
+def test_external_source_is_not_exportable(tmp_path: Path) -> None:
+    architecture = _architecture(tmp_path)
+    with pytest.raises(ValueError, match="study-only boundary"):
+        generate_ssp(architecture, tmp_path / "model.ssp", "LegacyBody")
+    with pytest.raises(ValueError, match="study-only boundary"):
+        generate_ssd(architecture, tmp_path / "SystemStructure.ssd", "LegacyBody")
+
+
+def test_ssp_metadata_requires_an_ssp_model(tmp_path: Path) -> None:
+    text = ARCHITECTURE.replace(
+        "  part def LegacyBody :> SspModel {\n"
+        "    attribute ssp_meta : LegacySsp;\n"
+        "  }",
+        "  part def PlainPart {\n    attribute ssp_meta : LegacySsp;\n  }",
+    )
+    architecture = load(_architecture(tmp_path, text))
+
+    with pytest.raises(ValueError, match="not marked ':> SspModel'"):
+        ssp_metadata(architecture, architecture.get_part_def("PlainPart"))

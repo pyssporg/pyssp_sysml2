@@ -130,8 +130,8 @@ SSM artifacts or inspection.
 ### Study
 
 A `part def ... :> Study` composes one exportable `part def ... :> SspModel`
-through a single part usage, conventionally named `sut`. The study applies one
-parameter set and declares one `Experiment` attribute:
+through a single part usage, conventionally named `sut`. The study applies zero
+or one parameter set and declares one `Experiment` attribute:
 
 ```sysml
 part def SspModel;
@@ -164,8 +164,32 @@ pyssp generate study \
 
 The command writes the applied scenario SSV, one `<Study>.ssm` with targets
 relative to the exported model root (the `sut.` prefix is stripped), and
-`study.json` with the experiment window and scenario paths. It never writes an
-SSD or an SSP. `generate ssp` rejects a `:> Study` composition.
+`study.json` with the experiment window and scenario paths. With zero applied
+sets it writes an experiment-only `study.json` (no SSV, no SSM), for a model
+body that stays a checked-in SSP and only authors its experiment window in
+SysML. It never writes an SSD or an SSP. `generate ssp` rejects a `:> Study`
+composition.
+
+A study over a checked-in SSP body selects that body through `SspMetadata`:
+
+```sysml
+attribute def SspMetadata {
+  attribute source : String;
+}
+
+attribute def LegacySsp :> SspMetadata {
+  attribute source = "models/ssp/example/ssp";
+}
+
+part def LegacyBody :> SspModel {
+  attribute ssp_meta : LegacySsp;
+}
+```
+
+`source` is a directory with `SystemStructure.ssd` and optional `resources/`,
+resolved against the repository root. `study.json` records it as
+`model_source`. Such a composition is a study-only boundary; `generate ssp`
+and `generate ssd` reject it.
 
 A complete two-study example over one `SspModel` is in
 [`examples/study/`](examples/study/README.md).

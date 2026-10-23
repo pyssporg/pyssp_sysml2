@@ -114,6 +114,65 @@ def test_generate_study_writes_scenario_and_descriptor(tmp_path: Path) -> None:
     assert 'target="sut.' not in ssm
 
 
+EXPERIMENT_ONLY_ARCHITECTURE = """\
+package LegacyStudy {
+  part def SspModel;
+  part def Study;
+
+  attribute def Experiment {
+    attribute startTime : Real;
+    attribute stopTime : Real;
+    attribute stepSize : Real;
+  }
+
+  attribute def BaselineExperiment :> Experiment {
+    attribute startTime = 0.0;
+    attribute stopTime = 1.0;
+    attribute stepSize = 0.001;
+  }
+
+  part def LegacyModel :> SspModel;
+
+  part def baseline :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    part sut : LegacyModel;
+  }
+}
+"""
+
+
+def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) -> None:
+    architecture = tmp_path / "legacy.sysml"
+    architecture.write_text(EXPERIMENT_ONLY_ARCHITECTURE, encoding="utf-8")
+    output = tmp_path / "study"
+    artifacts = generate_study(
+        architecture,
+        output,
+        "baseline",
+        model_name="legacy_model",
+    )
+
+    assert artifacts.descriptor.is_file()
+    assert artifacts.ssv is None
+    assert artifacts.ssm is None
+    assert artifacts.scenario_set is None
+    assert list(output.glob("*.ssv")) == []
+    assert list(output.glob("*.ssm")) == []
+
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert "scenario" not in descriptor
+    assert descriptor["model"] == "legacy_model"
+    assert descriptor["composition"] == "LegacyModel"
+    assert descriptor["sut"] == "sut"
+    assert descriptor["study"] == "baseline"
+    assert descriptor["experiment"] == {
+        "name": "experiment_baseline",
+        "start_time": 0.0,
+        "stop_time": 1.0,
+        "step_size": 0.001,
+    }
+
+
 def test_generate_ssp_rejects_study(tmp_path: Path) -> None:
     from pyssp_sysml2.ssp import generate_ssp
 

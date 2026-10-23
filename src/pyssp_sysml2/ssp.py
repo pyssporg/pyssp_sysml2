@@ -36,6 +36,7 @@ from pyssp_sysml2.parameters import (
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.roles import is_study, validate_role_markers
 from pyssp_sysml2.ssd import build_ssd
+from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
@@ -239,6 +240,12 @@ def generate_ssp(
             f"Composition '{composition}' is a Study; studies are not "
             "exportable as SSPs. Export its 'part sut : <SspModel>' model "
             "instead."
+        )
+    if ssp_metadata(architecture, system) is not None:
+        raise ValueError(
+            f"Composition '{composition}' selects an external SSP source via "
+            "'ssp_meta'; it is a study-only boundary and cannot be exported. "
+            "Generate its study instead."
         )
     validate_parameter_dialect(architecture, system)
 

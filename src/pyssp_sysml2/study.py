@@ -1,9 +1,12 @@
 """Generate study artifacts from a SysML ``Study`` composition.
 
-A study composes one ``SspModel`` usage (conventionally ``sut``), applies one
-scenario parameter set, and declares one experiment. Generation writes an SSV,
-one SSM with targets relative to the exported model root, and a ``study.json``
-descriptor. It never writes an SSD or an SSP.
+A study composes one ``SspModel`` usage (conventionally ``sut``), applies zero
+or one scenario parameter set, and declares one experiment. Generation writes a
+``study.json`` descriptor and, when a set is applied, an SSV plus one SSM with
+targets relative to the exported model root. A study without a set yields an
+experiment-only descriptor for a model body that stays a checked-in SSP; that
+body is named by the model's ``ssp_meta.source`` and recorded as
+``model_source``. It never writes an SSD or an SSP.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from pyssp_sysml2.roles import (
     read_experiment,
     validate_role_markers,
 )
+from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import load
 
@@ -36,10 +40,10 @@ from pyssp_sysml2.sysml_model import load
 class StudyArtifacts:
     """Paths written by :func:`generate_study`."""
 
-    ssv: Path
-    ssm: Path
+    ssv: Path | None
+    ssm: Path | None
     descriptor: Path
-    scenario_set: str
+    scenario_set: str | None
     model_usage: str
 
 
@@ -55,7 +59,7 @@ def generate_study(
     model_name: str,
     target_ssd: str = "SystemStructure.ssd",
 ) -> StudyArtifacts:
-    """Write scenario SSV, SSM, and ``study.json`` for one study."""
+    """Write ``study.json`` and, for one applied set, its SSV and SSM."""
     architecture = load(architecture_path)
     study = architecture.get_part_def(composition)
     validate_role_markers(architecture)
@@ -74,33 +78,45 @@ def generate_study(
     validate_marker_definitions(architecture)
     validate_parameter_dialect(architecture, study)
     sets = parameter_sets_for_generation(architecture, study)
-    if len(sets) != 1:
+    if len(sets) > 1:
         names = ", ".join(definition.name for definition in sets) or "none"
         raise ValueError(
-            f"Study '{composition}' must apply exactly one scenario parameter "
+            f"Study '{composition}' must apply at most one scenario parameter "
             f"set; found {names}"
         )
 
     experiment = read_experiment(architecture, study)
+    model_metadata = ssp_metadata(architecture, model_definition)
     ensure_directory(output_dir)
-    set_definition = sets[0]
-    ssv_path = write_parameter_set(
-        set_definition, output_dir / f"{set_definition.name}.ssv"
-    )
 
-    prefix = f"{model_part_usage.name}."
-    ssm_path = output_dir / f"{composition}.ssm"
-    with SSM(ssm_path, mode="w") as ssm:
-        for spec in mapping_specs(architecture, study):
-            for source, target in spec.entries:
-                if not target.startswith(prefix):
-                    raise ValueError(
-                        f"Study mapping target '{target}' is not below "
-                        f"'{model_part_usage.name}'"
-                    )
-                ssm.xml.add_mapping(source, target[len(prefix) :])
+    set_definition = sets[0] if sets else None
+    ssv_path: Path | None = None
+    ssm_path: Path | None = None
+    scenario: dict[str, str] | None = None
+    if set_definition is not None:
+        ssv_path = write_parameter_set(
+            set_definition, output_dir / f"{set_definition.name}.ssv"
+        )
 
-    descriptor = {
+        prefix = f"{model_part_usage.name}."
+        ssm_path = output_dir / f"{composition}.ssm"
+        with SSM(ssm_path, mode="w") as ssm:
+            for spec in mapping_specs(architecture, study):
+                for source, target in spec.entries:
+                    if not target.startswith(prefix):
+                        raise ValueError(
+                            f"Study mapping target '{target}' is not below "
+                            f"'{model_part_usage.name}'"
+                        )
+                    ssm.xml.add_mapping(source, target[len(prefix) :])
+
+        scenario = {
+            "set": set_definition.name,
+            "ssv": _relative_name(ssv_path, output_dir),
+            "ssm": _relative_name(ssm_path, output_dir),
+        }
+
+    descriptor: dict[str, object] = {
         "model": model_name,
         "composition": model_definition.name,
         "sut": model_part_usage.name,
@@ -112,12 +128,11 @@ def generate_study(
             "stop_time": experiment.stop_time,
             "step_size": experiment.step_size,
         },
-        "scenario": {
-            "set": set_definition.name,
-            "ssv": _relative_name(ssv_path, output_dir),
-            "ssm": _relative_name(ssm_path, output_dir),
-        },
     }
+    if scenario is not None:
+        descriptor["scenario"] = scenario
+    if model_metadata is not None and model_metadata.source is not None:
+        descriptor["model_source"] = model_metadata.source
     descriptor_path = output_dir / "study.json"
     descriptor_path.write_text(
         json.dumps(descriptor, indent=2, sort_keys=True) + "\n",
@@ -128,6 +143,6 @@ def generate_study(
         ssv=ssv_path,
         ssm=ssm_path,
         descriptor=descriptor_path,
-        scenario_set=set_definition.name,
+        scenario_set=set_definition.name if set_definition is not None else None,
         model_usage=model_part_usage.name,
     )

@@ -35,6 +35,7 @@ from pyssp_sysml2.parameters import (
 )
 from pyssp_sysml2.paths import ensure_parent_dir
 from pyssp_sysml2.roles import is_study, validate_role_markers
+from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.sysml import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
@@ -295,6 +296,11 @@ def build_ssd(
         raise ValueError(
             f"Composition '{system.name}' is a Study; studies generate scenario "
             "data and are never exported as an SSD or SSP"
+        )
+    if ssp_metadata(architecture, system) is not None:
+        raise ValueError(
+            f"Composition '{system.name}' selects an external SSP source via "
+            "'ssp_meta'; it is a study-only boundary and cannot be exported"
         )
     ssd.xml.name = system.name
     ssd.xml.version = "1.0"

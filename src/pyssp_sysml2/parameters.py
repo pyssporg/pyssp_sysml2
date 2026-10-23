@@ -29,6 +29,11 @@ from pyssp_sysml2.fmu_metadata import (
     is_fmu_metadata_definition,
     validate_retired_control_attributes,
 )
+from pyssp_sysml2.roles import is_study
+from pyssp_sysml2.ssp_metadata import (
+    is_ssp_metadata_definition,
+    ssp_metadata,
+)
 from pyssp_sysml2.sysml_model import (
     Architecture,
     Attribute,
@@ -850,6 +855,13 @@ def _is_metadata_attribute(
     return is_fmu_metadata_definition(architecture, definition)
 
 
+def _is_ssp_metadata_attribute(
+    architecture: Architecture, attribute: Attribute
+) -> bool:
+    definition = architecture.resolve_attribute_def(attribute)
+    return is_ssp_metadata_definition(architecture, definition)
+
+
 def _reject_flat_attributes(
     architecture: Architecture, part_def: PartDefinition
 ) -> None:
@@ -863,6 +875,9 @@ def _reject_flat_attributes(
                     "subparts; a nested system cannot also be an FMU component"
                 )
             fmu_metadata(architecture, part_def)
+            continue
+        if _is_ssp_metadata_attribute(architecture, attribute):
+            ssp_metadata(architecture, part_def)
             continue
         if name == FMU_METADATA_ATTR:
             raise ValueError(
@@ -897,6 +912,13 @@ def validate_parameter_dialect(
             raise ValueError(
                 f"{system.name}.{name} is FMU metadata, but the composition is "
                 "not an FMU component"
+            )
+        if _is_ssp_metadata_attribute(architecture, attribute) and is_study(
+            architecture, system
+        ):
+            raise ValueError(
+                f"{system.name}.{name} is SSP metadata; declare it on the "
+                "SspModel composition"
             )
         definition = architecture.resolve_attribute_def(attribute)
         if definition is not None:
