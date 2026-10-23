@@ -45,6 +45,7 @@ from pyssp_sysml2.sysml_model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
+    endpoint_text,
 )
 
 __all__ = ["load"]
@@ -247,10 +248,11 @@ def _requirement_definition(element, file: Path) -> RequirementDefinition:
 def _connection(connect, file: Path) -> Connection:
     """Repo Connection from a sysmlpy connect statement.
 
-    Only binary, part-qualified connects (``connect a.p to b.q;``) are
-    supported — the only form the legacy grammar accepted. A parsed name of
-    ``None`` or a UUID means sysmlpy generated it for an unnamed connect, so
-    the legacy endpoint-derived name is rebuilt instead.
+    Only binary connects are supported. An end is either part-qualified
+    (``connect a.p to b.q;``) or a bare port name that refers to a port of the
+    enclosing part def, i.e. the system boundary (``connect gain.y to y;``).
+    A parsed name of ``None`` or a UUID means sysmlpy generated it for an
+    unnamed connect, so the legacy endpoint-derived name is rebuilt instead.
     """
     ends = _connection_endpoints(connect)
     if len(ends) != 2:
@@ -259,16 +261,14 @@ def _connection(connect, file: Path) -> Connection:
             f"got {len(ends)} ends in {file}"
         )
     source, destination = ends
-    if len(source) < 2 or len(destination) < 2:
-        raise ValueError(
-            f"Connection ends must be part-qualified ('connect a.p to b.q;'), "
-            f"got {source} to {destination} in {file}"
-        )
-    source_part, source_port = source[0], source[-1]
-    destination_part, destination_port = destination[0], destination[-1]
+    source_part, source_port = _connection_endpoint(source, file)
+    destination_part, destination_port = _connection_endpoint(destination, file)
     name = connect.name
     if name is None or _UUID_PATTERN.match(name):
-        name = f"{source_part}.{source_port}_to_{destination_part}.{destination_port}"
+        name = (
+            f"{endpoint_text(source_part, source_port)}"
+            f"_to_{endpoint_text(destination_part, destination_port)}"
+        )
     return Connection(
         name=name,
         source_part=source_part,
@@ -276,6 +276,18 @@ def _connection(connect, file: Path) -> Connection:
         destination_part=destination_part,
         destination_port=destination_port,
     )
+
+
+def _connection_endpoint(names: list[str], file: Path) -> tuple[str | None, str]:
+    """Split one connection end into ``(part, port)``; a bare name is a boundary port."""
+    if not names:
+        raise ValueError(
+            "Connection ends must be 'part.port' or a boundary 'port', "
+            f"got an empty end in {file}"
+        )
+    if len(names) == 1:
+        return None, names[0]
+    return names[0], names[-1]
 
 
 def _binding(bind, file: Path) -> Binding:

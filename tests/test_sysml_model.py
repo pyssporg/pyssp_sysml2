@@ -562,24 +562,47 @@ def test_connections_from_all_files(tmp_path) -> None:
     assert list(architecture.part_definitions["CompB"].connections) == ["c.r->d.s"]
 
 
-def test_part_less_connection_rejected(tmp_path) -> None:
-    """`connect x to y;` (no part qualifier) is rejected with a clear error."""
-    model_file = tmp_path / "bare.sysml"
+def test_boundary_connection_endpoints_load(tmp_path) -> None:
+    """A bare end names a port of the enclosing part def (system boundary)."""
+    model_file = tmp_path / "boundary.sysml"
     write_model(
         model_file,
         """
-        package Bare {
-          part def Bad {
-            part x : X;
-            part y : Y;
-            connect x to y;
+        package Boundary {
+          part def Source {
+            out port outSig : Signal;
+          }
+
+          part def Sink { in port inSig : Signal; }
+
+          part def Inner {
+            in port u : Signal;
+            out port v : Signal;
+            part src : Source;
+            part dst : Sink;
+            connect u to src.inSig;
+            connect src.outSig to dst.inSig;
+            connect dst.inSig to v;
           }
         }
         """,
     )
 
-    with pytest.raises(ValueError, match="part-qualified"):
-        load(model_file)
+    connections = load(model_file).part_definitions["Inner"].connections
+
+    assert list(connections) == [
+        "u->src.inSig",
+        "src.outSig->dst.inSig",
+        "dst.inSig->v",
+    ]
+    assert (
+        connections["u->src.inSig"].source_part,
+        connections["u->src.inSig"].source_port,
+        connections["u->src.inSig"].destination_part,
+        connections["u->src.inSig"].destination_port,
+    ) == (None, "u", "src", "inSig")
+    assert connections["u->src.inSig"].name == "u_to_src.inSig"
+    assert connections["dst.inSig->v"].destination_part is None
 
 
 # -- syntax errors --------------------------------------------------------------
@@ -736,12 +759,14 @@ def test_export_round_trip(tmp_path) -> None:
           }
 
           part def SystemComposition {
+            out port outSig : Signal;
             part src : Source;
             part dst : Sink;
             part measured : Measured;
             attribute nominal : NominalMeasurements;
 
             connect src.sig to dst.sigIn;
+            connect src.sig to outSig;
             bind measured.parameters.temperature = nominal.temps;
           }
 

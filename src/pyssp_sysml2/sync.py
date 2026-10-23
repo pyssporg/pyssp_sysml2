@@ -36,6 +36,7 @@ from pyssp_sysml2.sysml_model import (
     PartUsage,
     PortDefinition,
     PortUsage,
+    endpoint_text,
     load,
 )
 
@@ -276,7 +277,7 @@ def _sync_system_level(
             )
 
     target_connections = _derive_port_connections_from_ssd(
-        target_parts, ssd_system, architecture
+        target_parts, part_def, ssd_system, architecture
     )
     _replace_system_parts(part_def, target_parts)
     _replace_system_connections(part_def, target_connections)
@@ -284,47 +285,51 @@ def _sync_system_level(
 
 def _derive_port_connections_from_ssd(
     target_parts: Mapping[str, PartUsage],
+    part_def: PartDefinition,
     ssd_system,
     architecture: Architecture,
-) -> set[Tuple[str, str, str, str]]:
-    grouped: Dict[Tuple[str, str, str, str], set[str]] = {}
+) -> set[Tuple[str | None, str, str | None, str]]:
+    grouped: Dict[Tuple[str | None, str, str | None, str], set[str]] = {}
     for conn in ssd_system.connections:
         src_port, src_attr = split_connector(conn.start_connector)
         dst_port, dst_attr = split_connector(conn.end_connector)
         if src_attr != dst_attr:
             raise ValueError(
                 "SSD uses attribute remapping that cannot be represented as a SysML port connect: "
-                f"{conn.start_element}.{conn.start_connector} -> {conn.end_element}.{conn.end_connector}"
+                f"{endpoint_text(conn.start_element, conn.start_connector)}"
+                f" -> {endpoint_text(conn.end_element, conn.end_connector)}"
             )
         key = (conn.start_element, src_port, conn.end_element, dst_port)
         grouped.setdefault(key, set()).add(src_attr)
 
-    target: set[Tuple[str, str, str, str]] = set()
+    target: set[Tuple[str | None, str, str | None, str]] = set()
     for src_component, src_port, dst_component, dst_port in grouped:
-        if src_component not in target_parts:
-            raise ValueError(f"SSD references unknown source component '{src_component}'")
-        if dst_component not in target_parts:
-            raise ValueError(f"SSD references unknown destination component '{dst_component}'")
-
-        src_part = architecture.resolve_part(target_parts[src_component])
-        dst_part = architecture.resolve_part(target_parts[dst_component])
-        if src_part is None or dst_part is None:
-            raise ValueError("Could not resolve part definition for at least one SSD connection endpoint")
-        src_port_usage = src_part.ports.get(src_port)
-        dst_port_usage = dst_part.ports.get(dst_port)
-        if src_port_usage is None:
-            raise ValueError(f"Unknown source port '{src_component}.{src_port}' in SSD")
-        if dst_port_usage is None:
-            raise ValueError(f"Unknown destination port '{dst_component}.{dst_port}' in SSD")
-
-        src_port_def = architecture.resolve_port(src_port_usage)
-        dst_port_def = architecture.resolve_port(dst_port_usage)
-        if src_port_def is None or dst_port_def is None:
-            raise ValueError("Could not resolve port definition for at least one SSD connection endpoint")
+        connection_text = (
+            f"{endpoint_text(src_component, src_port)} -> "
+            f"{endpoint_text(dst_component, dst_port)}"
+        )
+        src_port_def = _connection_endpoint_port_def(
+            target_parts,
+            part_def,
+            architecture,
+            src_component,
+            src_port,
+            role="source",
+            connection_text=connection_text,
+        )
+        dst_port_def = _connection_endpoint_port_def(
+            target_parts,
+            part_def,
+            architecture,
+            dst_component,
+            dst_port,
+            role="destination",
+            connection_text=connection_text,
+        )
         if src_port_def is not dst_port_def:
             raise ValueError(
                 "SSD connects incompatible ports that cannot be represented in SysML composition: "
-                f"{src_component}.{src_port} -> {dst_component}.{dst_port}"
+                f"{connection_text}"
             )
 
         required_attributes = set(src_port_def.attributes.keys())
@@ -334,7 +339,7 @@ def _derive_port_connections_from_ssd(
             extra = sorted(actual_attributes - required_attributes)
             raise ValueError(
                 "SSD contains a partial/invalid attribute mapping for port connection "
-                f"{src_component}.{src_port} -> {dst_component}.{dst_port}. "
+                f"{connection_text}. "
                 f"missing={missing}, extra={extra}"
             )
 
@@ -343,8 +348,61 @@ def _derive_port_connections_from_ssd(
     return target
 
 
-def _connection_key(src_component: str, src_port: str, dst_component: str, dst_port: str) -> str:
-    return f"{src_component}.{src_port}->{dst_component}.{dst_port}"
+def _connection_endpoint_port_def(
+    target_parts: Mapping[str, PartUsage],
+    part_def: PartDefinition,
+    architecture: Architecture,
+    component: str | None,
+    port: str,
+    *,
+    role: str,
+    connection_text: str,
+) -> PortDefinition:
+    """Resolve one endpoint; a ``None`` component is a boundary port."""
+    if component is None:
+        port_usage = part_def.ports.get(port)
+        if port_usage is None:
+            raise ValueError(
+                f"Unknown boundary port '{port}' in SSD connection "
+                f"{connection_text}; declare it on '{part_def.name}'"
+            )
+    else:
+        part_usage = target_parts.get(component)
+        if part_usage is None:
+            raise ValueError(f"SSD references unknown {role} component '{component}'")
+        part = architecture.resolve_part(part_usage)
+        if part is None:
+            raise ValueError(
+                "Could not resolve part definition for at least one SSD connection endpoint"
+            )
+        port_usage = part.ports.get(port)
+        if port_usage is None:
+            raise ValueError(f"Unknown {role} port '{component}.{port}' in SSD")
+
+    port_def = architecture.resolve_port(port_usage)
+    if port_def is None:
+        raise ValueError(
+            "Could not resolve port definition for at least one SSD connection endpoint"
+        )
+    return port_def
+
+
+def _connection_sort_key(
+    item: Tuple[str | None, str, str | None, str],
+) -> Tuple[str, str, str, str]:
+    return tuple("" if value is None else value for value in item)
+
+
+def _connection_key(
+    src_component: str | None,
+    src_port: str,
+    dst_component: str | None,
+    dst_port: str,
+) -> str:
+    return (
+        f"{endpoint_text(src_component, src_port)}"
+        f"->{endpoint_text(dst_component, dst_port)}"
+    )
 
 
 def _replace_system_parts(system: PartDefinition, target_parts: Mapping[str, PartUsage]) -> None:
@@ -354,18 +412,23 @@ def _replace_system_parts(system: PartDefinition, target_parts: Mapping[str, Par
 
 def _replace_system_connections(
     system: PartDefinition,
-    target_connections: Iterable[Tuple[str, str, str, str]],
+    target_connections: Iterable[Tuple[str | None, str, str | None, str]],
 ) -> None:
     previous = system.connections
     updated = {}
-    for src_component, src_port, dst_component, dst_port in sorted(target_connections):
+    for src_component, src_port, dst_component, dst_port in sorted(
+        target_connections, key=_connection_sort_key
+    ):
         key = _connection_key(src_component, src_port, dst_component, dst_port)
         existing = previous.get(key)
         if existing is not None:
             updated[key] = existing
             continue
         updated[key] = Connection(
-            name=f"{src_component}.{src_port}_to_{dst_component}.{dst_port}",
+            name=(
+                f"{endpoint_text(src_component, src_port)}"
+                f"_to_{endpoint_text(dst_component, dst_port)}"
+            ),
             source_part=src_component,
             source_port=src_port,
             destination_part=dst_component,

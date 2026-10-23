@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pyssp_standard.ssd import SSD
+from pyssp_standard.ssd import SSD, System
 
 from pyssp_sysml2.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.sysml_model import load
@@ -189,3 +189,130 @@ def test_generate_ssd_rejects_retired_parameter_set_attribute(tmp_path: Path) ->
     output_path = tmp_path / "SystemStructure.ssd"
     with pytest.raises(ValueError, match="pyssp_parameter_set is no longer supported"):
         generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+
+BOUNDARY_MODEL = """
+        package Example {{
+          port def Signal {{
+            attribute x : Real;
+          }}
+
+          part def Source {{
+            out port sig : Signal;
+          }}
+
+          part def Sink {{
+            in port sigIn : Signal;
+            out port sig : Signal;
+          }}
+
+          part def Inner {{
+            in port u : Signal;
+            out port v : Signal;
+            part src : Source;
+            part dst : Sink;
+            connect u to src.sig;
+            connect src.sig to dst.sigIn;
+            connect dst.sig to v;
+          }}
+
+          part def {COMPOSITION_NAME} {{
+            out port y : Signal;
+            part inner : Inner;
+            connect inner.v to y;
+          }}
+        }}
+        """
+
+
+def test_generate_ssd_wires_system_boundary(tmp_path: Path) -> None:
+    """A bare connection end emits an SSD connection without an element."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        BOUNDARY_MODEL.format(COMPOSITION_NAME=COMPOSITION_NAME),
+    )
+
+    output_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+    with SSD(output_path, mode="r") as ssd:
+        top = ssd.xml.system
+        assert [(connector.name, connector.kind) for connector in top.connectors] == [
+            ("y.x", "output")
+        ]
+        assert [
+            (c.start_element, c.start_connector, c.end_element, c.end_connector)
+            for c in top.connections
+        ] == [("inner", "v.x", None, "y.x")]
+
+        inner = top.elements[0]
+        assert isinstance(inner, System)
+        assert [(connector.name, connector.kind) for connector in inner.connectors] == [
+            ("u.x", "input"),
+            ("v.x", "output"),
+        ]
+        assert [
+            (c.start_element, c.start_connector, c.end_element, c.end_connector)
+            for c in inner.connections
+        ] == [
+            (None, "u.x", "src", "sig.x"),
+            ("src", "sig.x", "dst", "sigIn.x"),
+            ("dst", "sig.x", None, "v.x"),
+        ]
+
+
+def test_generate_ssd_rejects_boundary_port_wrong_direction(tmp_path: Path) -> None:
+    """A boundary port used as the start of a connection must be an input."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x : Real;
+          }
+
+          part def Source {
+            out port sig : Signal;
+          }
+
+          part def SystemComposition {
+            in port y : Signal;
+            part src : Source;
+            connect src.sig to y;
+          }
+        }
+        """,
+    )
+
+    with pytest.raises(ValueError, match="used as the end of a connection"):
+        generate_ssd(
+            architecture_dir, tmp_path / "SystemStructure.ssd", COMPOSITION_NAME
+        )
+
+
+def test_generate_ssd_rejects_boundary_to_boundary_connection(tmp_path: Path) -> None:
+    """A connection between two boundary ports does not cross a subpart."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x : Real;
+          }
+
+          part def SystemComposition {
+            in port u : Signal;
+            out port v : Signal;
+            connect u to v;
+          }
+        }
+        """,
+    )
+
+    with pytest.raises(ValueError, match="links two boundary ports"):
+        generate_ssd(
+            architecture_dir, tmp_path / "SystemStructure.ssd", COMPOSITION_NAME
+        )

@@ -34,6 +34,7 @@ __all__ = [
     "PortDefinition",
     "PortUsage",
     "RequirementDefinition",
+    "endpoint_text",
 ]
 
 # Lowercase alias map for the primitive types the generators understand.
@@ -141,20 +142,38 @@ class PartUsage:
     doc: str | None = None
 
 
+def endpoint_text(part: str | None, port: str) -> str:
+    """Text form of one connection endpoint.
+
+    A ``None`` part is a port of the enclosing part def, i.e. the system
+    boundary, written without a qualifier.
+    """
+    return port if part is None else f"{part}.{port}"
+
+
 @dataclass
 class Connection:
-    """A ``connect source.port to destination.port;`` inside a part def."""
+    """A ``connect source.port to destination.port;`` inside a part def.
+
+    An endpoint without a part (``connect gain.y to y;`` or
+    ``connect u to gain.u;``) refers to a port of the enclosing part def: the
+    connection crosses the system boundary. The SSD omits
+    ``startElement``/``endElement`` for such an endpoint.
+    """
 
     name: str
-    source_part: str
+    source_part: str | None
     source_port: str
-    destination_part: str
+    destination_part: str | None
     destination_port: str
     doc: str | None = None
 
     @property
     def key(self) -> str:
-        return f"{self.source_part}.{self.source_port}->{self.destination_part}.{self.destination_port}"
+        return (
+            f"{endpoint_text(self.source_part, self.source_port)}"
+            f"->{endpoint_text(self.destination_part, self.destination_port)}"
+        )
 
 
 @dataclass

@@ -18,7 +18,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.sysml_model import endpoint_text, load
 from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
@@ -68,16 +68,16 @@ def _composition_summary(architecture_path: Path) -> list[str]:
     for connection in sorted(
         composition.connections.values(),
         key=lambda conn: (
-            conn.source_part,
+            "" if conn.source_part is None else conn.source_part,
             conn.source_port,
-            conn.destination_part,
+            "" if conn.destination_part is None else conn.destination_part,
             conn.destination_port,
         ),
     ):
         lines.append(
             "connect "
-            f"{connection.source_part}.{connection.source_port}"
-            f"->{connection.destination_part}.{connection.destination_port}"
+            f"{endpoint_text(connection.source_part, connection.source_port)}"
+            f"->{endpoint_text(connection.destination_part, connection.destination_port)}"
         )
     return lines
 
@@ -781,3 +781,96 @@ def test_sync_nested_system_connections(tmp_path: Path) -> None:
     assert "part dst2 : Sink;" in text
     assert "connect src.outSig to dst2.inSig;" in text
     assert "connect src.outSig to dst.inSig;" not in text
+
+
+def _write_boundary_architecture(root: Path) -> Path:
+    write_model(
+        root / "model.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x : Real;
+          }
+
+          part def Source {
+            out port sig : Signal;
+          }
+
+          part def Sink {
+            in port sigIn : Signal;
+            out port sig : Signal;
+          }
+
+          part def Inner {
+            in port u : Signal;
+            out port v : Signal;
+            part src : Source;
+            part dst : Sink;
+            connect u to src.sig;
+            connect src.sig to dst.sigIn;
+            connect dst.sig to v;
+          }
+
+          part def SystemComposition {
+            out port y : Signal;
+            part inner : Inner;
+            connect inner.v to y;
+          }
+        }
+        """,
+    )
+    return root
+
+
+def test_sync_keeps_boundary_connections(tmp_path: Path) -> None:
+    """Sync from an unchanged SSD keeps connections to the system boundary."""
+    architecture_dir = _write_boundary_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, "SystemComposition")
+
+    output_dir = tmp_path / "synced"
+    sync_sysml_from_ssd(
+        architecture_dir,
+        ssd_path,
+        "SystemComposition",
+        output_architecture_dir=output_dir,
+    )
+
+    text = _architecture_text(output_dir)
+    assert "connect u to src.sig;" in text
+    assert "connect dst.sig to v;" in text
+    assert "connect inner.v to y;" in text
+
+
+def test_sync_rewires_boundary_connection(tmp_path: Path) -> None:
+    """Sync applies an SSD edit that retargets a boundary connection."""
+    architecture_dir = _write_boundary_architecture(tmp_path / "arch")
+    ssd_path = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, ssd_path, "SystemComposition")
+
+    with SSD(ssd_path, mode="a") as ssd:
+        [inner] = ssd.xml.system.elements
+        inner.connections = [
+            connection
+            for connection in inner.connections
+            if connection.end_element is not None
+        ]
+        inner.connections.append(
+            Connection(
+                start_element="src",
+                start_connector="sig.x",
+                end_connector="v.x",
+            )
+        )
+
+    output_dir = tmp_path / "synced"
+    sync_sysml_from_ssd(
+        architecture_dir,
+        ssd_path,
+        "SystemComposition",
+        output_architecture_dir=output_dir,
+    )
+
+    text = _architecture_text(output_dir)
+    assert "connect src.sig to v;" in text
+    assert "connect dst.sig to v;" not in text

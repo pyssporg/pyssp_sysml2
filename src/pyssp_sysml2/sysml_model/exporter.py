@@ -47,6 +47,7 @@ from pyssp_sysml2.sysml_model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
+    endpoint_text,
 )
 
 DEFAULT_SOURCE_FILE = "architecture.sysml"
@@ -126,8 +127,9 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
         for connection in part_def.connections.values():  # insertion order
             yield from _doc_line(connection.doc)
             yield (
-                f"{_MEMBER_INDENT}connect {connection.source_part}.{connection.source_port}"
-                f" to {connection.destination_part}.{connection.destination_port};"
+                f"{_MEMBER_INDENT}connect"
+                f" {endpoint_text(connection.source_part, connection.source_port)}"
+                f" to {endpoint_text(connection.destination_part, connection.destination_port)};"
             )
         for binding in part_def.bindings:  # insertion order
             yield (

@@ -14,8 +14,9 @@ the repo-owned dataclasses in `sysml_model/model.py`:
 - `loader.py` — parses `.sysml` files (file or directory, same-package merge)
   into the repo model. All sysmlpy-specific knowledge lives here.
 - `model.py` — the stable model (`Architecture`, `PartDefinition`,
-  `PortUsage` with `direction`, `Connection` with endpoints, `Attribute` with
-  Python-native values). Generators depend only on this.
+  `PortUsage` with `direction`, `Connection` with endpoints — `None` part means
+  the enclosing system's port — `Attribute` with Python-native values).
+  Generators depend only on this.
 - `exporter.py` — emits conformant SysML v2 text (grouped per source file)
   directly from the dataclasses, so the output format is a repo contract that
   cannot drift with sysmlpy releases. Round-trip tests
@@ -37,7 +38,9 @@ when upgrading the pin — all isolated at the bottom of `loader.py`
   `ConnectionUsage.part.part.children[].children[].children[]` and
   `BindingConnector.children[].children[].children[]`
   (`OwnedReferenceSubsetting` + `OwnedFeatureChaining`); for a dotted end like
-  `src.sig` both names come from the feature-chaining list.
+  `src.sig` both names come from the feature-chaining list. A bare end such as
+  `connect gain.y to y;` yields a single name (`['y']`), which the loader keeps
+  as a boundary port (part `None`).
 - **Attribute multiplicity** lives in
   `FeatureSpecializationPart.multiplicity` (`MultiplicityPart` →
   `OwnedMultiplicity` → `MultiplicityRange` → `LiteralInteger` /

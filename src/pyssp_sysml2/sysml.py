@@ -24,6 +24,7 @@ from pyssp_sysml2.sysml_model import (
     PartUsage,
     PortDefinition,
     PortUsage,
+    endpoint_text,
 )
 
 SCALAR_ATTRIBUTE_NAME = "value"
@@ -267,13 +268,64 @@ def _ensure_system_part_def(
     return part_def
 
 
+def _connection_endpoint_port_def(
+    system: PartDefinition,
+    architecture: Architecture,
+    child_elements: dict[str, Component | System],
+    element_name: str | None,
+    port_name: str,
+    connection_text: str,
+) -> PortDefinition:
+    """Resolve one SSD connection endpoint to its port definition.
+
+    ``element_name is None`` is a connector of the enclosing system itself,
+    i.e. the system boundary.
+    """
+    if element_name is None:
+        port_usage = system.ports.get(port_name)
+        if port_usage is None:
+            raise ValueError(
+                "SSD connection references a boundary port that is not "
+                f"declared by the system connectors: {connection_text}"
+            )
+    else:
+        if element_name not in child_elements:
+            raise ValueError(
+                f"SSD connection references unknown element '{element_name}'"
+            )
+        part_usage = system.parts.get(element_name)
+        if part_usage is None:
+            raise ValueError("SSD connection endpoint has no part usage")
+        part_def = architecture.resolve_part(part_usage)
+        if part_def is None:
+            raise ValueError("Could not resolve SSD connection endpoint")
+        port_usage = part_def.ports.get(port_name)
+        if port_usage is None:
+            raise ValueError(
+                "SSD connection references a port that is not declared by "
+                f"its element connectors: {connection_text}"
+            )
+
+    port_def = architecture.resolve_port(port_usage)
+    if port_def is None:
+        raise ValueError("Could not resolve SSD connection port")
+    return port_def
+
+
+def _connection_sort_key(
+    item: tuple[str | None, str, str | None, str],
+) -> tuple[str, str, str, str]:
+    """Order connections, sorting boundary ends (``None``) first."""
+    return tuple("" if value is None else value for value in item)
+
+
 def _add_level_connections(
     part_def: PartDefinition,
     ssd_system,
     child_elements: dict[str, Component | System],
     architecture: Architecture,
 ) -> None:
-    grouped: dict[tuple[str, str, str, str], set[str]] = {}
+    grouped: dict[tuple[str | None, str, str | None, str], set[str]] = {}
     for connection in ssd_system.connections:
         src_port, src_attribute = split_connector_or_scalar(
             connection.start_connector
@@ -287,42 +339,30 @@ def _add_level_connections(
         )
         grouped.setdefault(key, set()).add(src_attribute)
 
-    for src_element, src_port, dst_element, dst_port in sorted(grouped):
-        if src_element not in child_elements:
-            raise ValueError(
-                f"SSD connection references unknown element '{src_element}'"
-            )
-        if dst_element not in child_elements:
-            raise ValueError(
-                f"SSD connection references unknown element '{dst_element}'"
-            )
-        src_usage = part_def.parts.get(src_element)
-        dst_usage = part_def.parts.get(dst_element)
-        if src_usage is None or dst_usage is None:
-            raise ValueError("SSD connection endpoint has no part usage")
-        src_def = architecture.resolve_part(src_usage)
-        dst_def = architecture.resolve_part(dst_usage)
-        if src_def is None or dst_def is None:
-            raise ValueError("Could not resolve SSD connection endpoint")
-        src_port_usage = src_def.ports.get(src_port)
-        dst_port_usage = dst_def.ports.get(dst_port)
-        if src_port_usage is None or dst_port_usage is None:
-            raise ValueError(
-                "SSD connection references a port that is not declared by "
-                "its element connectors: "
-                f"{src_element}.{src_port} -> {dst_element}.{dst_port}"
-            )
-        src_port_def = architecture.resolve_port(src_port_usage)
-        dst_port_def = architecture.resolve_port(dst_port_usage)
-        if src_port_def is None or dst_port_def is None:
-            raise ValueError("Could not resolve SSD connection port")
+    for src_element, src_port, dst_element, dst_port in sorted(
+        grouped, key=_connection_sort_key
+    ):
+        connection_text = (
+            f"{endpoint_text(src_element, src_port)} -> "
+            f"{endpoint_text(dst_element, dst_port)}"
+        )
+        src_port_def = _connection_endpoint_port_def(
+            part_def, architecture, child_elements, src_element, src_port,
+            connection_text,
+        )
+        dst_port_def = _connection_endpoint_port_def(
+            part_def, architecture, child_elements, dst_element, dst_port,
+            connection_text,
+        )
         if src_port_def is not dst_port_def:
             raise ValueError(
-                "SSD connects incompatible ports: "
-                f"{src_element}.{src_port} -> {dst_element}.{dst_port}"
+                f"SSD connects incompatible ports: {connection_text}"
             )
         connection = Connection(
-            name=f"{src_element}.{src_port}_to_{dst_element}.{dst_port}",
+            name=(
+                f"{endpoint_text(src_element, src_port)}"
+                f"_to_{endpoint_text(dst_element, dst_port)}"
+            ),
             source_part=src_element,
             source_port=src_port,
             destination_part=dst_element,

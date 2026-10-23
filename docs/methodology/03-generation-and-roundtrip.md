@@ -576,7 +576,7 @@ through a parameter interface and SysML-defined sets.
 | Interface defaults | Preserved when sync reconciles an unchanged signature |
 | Identity/explicit binding intent | Identity → prefix; explicit → mapping |
 | Nested system structure | Nested SSD `System` ↔ nested part definition/usage |
-| Connections | Per system level |
+| Connections | Per system level, including connections to the enclosing system's ports (bare-name ends) |
 | FMU metadata | `fmu_meta` resource name and implementation |
 | Control metadata | Default experiment |
 | Unrelated definitions and file layout | `sync` preserves them; `generate sysml` starts fresh |

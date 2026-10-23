@@ -351,8 +351,14 @@ Recursive part hierarchy at 'a.b' (A)
 | Bound component must have parameter connectors | `... but that component has no parameter connectors` | Add connectors or remove the binding |
 | Set members must exist on the component | `Parameter set members ... do not exist on component ...` | Fix the set/mapping or the connectors |
 | Sync connections must use `port.attribute` | `Connector '...' is not in 'port.attribute' form` | Normalize the SSD connector |
+| Boundary ports must point the right way | `Boundary port '...' ... is declared as '...' but is used as the ... of a connection` | Declare the boundary port `in` at the start and `out` at the end |
+| Boundary connections must cross a subpart | `links two boundary ports ...` | Connect a subpart output to the boundary and the boundary to a subpart input |
+| Boundary connection ports must be declared | `Unknown boundary port '...'` / `SSD connection references a boundary port ...` | Declare the port on the enclosing system or qualify the part |
 | Sync requires complete port mappings | `partial/invalid attribute mapping ... missing=..., extra=...` | Map all attributes consistently |
 | Sync requires compatible ports | `SSD connects incompatible ports ...` | Connect compatible port definitions |
+| Boundary ports must exist on the system | `Unknown boundary port '...' in connection` | Declare the port on the enclosing part def |
+| Boundary ports have a fixed direction | `... is declared as '...' but is used as the start/end of a connection` | Declare it `in` at the start and `out` at the end |
+| Boundary-to-boundary connections are rejected | `... links two boundary ports of ...` | Connect a subpart to the boundary instead |
 | Unknown sources can be rejected | `references unknown part source '...'` | Add the part definition or allow synthesis |
 | Unknown ports can be rejected | `Unknown source port ...` / `Unknown destination ...` | Fix the SSD or the model |
 | The composition must exist | `Part not found: ...` | Fix `--composition` |

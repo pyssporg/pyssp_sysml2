@@ -439,3 +439,84 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
             ("parameter_sets/OuterSet.ssv", "outer.gain"),
             ("parameter_sets/InnerSet.ssv", "outer.inner.k"),
         ]
+
+
+def _wiring(ssd_path: Path) -> list[tuple[str, str, str | None, str | None]]:
+    """All connections of the top system and its nested systems."""
+    with SSD(ssd_path, mode="r") as ssd:
+        top = ssd.xml.system
+
+    result = []
+    for element in top.elements:
+        if isinstance(element, System):
+            result.extend(
+                (c.start_element, c.start_connector, c.end_element, c.end_connector)
+                for c in element.connections
+            )
+    result.extend(
+        (c.start_element, c.start_connector, c.end_element, c.end_connector)
+        for c in top.connections
+    )
+    return sorted(
+        result,
+        key=lambda item: tuple("" if value is None else value for value in item),
+    )
+
+
+def test_boundary_connections_roundtrip(tmp_path: Path) -> None:
+    """Boundary connections survive SSD -> SysML -> SSD unchanged."""
+    architecture_dir = tmp_path / "source_arch"
+    write_model(
+        architecture_dir / "model.sysml",
+        """
+        package Example {
+          port def Signal {
+            attribute x : Real;
+            attribute y : Real;
+          }
+
+          part def Source {
+            out port sig : Signal;
+          }
+
+          part def Sink {
+            in port sigIn : Signal;
+            out port sig : Signal;
+          }
+
+          part def Inner {
+            in port u : Signal;
+            out port v : Signal;
+            part src : Source;
+            part dst : Sink;
+            connect u to src.sig;
+            connect src.sig to dst.sigIn;
+            connect dst.sig to v;
+          }
+
+          part def SystemComposition {
+            out port y : Signal;
+            part inner : Inner;
+            connect inner.v to y;
+          }
+        }
+        """,
+    )
+
+    first_ssd = tmp_path / "source" / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, first_ssd, "SystemComposition")
+
+    roundtrip_arch = tmp_path / "roundtrip_arch"
+    roundtrip_arch.mkdir()
+    generated = roundtrip_arch / "architecture.sysml"
+    generate_sysml_from_ssd(first_ssd, generated)
+
+    text = generated.read_text()
+    assert "connect u to src.sig;" in text
+    assert "connect dst.sig to v;" in text
+    assert "connect inner.v to y;" in text
+
+    second_ssd = tmp_path / "regenerated.ssd"
+    generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
+
+    assert _wiring(second_ssd) == _wiring(first_ssd)

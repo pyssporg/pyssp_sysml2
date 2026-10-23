@@ -490,3 +490,150 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
 
     assert "part inner : Inner;" in text
     assert "bind outer.inner.parameters = Nom;" in text
+
+
+def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> None:
+    """A connection end without an element becomes a bare port reference."""
+    ssd_path = tmp_path / "boundary.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "BoundaryExample"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="BoundaryExample")
+        ssd.xml.system.connectors.append(
+            Connector(name="y", kind="output", type_name="Real")
+        )
+
+        inner = System(name="inner")
+        inner.connectors.extend(
+            [
+                Connector(name="u", kind="input", type_name="Real"),
+                Connector(name="v", kind="output", type_name="Real"),
+            ]
+        )
+        src = Component()
+        src.name = "src"
+        src.source = "resources/Source.fmu"
+        src.connectors.append(Connector(name="sig", kind="output", type_name="Real"))
+        inner.elements.append(src)
+
+        dst = Component()
+        dst.name = "dst"
+        dst.source = "resources/Sink.fmu"
+        dst.connectors.extend(
+            [
+                Connector(name="sigIn", kind="input", type_name="Real"),
+                Connector(name="sig", kind="output", type_name="Real"),
+            ]
+        )
+        inner.elements.append(dst)
+
+        inner.connections.extend(
+            [
+                Connection(start_connector="u", end_element="src", end_connector="sig"),
+                Connection(
+                    start_element="src",
+                    start_connector="sig",
+                    end_element="dst",
+                    end_connector="sigIn",
+                ),
+                Connection(start_element="dst", start_connector="sig", end_connector="v"),
+            ]
+        )
+        ssd.xml.system.elements.append(inner)
+        ssd.xml.system.connections.append(
+            Connection(start_element="inner", start_connector="v", end_connector="y")
+        )
+
+    output = tmp_path / "boundary.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = _architecture_text(output)
+
+    assert "connect u to src.sig;" in text
+    assert "connect dst.sig to v;" in text
+    assert "connect inner.v to y;" in text
+
+
+def test_generate_sysml_from_ssd_rejects_unknown_boundary_port(tmp_path: Path) -> None:
+    """A boundary connection must reference a declared system connector."""
+    ssd_path = tmp_path / "boundary.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "BoundaryExample"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="BoundaryExample")
+
+        src = Component()
+        src.name = "src"
+        src.source = "resources/Source.fmu"
+        src.connectors.append(Connector(name="sig", kind="output", type_name="Real"))
+        ssd.xml.system.elements.append(src)
+        ssd.xml.system.connections.append(
+            Connection(start_element="src", start_connector="sig", end_connector="y")
+        )
+
+    with pytest.raises(ValueError, match="boundary port"):
+        generate_sysml_from_ssd(ssd_path, tmp_path / "boundary.sysml")
+
+
+def test_generate_sysml_from_ssd_writes_boundary_connections(tmp_path: Path) -> None:
+    """An SSD connection without an element becomes a bare-name connect."""
+    ssd_path = tmp_path / "boundary.ssd"
+    with SSD(ssd_path, mode="w") as ssd:
+        ssd.xml.name = "Boundary"
+        ssd.xml.version = "1.0"
+        ssd.xml.system = System(name="Boundary")
+        ssd.xml.system.connectors.append(
+            Connector(name="y.x", kind="output", type_name="Real")
+        )
+
+        inner = System(name="inner")
+        inner.connectors.extend(
+            [
+                Connector(name="u.x", kind="input", type_name="Real"),
+                Connector(name="v.x", kind="output", type_name="Real"),
+            ]
+        )
+        src = Component()
+        src.name = "src"
+        src.source = "resources/Source.fmu"
+        src.connectors.append(Connector(name="sig.x", kind="output", type_name="Real"))
+        inner.elements.append(src)
+        dst = Component()
+        dst.name = "dst"
+        dst.source = "resources/Sink.fmu"
+        dst.connectors.extend(
+            [
+                Connector(name="sigIn.x", kind="input", type_name="Real"),
+                Connector(name="sig.x", kind="output", type_name="Real"),
+            ]
+        )
+        inner.elements.append(dst)
+        inner.connections.extend(
+            [
+                Connection(
+                    start_connector="u.x", end_element="src", end_connector="sig.x"
+                ),
+                Connection(
+                    start_element="src",
+                    start_connector="sig.x",
+                    end_element="dst",
+                    end_connector="sigIn.x",
+                ),
+                Connection(
+                    start_element="dst", start_connector="sig.x", end_connector="v.x"
+                ),
+            ]
+        )
+        ssd.xml.system.elements.append(inner)
+        ssd.xml.system.connections.append(
+            Connection(
+                start_element="inner", start_connector="v.x", end_connector="y.x"
+            )
+        )
+
+    output = tmp_path / "boundary.sysml"
+    generate_sysml_from_ssd(ssd_path, output)
+    text = _architecture_text(output)
+
+    assert "connect u to src.sig;" in text
+    assert "connect dst.sig to v;" in text
+    assert "connect inner.v to y;" in text

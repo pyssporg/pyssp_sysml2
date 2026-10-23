@@ -271,6 +271,38 @@ therefore become the same one-attribute port type and round-trip as
 This is intentional: SSP only gives the attribute names, not the original
 SysML port definition names.
 
+### Boundary connections
+
+A connection end without a part names a port of the enclosing part def, i.e.
+the system boundary:
+
+```sysml
+part def Inner {
+  in port u : Signal;
+  out port v : Signal;
+  part gain : Gain;
+  connect u to gain.u;
+  connect gain.y to v;
+}
+```
+
+The SSD omits `startElement`/`endElement` for that end, which is how SSP
+means "a connector of the enclosing system":
+
+```xml
+<ssd:Connection startConnector="u.x" endElement="gain" endConnector="u.x" />
+<ssd:Connection startElement="gain" startConnector="y.x" endConnector="v.x" />
+```
+
+Rules:
+
+- a boundary port used at the start of a connection must be declared `in`;
+- a boundary port used at the end must be declared `out`;
+- a connection between two boundary ports is rejected (it would not cross a
+  subpart);
+- `generate sysml` and `sync ssd` write the same bare-name form back.
+
+
 ## 5. Control attributes and FMU metadata
 
 Several SSP concepts have no first-class SysML v2 equivalent. Simple metadata

@@ -46,10 +46,31 @@ from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 def _endpoint_port_def(
     system: PartDefinition,
     architecture: Architecture,
-    part_name: str,
+    part_name: str | None,
     port_name: str,
 ):
-    """Resolve a connection endpoint to its port definition."""
+    """Resolve a connection endpoint to its port definition.
+
+    ``part_name is None`` is a port of the enclosing system itself, i.e. the
+    system boundary; the SSD connection omits the element for that end.
+    """
+    if part_name is None:
+        port_usage = system.ports.get(port_name)
+        if port_usage is None:
+            raise ValueError(
+                f"Unknown boundary port '{port_name}' in connection; declare "
+                f"it as a port of '{system.name}'"
+            )
+        port_def = architecture.resolve_port(port_usage)
+        if port_def is None:
+            raise ValueError("Port definition not connected")
+        if is_parameter_interface(port_def):
+            raise ValueError(
+                f"Parameter port '{port_name}' cannot be connected; "
+                "apply a parameter set with 'bind'"
+            )
+        return port_def
+
     part_usage = system.parts.get(part_name)
     if part_usage is None:
         raise ValueError(f"Unknown part '{part_name}' in connection")
@@ -68,6 +89,31 @@ def _endpoint_port_def(
             "apply a parameter set with 'bind'"
         )
     return port_def
+
+
+def _check_boundary_direction(
+    system: PartDefinition,
+    part_name: str | None,
+    port_name: str,
+    expected_direction: str,
+) -> None:
+    """A boundary endpoint must be an input at the start and an output at the end.
+
+    Inside a system, an input port receives from the parent and feeds the
+    enclosed components; an output port consumes from the enclosed components
+    and exposes the value to the parent.
+    """
+    if part_name is not None:
+        return
+    port_usage = system.ports[port_name]
+    if port_usage.direction != expected_direction:
+        side = "start" if expected_direction == "in" else "end"
+        raise ValueError(
+            f"Boundary port '{port_name}' of '{system.name}' is declared as "
+            f"'{port_usage.direction}' but is used as the {side} of a "
+            "connection; boundary ports are inputs at the start and outputs "
+            "at the end"
+        )
 
 
 def _parameter_set_source(set_name: str, prefix: str) -> str:
@@ -146,11 +192,20 @@ def _add_connections(
 ) -> None:
     """Append this system level's connections to an SSD system."""
     for conn in part_def.connections.values():
+        if conn.source_part is None and conn.destination_part is None:
+            raise ValueError(
+                f"Connection '{conn.key}' links two boundary ports of "
+                f"'{part_def.name}'; a connection must cross into a subpart"
+            )
         src_port_def = _endpoint_port_def(
             part_def, architecture, conn.source_part, conn.source_port
         )
         dst_port_def = _endpoint_port_def(
             part_def, architecture, conn.destination_part, conn.destination_port
+        )
+        _check_boundary_direction(part_def, conn.source_part, conn.source_port, "in")
+        _check_boundary_direction(
+            part_def, conn.destination_part, conn.destination_port, "out"
         )
         if type_check and src_port_def is not dst_port_def:
             raise ValueError(
