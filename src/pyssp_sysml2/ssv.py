@@ -29,11 +29,11 @@ def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attrib
             for idx, item in enumerate(attr.value, start=0):
                 indexed_name = f"{name}[{idx}]"
                 formatted = format_value(data_type, item)
-                ssv.xml.add_parameter(indexed_name, ptype=data_type, value=formatted)
+                ssv.add_parameter(indexed_name, formatted, type_name=data_type)
             continue
 
         formatted = format_value(data_type, attr.value)
-        ssv.xml.add_parameter(name, ptype=data_type, value=formatted)
+        ssv.add_parameter(name, formatted, type_name=data_type)
 
 
 def write_parameter_set(

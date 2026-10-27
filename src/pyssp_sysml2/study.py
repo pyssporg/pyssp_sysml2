@@ -118,7 +118,7 @@ def generate_study(
                             f"Study mapping target '{target}' is not below "
                             f"'{model_part_usage.name}'"
                         )
-                    ssm.xml.add_mapping(source, target[len(prefix) :])
+                    ssm.add_mapping(source, target[len(prefix) :])
 
         scenario = {
             "set": set_definition.name,

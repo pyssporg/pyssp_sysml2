@@ -27,6 +27,7 @@ from pyssp_sysml2.parameters import (
     parameter_declarations,
     parameter_interface,
     parameter_items,
+    parameter_set_resource,
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_parent_dir
@@ -113,16 +114,11 @@ def _check_boundary_direction(
         )
 
 
-def _parameter_set_source(set_name: str, prefix: str) -> str:
-    prefix = prefix.strip().strip("/")
-    return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
-
-
 def _parameter_binding(
     system: System, spec: MappingSpec, parameter_set_prefix: str
 ) -> ParameterBinding:
     """Attach one parameter binding to *system* and return it."""
-    source = _parameter_set_source(spec.set_name, parameter_set_prefix)
+    source = parameter_set_resource(parameter_set_prefix, spec.set_name)
     if spec.identity:
         return system.add_parameter_binding(
             source, prefix=f"{spec.component_name}."

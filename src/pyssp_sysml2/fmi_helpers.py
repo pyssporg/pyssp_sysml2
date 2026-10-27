@@ -1,7 +1,7 @@
 """Utility helpers for working with FMI artifacts derived from Modelica classes."""
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Optional
 
 
 def fmu_filename(modelica_class: str) -> str:

@@ -31,6 +31,6 @@ def generate_parameter_mappings(
         ensure_directory(output_dir)
         with SSM(output_path, mode="w") as ssm:
             for source, target in spec.entries:
-                ssm.xml.add_mapping(source, target)
+                ssm.add_mapping(source, target)
         written.append(output_path)
     return sorted(written)

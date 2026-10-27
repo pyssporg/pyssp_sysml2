@@ -77,6 +77,12 @@ def is_parameter_set(definition: AttributeDefinition | None) -> bool:
     return _specializes_marker(definition, PARAMETER_SET_MARKER)
 
 
+def parameter_set_resource(prefix: str, set_name: str) -> str:
+    """Archive-relative path of one parameter set inside an SSP."""
+    prefix = prefix.strip().strip("/")
+    return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
+
+
 def validate_marker_definitions(architecture: Architecture) -> None:
     """Require the marker defs used by ``:>`` to exist with the right kind."""
     interface_users = [

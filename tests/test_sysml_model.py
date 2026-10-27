@@ -7,8 +7,6 @@ like the rest of the repo.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from pyssp_sysml2.sysml_model import Architecture, load

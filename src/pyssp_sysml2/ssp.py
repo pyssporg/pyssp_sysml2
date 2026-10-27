@@ -29,10 +29,11 @@ from pyssp_standard import (
     validate_component_fmu,
 )
 
-from pyssp_sysml2.fmi_helpers import fmu_resource_path
+from pyssp_sysml2.fmi_helpers import fmu_filename
 from pyssp_sysml2.fmu_metadata import fmu_metadata
 from pyssp_sysml2.parameters import (
     component_definitions,
+    parameter_set_resource,
     parameter_sets_for_generation,
     validate_parameter_dialect,
 )
@@ -60,10 +61,6 @@ def _resolve_fmu_source(source: str, fmu_root: Path | None) -> Path:
     return path.resolve()
 
 
-def _default_resource_name(part_def: PartDefinition) -> str:
-    return Path(fmu_resource_path(part_def.name)).name
-
-
 def _collect_fmu_resources(
     architecture: Architecture,
     system: PartDefinition,
@@ -77,7 +74,7 @@ def _collect_fmu_resources(
             continue
 
         metadata = fmu_metadata(architecture, part_def)
-        resource_name = _default_resource_name(part_def)
+        resource_name = fmu_filename(part_def.name)
         if metadata is None or not metadata.source:
             # No FMU authored yet: the design structure leaves the component
             # unpopulated (empty SSD source).
@@ -200,10 +197,6 @@ def _normalise_parameter_set_prefix(prefix: str) -> str:
     return path.as_posix()
 
 
-def _parameter_set_target(prefix: str, set_name: str) -> str:
-    return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
-
-
 def generate_ssp(
     architecture_path: Path,
     output_path: Path,
@@ -298,7 +291,7 @@ def generate_ssp(
             for definition, ssv_path in ssv_paths:
                 archive.runtime.add_file(
                     ssv_path,
-                    target_name=_parameter_set_target(
+                    target_name=parameter_set_resource(
                         parameter_set_prefix, definition.name
                     ),
                 )

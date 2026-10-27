@@ -36,8 +36,6 @@ name inside their definition; connections and bindings keep insertion order.
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from pyssp_sysml2.sysml_model.model import (
     Architecture,
     Attribute,
