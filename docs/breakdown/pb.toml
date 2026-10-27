@@ -1,0 +1,8 @@
+[layout]
+archive = "../archive/archive.zip"
+repo_root = "../.."
+
+[registers]
+index = "README.md"
+log = "design-choice-log.md"
+traceability = "traceability-map.md"

@@ -1,3 +1,12 @@
+---
+id: INFO-001
+type: info
+title: Intent
+summary: Why pyssp_sysml2 exists, what it commits to, and what it refuses to become.
+date: 2026-10-23
+status: current
+---
+
 # Intent
 
 ## Purpose
@@ -9,19 +18,26 @@ simulations.
 
 It covers two directions:
 
-- SysML architecture or SSD → SSD, one SSV per parameter set, SSM parameter
+- SysML architecture or SSD to SSD, one SSV per parameter set, SSM parameter
   mappings, FMI model descriptions, and a packaged SSP.
-- SSD wiring edits → a sync back into an existing SysML composition, or a
+- SSD wiring edits to a sync back into an existing SysML composition, or a
   minimal SysML architecture bootstrapped from an SSD.
 
 ## Scope
 
-| Belongs here | Belongs elsewhere |
-| --- | --- |
-| SysML v2 model adapter and generators | SSP/FMI XML object model (`pyssp_standard`) |
-| SSD/SSV/SSM/FMI XML/SSP generation | engine execution and result normalisation (`pyssp_simulate`) |
-| SSD→SysML synthesis and `sync ssd` | measurement and judgment (`pyssp_vv`) |
-| the `pyssp` CLI as the public surface | workflow composition and scheduling (`pyssp_workflow`) |
+Belongs here:
+
+- SysML v2 model adapter and generators.
+- SSD, SSV, SSM, FMI XML, and SSP generation.
+- SSD to SysML synthesis and `sync ssd`.
+- the `pyssp` CLI as the public surface.
+
+Belongs elsewhere:
+
+- SSP/FMI XML object model: `pyssp_standard`.
+- engine execution and result normalisation: `pyssp_simulate`.
+- measurement and judgment: `pyssp_vv`.
+- workflow composition and scheduling: `pyssp_workflow`.
 
 ## Commitments
 
@@ -38,12 +54,11 @@ It covers two directions:
 - **Generated SysML is deliberately minimal.** Only SSD information with a
   documented SysML representation is emitted. The rest is carried as typed FMU
   metadata or `pyssp_*` control attributes and preserved on regeneration.
-- **Round-trip limits are explicit.** The fidelity limits are documented in
-  `docs/methodology/03-generation-and-roundtrip.md`; they are not to be
-  presented as full round-trip.
-- **The code is the source of truth for the methodology.** When
-  `docs/methodology/` and the implementation disagree, the implementation wins
-  and the documentation is updated.
+- **Round-trip limits are explicit.** Fidelity limits are documented in
+  `INFO-007`; they are not to be presented as full round-trip.
+- **The code is the source of truth for the methodology.** When the documented
+  dialect and the implementation disagree, the implementation wins and the
+  documentation is updated.
 
 ## Non-goals
 
@@ -55,10 +70,12 @@ It covers two directions:
 
 ## Roles of the ecosystem
 
-| Package | Responsibility | Relation to `pyssp_sysml2` |
-| --- | --- | --- |
-| `pyssp_sysml2` | SysML → SSP/FMI generation, SSD → SysML sync | — |
-| `pyssp_standard` | SSP/FMI XML object handling | consumed |
-| `pyssp_simulate` | run engines, normalise results | consumes the generated SSP |
-| `pyssp_vv` | measurement, judgment, evidence | judges the simulated result |
-| `pyssp_workflow` | build/run/compare/verify flows | composes the steps |
+- **`pyssp_sysml2`** generates SysML to SSP/FMI artifacts and syncs SSD to
+  SysML.
+- **`pyssp_standard`** handles SSP/FMI XML objects; consumed by this package.
+- **`pyssp_simulate`** runs engines and normalises results; consumes the
+  generated SSP.
+- **`pyssp_vv`** measures, judges, and records evidence; judges the simulated
+  result.
+- **`pyssp_workflow`** builds, runs, compares, and verifies; composes the
+  steps.

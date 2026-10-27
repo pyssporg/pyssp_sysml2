@@ -10,7 +10,7 @@ internals and schema bindings do not cross.
 ## Who This Is For
 
 - `README.md` (this file): package users who want to generate/sync artifacts.
-- `docs/development.md`: contributors and maintainers.
+- `docs/breakdown/`: intent, architecture, and contributor guidance.
 
 ## Workflow Overview
 
@@ -199,7 +199,7 @@ A complete two-study example over one `SspModel` is in
 Parameters can be separated from the component definition into an interface
 and reusable value sets. The full methodology, including multiple-set and
 nested-path patterns, is in
-[`docs/methodology/01-parameter-sets.md`](docs/methodology/01-parameter-sets.md).
+[`docs/breakdown/01-product/parameter-model.md`](docs/breakdown/01-product/parameter-model.md).
 
 ```sysml
 port def ParameterInterface;
@@ -582,6 +582,6 @@ Artifact purpose:
 
 Project internals, test/reference behavior, and maintainer workflow are in:
 
-- [`docs/methodology/README.md`](docs/methodology/README.md) — SysML v2
-  simulation-modeling methodology knowledge base, starting with parameter sets
-- [`docs/development.md`](docs/development.md)
+- [`docs/breakdown/README.md`](docs/breakdown/README.md) — current state: intent,
+  parameter dialect, architecture, implementation, verification, operation, and
+  evolution

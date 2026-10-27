@@ -34,8 +34,8 @@ is a runtime mapping, not an FMI start value).
 
 The same dialect supports multiple disjoint sets per component and nested part
 paths such as `bind outer.inner.parameters.k = nominal.k`. For the full
-methodology and more examples, see
-[`docs/methodology/01-parameter-sets.md`](../../docs/methodology/01-parameter-sets.md).
+dialect, see the parameter-set leaves beginning with `CP-001` in the
+[product breakdown](../../docs/breakdown/README.md).
 
 Regenerate SysML from the SSD to see the synthesized dialect:
 

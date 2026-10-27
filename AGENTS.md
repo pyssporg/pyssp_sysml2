@@ -33,8 +33,8 @@ interchange artifact (SSD/SSV/SSM/SSP/FMI XML) is the library boundary; the CLI
 is the public surface for other projects.
 
 - SysML parsing sits behind the adapter in `src/pyssp_sysml2/sysml_model/`.
-- Modeling conventions live in `docs/methodology/`; the code is the source of
-  truth when the two disagree.
+- Current state, intent, and modeling conventions live in `docs/breakdown/`; the
+  code is the source of truth when the two disagree.
 - This is also a test and experiment repo: keep it easy to extend.
 
 ## Hard constraints
@@ -71,8 +71,8 @@ is the public surface for other projects.
 
 ## Conventions
 
-- Current state and intent live in `docs/breakdown/`; modeling conventions live
-  in `docs/methodology/`. When code and docs disagree, the code wins and the
+- Current state and intent live in `docs/breakdown/`; modeling conventions
+  live there too. When code and docs disagree, the code wins and the
   documentation is updated.
 - When behavior changes, update or add tests close to the affected code.
 - Prefer test-local model setup over large shared fixtures unless the fixture is

@@ -1,9 +1,9 @@
-# Parameter-set methodology examples
+# Parameter-set examples
 
-Each directory is a self-contained SysML model used by
-[01 — Parameter sets](../../01-parameter-sets.md). They are runnable, but they
-intentionally live under `docs/` so they do not become part of the repository's
-main example suite.
+Each directory is a self-contained SysML model used by the parameter-set leaves
+in the product breakdown (`CP-001` to `CP-004`, index at
+`docs/breakdown/README.md`). They run like the other examples under
+`examples/`.
 
 | Example | Demonstrates | Composition |
 | --- | --- | --- |
@@ -19,24 +19,24 @@ installed; otherwise use `PYTHONPATH=src python3 -m pyssp_sysml2.cli`.
 
 ```bash
 pyssp generate ssv \
-  --architecture docs/methodology/examples/parameter-sets/identity \
+  --architecture examples/parameter-sets/identity \
   --composition IdentityComposition \
-  --output-dir build/methodology/identity/parameter_sets
+  --output-dir build/parameter-sets/identity/parameter_sets
 
 pyssp generate ssd \
-  --architecture docs/methodology/examples/parameter-sets/identity \
+  --architecture examples/parameter-sets/identity \
   --composition IdentityComposition \
-  --output build/methodology/identity/SystemStructure.ssd
+  --output build/parameter-sets/identity/SystemStructure.ssd
 
 pyssp generate fmi \
-  --architecture docs/methodology/examples/parameter-sets/identity \
+  --architecture examples/parameter-sets/identity \
   --composition IdentityComposition \
-  --output-dir build/methodology/identity/model_descriptions
+  --output-dir build/parameter-sets/identity/model_descriptions
 ```
 
 Expected:
 
-- `build/methodology/identity/parameter_sets/NominalSet.ssv`
+- `build/parameter-sets/identity/parameter_sets/NominalSet.ssv`
 - an SSD `ParameterBinding` with `prefix="autopilot."` and no inline mapping;
 - FMI parameter variables `waypointCount`, `waypointX_km[0..2]`.
 
@@ -44,25 +44,25 @@ Expected:
 
 ```bash
 pyssp generate ssv \
-  --architecture docs/methodology/examples/parameter-sets/explicit \
+  --architecture examples/parameter-sets/explicit \
   --composition ExplicitComposition \
-  --output-dir build/methodology/explicit/parameter_sets
+  --output-dir build/parameter-sets/explicit/parameter_sets
 
 pyssp generate ssd \
-  --architecture docs/methodology/examples/parameter-sets/explicit \
+  --architecture examples/parameter-sets/explicit \
   --composition ExplicitComposition \
-  --output build/methodology/explicit/SystemStructure.ssd
+  --output build/parameter-sets/explicit/SystemStructure.ssd
 
 pyssp generate ssm \
-  --architecture docs/methodology/examples/parameter-sets/explicit \
+  --architecture examples/parameter-sets/explicit \
   --composition ExplicitComposition \
-  --output-dir build/methodology/explicit/parameter_mappings
+  --output-dir build/parameter-sets/explicit/parameter_mappings
 ```
 
 Expected:
 
-- SSM entries renaming `n_waypoints` → `autopilot.waypointCount`;
-- list entries `waypoints_x_km[i]` → `autopilot.waypointX_km[i]`;
+- SSM entries renaming `n_waypoints` to `autopilot.waypointCount`;
+- list entries `waypoints_x_km[i]` to `autopilot.waypointX_km[i]`;
 - `NominalSet_autopilot.ssm`.
 
 The SSD also contains the same mapping inline by default.
@@ -71,14 +71,14 @@ The SSD also contains the same mapping inline by default.
 
 ```bash
 pyssp generate ssv \
-  --architecture docs/methodology/examples/parameter-sets/multiple \
+  --architecture examples/parameter-sets/multiple \
   --composition MultipleSetComposition \
-  --output-dir build/methodology/multiple/parameter_sets
+  --output-dir build/parameter-sets/multiple/parameter_sets
 
 pyssp generate ssd \
-  --architecture docs/methodology/examples/parameter-sets/multiple \
+  --architecture examples/parameter-sets/multiple \
   --composition MultipleSetComposition \
-  --output build/methodology/multiple/SystemStructure.ssd
+  --output build/parameter-sets/multiple/SystemStructure.ssd
 ```
 
 Expected:
@@ -91,37 +91,36 @@ Expected:
 
 ```bash
 pyssp generate ssv \
-  --architecture docs/methodology/examples/parameter-sets/nested \
+  --architecture examples/parameter-sets/nested \
   --composition NestedPathComposition \
-  --output-dir build/methodology/nested/parameter_sets
+  --output-dir build/parameter-sets/nested/parameter_sets
 
 pyssp generate ssd \
-  --architecture docs/methodology/examples/parameter-sets/nested \
+  --architecture examples/parameter-sets/nested \
   --composition NestedPathComposition \
-  --output build/methodology/nested/SystemStructure.ssd
+  --output build/parameter-sets/nested/SystemStructure.ssd
 
 pyssp generate sysml \
-  --ssd build/methodology/nested/SystemStructure.ssd \
-  --output build/methodology/nested/recovered.sysml
+  --ssd build/parameter-sets/nested/SystemStructure.ssd \
+  --output build/parameter-sets/nested/recovered.sysml
 ```
 
 Expected:
 
-- SSD nested shape: `System outer` → `Component inner`;
+- SSD nested shape: `System outer` to `Component inner`;
 - mapping target `outer.inner.k`;
 - recovered SysML contains `part def outer`, `part inner : Inner;`, and
   `bind NominalSet.k = outer.inner.parameters.k;`.
 
 The `generate sysml` step needs `NominalSet.ssv` to exist under the relative
 path referenced by the SSD. Generating the SSV into
-`build/methodology/nested/parameter_sets` before the SSD keeps that path
+`build/parameter-sets/nested/parameter_sets` before the SSD keeps that path
 valid.
 
 ## What these examples deliberately do not show
 
-- A set inside a set. That is not supported; see
-  [the reuse proposal](../../proposals/parameter-set-reuse.md).
-- Set inheritance/union with `:>` and `:>>`. Proposed only.
+- A set inside a set. That is not supported; see `IMP-001`.
+- Set inheritance or union with `:>` and `:>>`. Proposed only; see `IMP-001`.
 - Top-level composition parameter bags. Rejected by the dialect.
 - Overlapping sets on one component. Rejected; the error is documented in
-  [04 — Validation catalog](../../04-validation-catalog.md).
+  `INFO-016`.
