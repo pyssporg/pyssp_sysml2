@@ -24,9 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from pyssp_standard.ssd import Component, System
-from pyssp_standard.ssm import SSM
-from pyssp_standard.ssv import SSV
+from pyssp_standard import Component, SSM, SSV, System
 
 from pyssp_sysml2.control import (
     CONTROL_PREFIX,

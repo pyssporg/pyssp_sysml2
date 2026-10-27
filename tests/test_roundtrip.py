@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.ssd import (
+from pyssp_standard import (
     Component,
     Connector,
     DefaultExperiment,

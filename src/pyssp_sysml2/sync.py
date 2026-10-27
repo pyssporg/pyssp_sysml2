@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Dict, Iterable, Mapping, Tuple
 
-from pyssp_standard.ssd import Component, System
+from pyssp_standard import Component, System
 
 from pyssp_sysml2.fmu_metadata import (
     component_source,

@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.ssd import (
+from pyssp_standard import (
     Component,
     Connection,
     Connector,
     DefaultExperiment,
     ParameterBinding,
-    ParameterMapping,
     ParameterMappingReference,
     SSD,
+    Ssp1ParameterMapping,
     System,
 )
 
@@ -129,7 +129,7 @@ def _parameter_binding(
     if spec.identity:
         return ParameterBinding(source=source, prefix=f"{spec.component_name}.")
 
-    mapping = ParameterMapping(version="1.0")
+    mapping = Ssp1ParameterMapping(version="1.0")
     for source_name, target_name in spec.entries:
         mapping.add_mapping(source_name, target_name)
     return ParameterBinding(

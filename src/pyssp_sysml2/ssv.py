@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pyssp_standard.ssv import SSV
+from pyssp_standard import SSV
 
 from pyssp_sysml2.control import is_control_attribute
 from pyssp_sysml2.fmi_helpers import format_value

@@ -15,7 +15,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from pyssp_standard.ssm import SSM
+from pyssp_standard import SSM
 
 from pyssp_sysml2.parameters import (
     applied_sets,

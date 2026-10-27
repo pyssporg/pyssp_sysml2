@@ -4,7 +4,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from pyssp_standard.ssd import SSD
+from pyssp_standard import SSD
 
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd

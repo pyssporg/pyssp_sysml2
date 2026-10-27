@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 from textwrap import dedent
 
-from pyssp_standard.ssd import (
+from pyssp_standard import (
     Component,
     Connection,
     Connector,

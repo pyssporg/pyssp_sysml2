@@ -4,19 +4,17 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-from pyssp_standard.ssd import (
+from pyssp_standard import (
     Component,
     Connection,
     Connector,
     ParameterBinding,
+    ParameterMappingReference,
     SSD,
-    System,
-)
-from pyssp_standard.ssm import SSM
-from pyssp_standard.standard.ssp1.model import (
-    Ssd1ParameterMappingReference,
+    SSM,
     Ssp1ParameterMapping,
     Ssp1ParameterSet,
+    System,
 )
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
@@ -294,7 +292,7 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
         ssd.xml.system.parameter_bindings = [
             ParameterBinding(
                 parameter_set=parameter_set,
-                parameter_mapping=Ssd1ParameterMappingReference(mapping=mapping),
+                parameter_mapping=ParameterMappingReference(mapping=mapping),
             )
         ]
 
@@ -406,7 +404,7 @@ def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
         ssd.xml.system.parameter_bindings = [
             ParameterBinding(
                 source="parameters.ssv",
-                parameter_mapping=Ssd1ParameterMappingReference(
+                parameter_mapping=ParameterMappingReference(
                     source="mapping.ssm"
                 ),
             )

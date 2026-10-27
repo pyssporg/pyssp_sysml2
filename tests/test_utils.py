@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.ssd import Component, Connection, Connector, SSD, System
+from pyssp_standard import Component, Connection, Connector, SSD, System
 
 
 COMPOSITION_NAME = "SystemComposition"

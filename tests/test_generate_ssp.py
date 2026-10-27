@@ -5,9 +5,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from pyssp_standard.fmu import FMU
-from pyssp_standard.ssp import SSP
-from pyssp_standard.ssv import SSV
+from pyssp_standard import FMU, SSP, SSV
 
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.fmi import generate_model_descriptions

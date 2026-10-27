@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
-from pyssp_standard.ssd import SSD
+from pyssp_standard import SSD
 
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.parameters import (

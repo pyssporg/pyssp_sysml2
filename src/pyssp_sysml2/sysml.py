@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pyssp_standard.ssd import Component, SSD, System
+from pyssp_standard import Component, SSD, System
 
 from pyssp_sysml2.control import (
     DEFAULT_START_ATTR,

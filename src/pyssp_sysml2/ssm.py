@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard.ssm import SSM
+from pyssp_standard import SSM
 
 from pyssp_sysml2.parameters import mapping_specs
 from pyssp_sysml2.paths import ensure_directory
