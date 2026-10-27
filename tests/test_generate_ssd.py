@@ -13,10 +13,10 @@ from tests.test_utils import COMPOSITION_NAME, write_model
 
 def _ssd_summary(ssd_path) -> list[str]:
     with SSD(ssd_path, mode="r") as ssd:
-        assert ssd.xml.system is not None
+        assert ssd.system is not None
 
         lines = []
-        for component in sorted(ssd.xml.system.elements, key=lambda element: element.name):
+        for component in sorted(ssd.system.elements, key=lambda element: element.name):
             connector_summaries = sorted(
                 f"{connector.kind}:{connector.name}:{connector.type_name}"
                 for connector in component.connectors
@@ -25,7 +25,7 @@ def _ssd_summary(ssd_path) -> list[str]:
             lines.extend(f"  {summary}" for summary in connector_summaries)
 
         for connection in sorted(
-            ssd.xml.system.connections,
+            ssd.system.connections,
             key=lambda conn: (
                 conn.start_element,
                 conn.start_connector,
@@ -155,13 +155,13 @@ def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
 
     with SSD(output_path, mode="r") as ssd:
         assert ssd.xml.name == COMPOSITION_NAME
-        assert ssd.xml.version == "1.0"
-        assert ssd.xml.default_experiment is not None
-        assert ssd.xml.default_experiment.start_time == 0
-        assert ssd.xml.default_experiment.stop_time == 3600
-        assert ssd.xml.system is not None
-        assert len(ssd.xml.system.elements) == 1
-        component = ssd.xml.system.elements[0]
+        assert 'version="1.0"' in output_path.read_text()
+        assert ssd.default_experiment is not None
+        assert ssd.default_experiment.start_time == 0
+        assert ssd.default_experiment.stop_time == 3600
+        assert ssd.system is not None
+        assert len(ssd.system.elements) == 1
+        component = ssd.system.elements[0]
         assert component.name == "src"
         assert component.component_type == "application/x-fmu-sharedlibrary"
         assert component.source == ""
@@ -237,7 +237,7 @@ def test_generate_ssd_wires_system_boundary(tmp_path: Path) -> None:
     generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
 
     with SSD(output_path, mode="r") as ssd:
-        top = ssd.xml.system
+        top = ssd.system
         assert [(connector.name, connector.kind) for connector in top.connectors] == [
             ("y.x", "output")
         ]

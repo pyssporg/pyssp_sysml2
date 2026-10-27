@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard import Component, Connection, Connector, SSD, System
+from pyssp_standard import SSD
 
 
 COMPOSITION_NAME = "SystemComposition"
@@ -15,47 +15,28 @@ def write_model(path: Path, content: str) -> None:
 
 def write_bootstrap_ssd(path: Path, composition_name: str = COMPOSITION_NAME) -> Path:
     with SSD(path, mode="w") as ssd:
-        ssd.xml.name = composition_name
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name=composition_name)
+        top = ssd.new_system(composition_name)
+        ssd.rename(composition_name)
 
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.extend(
-            [
-                Connector(name="outSig.x", kind="output", type_name="Real"),
-                Connector(name="outSig.y", kind="output", type_name="Real"),
-            ]
+        src = top.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="outSig.x", kind="output", type_name="Real")
+        src.add_connector(name="outSig.y", kind="output", type_name="Real")
+
+        dst = top.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(name="inSig.x", kind="input", type_name="Real")
+        dst.add_connector(name="inSig.y", kind="input", type_name="Real")
+
+        top.add_connection(
+            start_element="src",
+            start_connector="outSig.x",
+            end_element="dst",
+            end_connector="inSig.x",
         )
-        ssd.xml.system.elements.append(src)
-
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.extend(
-            [
-                Connector(name="inSig.x", kind="input", type_name="Real"),
-                Connector(name="inSig.y", kind="input", type_name="Real"),
-            ]
-        )
-        ssd.xml.system.elements.append(dst)
-
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.x",
-                    end_element="dst",
-                    end_connector="inSig.x",
-                ),
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.y",
-                    end_element="dst",
-                    end_connector="inSig.y",
-                ),
-            ]
+        top.add_connection(
+            start_element="src",
+            start_connector="outSig.y",
+            end_element="dst",
+            end_connector="inSig.y",
         )
 
     return path

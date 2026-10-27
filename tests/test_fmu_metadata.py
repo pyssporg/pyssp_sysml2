@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from pyssp_standard import Component, SSD, System
+from pyssp_standard import SSD
 
 from pyssp_sysml2.fmu_metadata import (
     FmuMetadata,
@@ -58,8 +58,8 @@ def _load(tmp_path: Path, text: str):
 
 def _component(ssd_path: Path):
     with SSD(ssd_path, mode="r") as ssd:
-        assert ssd.xml.system is not None
-        [component] = ssd.xml.system.elements
+        assert ssd.system is not None
+        [component] = ssd.system.elements
         return component
 
 
@@ -296,8 +296,8 @@ def test_sync_updates_implementation_and_preserves_source(tmp_path) -> None:
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        [component] = ssd.xml.system.elements
+        assert ssd.system is not None
+        [component] = ssd.system.elements
         component.implementation = "ModelExchange"
 
     synced_dir = tmp_path / "synced"
@@ -323,8 +323,8 @@ def test_sync_resolves_empty_component_source_by_part_name(tmp_path) -> None:
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        [component] = ssd.xml.system.elements
+        assert ssd.system is not None
+        [component] = ssd.system.elements
         component.source = ""
 
     synced_dir = tmp_path / "synced"
@@ -370,14 +370,13 @@ def test_sysml_roundtrip_preserves_implementation_without_source(tmp_path) -> No
     """SSD source is authoring data: recovery keeps the name and implementation."""
     ssd_path = tmp_path / "source.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = COMPOSITION_NAME
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name=COMPOSITION_NAME)
-        component = Component()
-        component.name = "comp"
-        component.source = "resources/Renamed.fmu"
-        component.implementation = "CoSimulation"
-        ssd.xml.system.elements.append(component)
+        top = ssd.new_system(COMPOSITION_NAME)
+        ssd.rename(COMPOSITION_NAME)
+        top.add_component(
+            "comp",
+            source="resources/Renamed.fmu",
+            implementation="CoSimulation",
+        )
 
     architecture_dir = tmp_path / "recovered"
     architecture_dir.mkdir()

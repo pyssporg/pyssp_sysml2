@@ -34,9 +34,9 @@ def load_ssd_system(ssd_path: Path):
     if not Path(ssd_path).is_file():
         raise FileNotFoundError(f"SSD file not found: {ssd_path}")
     with SSD(ssd_path, mode="r") as ssd:
-        if ssd.xml.system is None:
+        if ssd.system is None:
             raise ValueError(f"No system element found in SSD: {ssd_path}")
-        return ssd.xml.system
+        return ssd.system
 
 
 def split_connector(name: str) -> tuple[str, str]:
@@ -470,7 +470,7 @@ def generate_sysml_from_ssd(
     composition: str | None = None,
 ) -> Path:
     with SSD(ssd_path, mode="r") as ssd:
-        ssd_system = ssd.xml.system
+        ssd_system = ssd.system
         if ssd_system is None:
             raise ValueError(f"No system element found in SSD: {ssd_path}")
         composition_name = composition or ssd_system.name
@@ -480,7 +480,7 @@ def generate_sysml_from_ssd(
             ssd_system,
             composition_name,
             ssd_path=ssd_path,
-            default_experiment=ssd.xml.default_experiment,
+            default_experiment=ssd.default_experiment,
         )
     file_texts = architecture.export_declared()
     if len(file_texts) != 1:

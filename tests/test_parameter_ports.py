@@ -203,7 +203,7 @@ def test_ssd_connectors_are_flat_parameter_connectors(tmp_path) -> None:
     generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
 
     with SSD(output_path, mode="r") as ssd:
-        component = ssd.xml.system.elements[0]
+        component = ssd.system.elements[0]
         assert sorted(
             (connector.name, connector.kind, connector.type_name)
             for connector in component.connectors

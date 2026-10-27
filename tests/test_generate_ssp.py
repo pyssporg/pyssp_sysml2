@@ -126,10 +126,10 @@ def _write_mismatched_fmu(fmu_path: Path) -> Path:
 def _component(ssp_path: Path):
     with SSP(ssp_path, mode="r") as ssp:
         with ssp.system_structure() as ssd:
-            assert ssd.xml.system is not None
+            assert ssd.system is not None
             return next(
                 element
-                for element in ssd.xml.system.elements
+                for element in ssd.system.elements
                 if element.name == "comp"
             )
 
@@ -158,8 +158,8 @@ def test_generate_ssp_packages_ssd_fmu_and_parameter_set(tmp_path: Path) -> None
     with SSP(output_path, mode="r") as ssp:
         assert ssp.resources == ["Comp.fmu", "parameter_sets/NominalSet.ssv"]
         with ssp.system_structure() as ssd:
-            assert ssd.xml.system is not None
-            [binding] = ssd.xml.system.parameter_bindings
+            assert ssd.system is not None
+            [binding] = ssd.system.parameter_bindings
             assert binding.source == "resources/parameter_sets/NominalSet.ssv"
 
         ssv_path = ssp.runtime.resolve(
@@ -204,8 +204,8 @@ def test_generate_ssp_uses_custom_parameter_set_prefix(tmp_path: Path) -> None:
 
     with SSP(output_path, mode="r") as ssp:
         with ssp.system_structure() as ssd:
-            assert ssd.xml.system is not None
-            [binding] = ssd.xml.system.parameter_bindings
+            assert ssd.system is not None
+            [binding] = ssd.system.parameter_bindings
             assert binding.source == "custom_sets/NominalSet.ssv"
 
 
@@ -228,8 +228,8 @@ def test_generate_ssp_without_parameter_sets(tmp_path: Path) -> None:
 
     with SSP(output_path, mode="r") as ssp:
         with ssp.system_structure() as ssd:
-            assert ssd.xml.system is not None
-            assert ssd.xml.system.parameter_bindings == []
+            assert ssd.system is not None
+            assert ssd.system.parameter_bindings == []
 
 
 def test_generate_ssp_rejects_missing_fmu_file(tmp_path: Path) -> None:
@@ -369,8 +369,8 @@ def test_generate_ssp_packages_nested_component(tmp_path: Path) -> None:
 
     with SSP(output_path, mode="r") as ssp:
         with ssp.system_structure() as ssd:
-            assert ssd.xml.system is not None
-            [sub] = ssd.xml.system.elements
+            assert ssd.system is not None
+            [sub] = ssd.system.elements
             [leaf] = sub.elements
             assert leaf.name == "leaf"
             assert leaf.source == "resources/Leaf.fmu"

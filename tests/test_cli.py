@@ -261,7 +261,7 @@ def test_pyssp_generate_ssd_cli_parameter_set_prefix(tmp_path: Path) -> None:
 
     assert code == 0
     with SSD(output, mode="r") as ssd:
-        [binding] = ssd.xml.system.parameter_bindings
+        [binding] = ssd.system.parameter_bindings
         assert binding.source == "custom_sets/NominalSet.ssv"
 
 

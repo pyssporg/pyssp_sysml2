@@ -4,18 +4,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
-from pyssp_standard import (
-    Component,
-    Connection,
-    Connector,
-    ParameterBinding,
-    ParameterMappingReference,
-    SSD,
-    SSM,
-    Ssp1ParameterMapping,
-    Ssp1ParameterSet,
-    System,
-)
+from pyssp_standard import SSD, SSM, SSV
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
@@ -75,29 +64,20 @@ def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> N
     """Generating SysML from SSD tolerates scalar connector names without dotted attributes."""
     ssd_path = tmp_path / "scalar.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ScalarExample"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ScalarExample")
+        top = ssd.new_system("ScalarExample")
+        ssd.rename("ScalarExample")
 
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.append(Connector(name="signal", kind="output", type_name="Real"))
-        ssd.xml.system.elements.append(src)
+        src = top.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="signal", kind="output", type_name="Real")
 
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.append(Connector(name="signal", kind="input", type_name="Real"))
-        ssd.xml.system.elements.append(dst)
+        dst = top.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(name="signal", kind="input", type_name="Real")
 
-        ssd.xml.system.connections.append(
-            Connection(
-                start_element="src",
-                start_connector="signal",
-                end_element="dst",
-                end_connector="signal",
-            )
+        top.add_connection(
+            start_element="src",
+            start_connector="signal",
+            end_element="dst",
+            end_connector="signal",
         )
 
     output = tmp_path / "scalar.sysml"
@@ -134,52 +114,35 @@ def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer
 ) -> None:
     ssd_path = tmp_path / "enum_mix.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "EnumMix"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="EnumMix")
+        top = ssd.new_system("EnumMix")
+        ssd.rename("EnumMix")
 
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.extend(
-            [
-                Connector(name="signal.Aircraft_State", kind="output", type_name="Integer"),
-                Connector(name="signal.TLiquid", kind="output", type_name="Real"),
-            ]
+        src = top.add_component("src", source="resources/Source.fmu")
+        src.add_connector(
+            name="signal.Aircraft_State", kind="output", type_name="Integer"
         )
-        ssd.xml.system.elements.append(src)
+        src.add_connector(name="signal.TLiquid", kind="output", type_name="Real")
 
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.extend(
-            [
-                Connector(
-                    name="signal.Aircraft_State",
-                    kind="input",
-                    type_name="Enumeration",
-                    type_attributes={"name": "FlightPhase"},
-                ),
-                Connector(name="signal.TLiquid", kind="input", type_name="Real"),
-            ]
+        dst = top.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(
+            name="signal.Aircraft_State",
+            kind="input",
+            type_name="Enumeration",
+            type_attributes={"name": "FlightPhase"},
         )
-        ssd.xml.system.elements.append(dst)
+        dst.add_connector(name="signal.TLiquid", kind="input", type_name="Real")
 
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="src",
-                    start_connector="signal.Aircraft_State",
-                    end_element="dst",
-                    end_connector="signal.Aircraft_State",
-                ),
-                Connection(
-                    start_element="src",
-                    start_connector="signal.TLiquid",
-                    end_element="dst",
-                    end_connector="signal.TLiquid",
-                ),
-            ]
+        top.add_connection(
+            start_element="src",
+            start_connector="signal.Aircraft_State",
+            end_element="dst",
+            end_connector="signal.Aircraft_State",
+        )
+        top.add_connection(
+            start_element="src",
+            start_connector="signal.TLiquid",
+            end_element="dst",
+            end_connector="signal.TLiquid",
         )
 
     output = tmp_path / "enum_mix.sysml"
@@ -196,29 +159,20 @@ def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer
 def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_path: Path) -> None:
     ssd_path = tmp_path / "scalar_group.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ScalarGroup"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ScalarGroup")
+        top = ssd.new_system("ScalarGroup")
+        ssd.rename("ScalarGroup")
 
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.append(Connector(name="signal.value", kind="output", type_name="Real"))
-        ssd.xml.system.elements.append(src)
+        src = top.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="signal.value", kind="output", type_name="Real")
 
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.append(Connector(name="signal.in.y", kind="input", type_name="Real"))
-        ssd.xml.system.elements.append(dst)
+        dst = top.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(name="signal.in.y", kind="input", type_name="Real")
 
-        ssd.xml.system.connections.append(
-            Connection(
-                start_element="src",
-                start_connector="signal.value",
-                end_element="dst",
-                end_connector="signal.in.y",
-            )
+        top.add_connection(
+            start_element="src",
+            start_connector="signal.value",
+            end_element="dst",
+            end_connector="signal.in.y",
         )
 
     output = tmp_path / "scalar_group.sysml"
@@ -245,18 +199,12 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
     )
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
-        ssd.xml.system.parameter_bindings = [
-            ParameterBinding(source="parameters.ssv", prefix="gain")
-        ]
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
+        top.add_parameter_binding("parameters.ssv", prefix="gain")
 
-        gain = Component()
-        gain.name = "gain"
-        gain.source = "resources/Gain.fmu"
-        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
-        ssd.xml.system.elements.append(gain)
+        gain = top.add_component("gain", source="resources/Gain.fmu")
+        gain.add_connector(name="k", kind="parameter", type_name="Real")
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -275,38 +223,24 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
     tmp_path: Path,
 ) -> None:
     """Inline SSM entries become per-member binds with list expansion."""
-    parameter_set = Ssp1ParameterSet(name="Nom", version="1.0")
+    parameter_set = SSV.create_parameter_set("Nom")
     parameter_set.add_parameter("n", "Integer", value=5)
     parameter_set.add_parameter("x[0]", "Real", value=1.0)
     parameter_set.add_parameter("x[1]", "Real", value=2.0)
-    mapping = Ssp1ParameterMapping(version="1.0")
-    mapping.add_mapping("n", "comp.count")
-    mapping.add_mapping("x[0]", "comp.xs[0]")
-    mapping.add_mapping("x[1]", "comp.xs[1]")
+    mapping = SSM.create_mapping(
+        [("n", "comp.count"), ("x[0]", "comp.xs[0]"), ("x[1]", "comp.xs[1]")]
+    )
 
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
-        ssd.xml.system.parameter_bindings = [
-            ParameterBinding(
-                parameter_set=parameter_set,
-                parameter_mapping=ParameterMappingReference(mapping=mapping),
-            )
-        ]
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
+        top.add_parameter_binding(None, parameter_set=parameter_set, mapping=mapping)
 
-        comp = Component()
-        comp.name = "comp"
-        comp.source = "resources/Comp.fmu"
-        comp.connectors.extend(
-            [
-                Connector(name="count", kind="parameter", type_name="Integer"),
-                Connector(name="xs[0]", kind="parameter", type_name="Real"),
-                Connector(name="xs[1]", kind="parameter", type_name="Real"),
-            ]
-        )
-        ssd.xml.system.elements.append(comp)
+        comp = top.add_component("comp", source="resources/Comp.fmu")
+        comp.add_connector(name="count", kind="parameter", type_name="Integer")
+        comp.add_connector(name="xs[0]", kind="parameter", type_name="Real")
+        comp.add_connector(name="xs[1]", kind="parameter", type_name="Real")
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -327,21 +261,17 @@ def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
     tmp_path: Path,
 ) -> None:
     """A component-level inline ParameterValues applies to its owning component."""
-    parameter_set = Ssp1ParameterSet(name="parameters", version="1.0")
+    parameter_set = SSV.create_parameter_set("parameters")
     parameter_set.add_parameter("k", "Real", value=4.0)
 
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
 
-        gain = Component()
-        gain.name = "gain"
-        gain.source = "resources/Gain.fmu"
-        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
-        gain.parameter_bindings.append(ParameterBinding(parameter_set=parameter_set))
-        ssd.xml.system.elements.append(gain)
+        gain = top.add_component("gain", source="resources/Gain.fmu")
+        gain.add_connector(name="k", kind="parameter", type_name="Real")
+        gain.add_parameter_binding(None, parameter_set=parameter_set)
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -358,15 +288,11 @@ def test_generate_sysml_from_ssd_keeps_interface_without_binding(
     """Parameter connectors still define an interface when no set is applied."""
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
 
-        gain = Component()
-        gain.name = "gain"
-        gain.source = "resources/Gain.fmu"
-        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
-        ssd.xml.system.elements.append(gain)
+        gain = top.add_component("gain", source="resources/Gain.fmu")
+        gain.add_connector(name="k", kind="parameter", type_name="Real")
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -398,29 +324,14 @@ def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
 
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
-        ssd.xml.system.parameter_bindings = [
-            ParameterBinding(
-                source="parameters.ssv",
-                parameter_mapping=ParameterMappingReference(
-                    source="mapping.ssm"
-                ),
-            )
-        ]
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
+        top.add_parameter_binding("parameters.ssv", mapping_source="mapping.ssm")
 
-        comp = Component()
-        comp.name = "comp"
-        comp.source = "resources/Comp.fmu"
-        comp.connectors.extend(
-            [
-                Connector(name="count", kind="parameter", type_name="Integer"),
-                Connector(name="xs[0]", kind="parameter", type_name="Real"),
-                Connector(name="xs[1]", kind="parameter", type_name="Real"),
-            ]
-        )
-        ssd.xml.system.elements.append(comp)
+        comp = top.add_component("comp", source="resources/Comp.fmu")
+        comp.add_connector(name="count", kind="parameter", type_name="Integer")
+        comp.add_connector(name="xs[0]", kind="parameter", type_name="Real")
+        comp.add_connector(name="xs[1]", kind="parameter", type_name="Real")
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -434,17 +345,11 @@ def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
     """Reserved SysML keywords cannot become parameter feature names."""
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
 
-        comp = Component()
-        comp.name = "comp"
-        comp.source = "resources/Comp.fmu"
-        comp.connectors.append(
-            Connector(name="part", kind="parameter", type_name="Real")
-        )
-        ssd.xml.system.elements.append(comp)
+        comp = top.add_component("comp", source="resources/Comp.fmu")
+        comp.add_connector(name="part", kind="parameter", type_name="Real")
 
     with pytest.raises(ValueError, match="cannot be represented"):
         generate_sysml_from_ssd(ssd_path, tmp_path / "architecture.sysml")
@@ -465,22 +370,14 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
     )
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "Demo"
-        ssd.xml.version = "1.0"
-        top = System(name="Demo")
-        ssd.xml.system = top
+        top = ssd.new_system("Demo")
+        ssd.rename("Demo")
 
-        outer = System(name="outer")
-        top.elements.append(outer)
+        outer = top.add_subsystem("outer")
 
-        inner = Component()
-        inner.name = "inner"
-        inner.source = "resources/Inner.fmu"
-        inner.connectors.append(
-            Connector(name="k", kind="parameter", type_name="Real")
-        )
-        outer.elements.append(inner)
-        outer.parameter_bindings = [ParameterBinding(source="parameters.ssv")]
+        inner = outer.add_component("inner", source="resources/Inner.fmu")
+        inner.add_connector(name="k", kind="parameter", type_name="Real")
+        outer.add_parameter_binding("parameters.ssv")
 
     output = tmp_path / "architecture.sysml"
     generate_sysml_from_ssd(ssd_path, output)
@@ -494,52 +391,32 @@ def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> N
     """A connection end without an element becomes a bare port reference."""
     ssd_path = tmp_path / "boundary.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "BoundaryExample"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="BoundaryExample")
-        ssd.xml.system.connectors.append(
-            Connector(name="y", kind="output", type_name="Real")
-        )
+        top = ssd.new_system("BoundaryExample")
+        ssd.rename("BoundaryExample")
+        top.add_connector(name="y", kind="output", type_name="Real")
 
-        inner = System(name="inner")
-        inner.connectors.extend(
-            [
-                Connector(name="u", kind="input", type_name="Real"),
-                Connector(name="v", kind="output", type_name="Real"),
-            ]
-        )
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.append(Connector(name="sig", kind="output", type_name="Real"))
-        inner.elements.append(src)
+        inner = top.add_subsystem("inner")
+        inner.add_connector(name="u", kind="input", type_name="Real")
+        inner.add_connector(name="v", kind="output", type_name="Real")
+        src = inner.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="sig", kind="output", type_name="Real")
 
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.extend(
-            [
-                Connector(name="sigIn", kind="input", type_name="Real"),
-                Connector(name="sig", kind="output", type_name="Real"),
-            ]
-        )
-        inner.elements.append(dst)
+        dst = inner.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(name="sigIn", kind="input", type_name="Real")
+        dst.add_connector(name="sig", kind="output", type_name="Real")
 
-        inner.connections.extend(
-            [
-                Connection(start_connector="u", end_element="src", end_connector="sig"),
-                Connection(
-                    start_element="src",
-                    start_connector="sig",
-                    end_element="dst",
-                    end_connector="sigIn",
-                ),
-                Connection(start_element="dst", start_connector="sig", end_connector="v"),
-            ]
+        inner.add_connection(start_connector="u", end_element="src", end_connector="sig")
+        inner.add_connection(
+            start_element="src",
+            start_connector="sig",
+            end_element="dst",
+            end_connector="sigIn",
         )
-        ssd.xml.system.elements.append(inner)
-        ssd.xml.system.connections.append(
-            Connection(start_element="inner", start_connector="v", end_connector="y")
+        inner.add_connection(
+            start_element="dst", start_connector="sig", end_connector="v"
+        )
+        top.add_connection(
+            start_element="inner", start_connector="v", end_connector="y"
         )
 
     output = tmp_path / "boundary.sysml"
@@ -555,17 +432,13 @@ def test_generate_sysml_from_ssd_rejects_unknown_boundary_port(tmp_path: Path) -
     """A boundary connection must reference a declared system connector."""
     ssd_path = tmp_path / "boundary.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "BoundaryExample"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="BoundaryExample")
+        top = ssd.new_system("BoundaryExample")
+        ssd.rename("BoundaryExample")
 
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.append(Connector(name="sig", kind="output", type_name="Real"))
-        ssd.xml.system.elements.append(src)
-        ssd.xml.system.connections.append(
-            Connection(start_element="src", start_connector="sig", end_connector="y")
+        src = top.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="sig", kind="output", type_name="Real")
+        top.add_connection(
+            start_element="src", start_connector="sig", end_connector="y"
         )
 
     with pytest.raises(ValueError, match="boundary port"):
@@ -576,56 +449,32 @@ def test_generate_sysml_from_ssd_writes_boundary_connections(tmp_path: Path) -> 
     """An SSD connection without an element becomes a bare-name connect."""
     ssd_path = tmp_path / "boundary.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "Boundary"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="Boundary")
-        ssd.xml.system.connectors.append(
-            Connector(name="y.x", kind="output", type_name="Real")
-        )
+        top = ssd.new_system("Boundary")
+        ssd.rename("Boundary")
+        top.add_connector(name="y.x", kind="output", type_name="Real")
 
-        inner = System(name="inner")
-        inner.connectors.extend(
-            [
-                Connector(name="u.x", kind="input", type_name="Real"),
-                Connector(name="v.x", kind="output", type_name="Real"),
-            ]
+        inner = top.add_subsystem("inner")
+        inner.add_connector(name="u.x", kind="input", type_name="Real")
+        inner.add_connector(name="v.x", kind="output", type_name="Real")
+        src = inner.add_component("src", source="resources/Source.fmu")
+        src.add_connector(name="sig.x", kind="output", type_name="Real")
+        dst = inner.add_component("dst", source="resources/Sink.fmu")
+        dst.add_connector(name="sigIn.x", kind="input", type_name="Real")
+        dst.add_connector(name="sig.x", kind="output", type_name="Real")
+        inner.add_connection(
+            start_connector="u.x", end_element="src", end_connector="sig.x"
         )
-        src = Component()
-        src.name = "src"
-        src.source = "resources/Source.fmu"
-        src.connectors.append(Connector(name="sig.x", kind="output", type_name="Real"))
-        inner.elements.append(src)
-        dst = Component()
-        dst.name = "dst"
-        dst.source = "resources/Sink.fmu"
-        dst.connectors.extend(
-            [
-                Connector(name="sigIn.x", kind="input", type_name="Real"),
-                Connector(name="sig.x", kind="output", type_name="Real"),
-            ]
+        inner.add_connection(
+            start_element="src",
+            start_connector="sig.x",
+            end_element="dst",
+            end_connector="sigIn.x",
         )
-        inner.elements.append(dst)
-        inner.connections.extend(
-            [
-                Connection(
-                    start_connector="u.x", end_element="src", end_connector="sig.x"
-                ),
-                Connection(
-                    start_element="src",
-                    start_connector="sig.x",
-                    end_element="dst",
-                    end_connector="sigIn.x",
-                ),
-                Connection(
-                    start_element="dst", start_connector="sig.x", end_connector="v.x"
-                ),
-            ]
+        inner.add_connection(
+            start_element="dst", start_connector="sig.x", end_connector="v.x"
         )
-        ssd.xml.system.elements.append(inner)
-        ssd.xml.system.connections.append(
-            Connection(
-                start_element="inner", start_connector="v.x", end_connector="y.x"
-            )
+        top.add_connection(
+            start_element="inner", start_connector="v.x", end_connector="y.x"
         )
 
     output = tmp_path / "boundary.sysml"

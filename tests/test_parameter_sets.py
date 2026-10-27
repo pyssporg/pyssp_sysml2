@@ -232,7 +232,7 @@ def test_generate_ssd_emits_interface_parameter_connectors(tmp_path) -> None:
     )
 
     with SSD(output_path, mode="r") as ssd:
-        component = ssd.xml.system.elements[0]
+        component = ssd.system.elements[0]
         assert sorted(
             (connector.name, connector.kind, connector.type_name)
             for connector in component.connectors
@@ -243,7 +243,7 @@ def test_generate_ssd_emits_interface_parameter_connectors(tmp_path) -> None:
             ("waypointX_km[2]", "parameter", "Real"),
         ]
 
-        [binding] = ssd.xml.system.parameter_bindings
+        [binding] = ssd.system.parameter_bindings
         assert binding.source == "sets/NominalSet.ssv"
         assert binding.prefix is None
         assert binding.parameter_mapping is not None
@@ -279,7 +279,7 @@ def test_generate_ssd_identity_binding_uses_prefix(tmp_path) -> None:
     generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
 
     with SSD(output_path, mode="r") as ssd:
-        [binding] = ssd.xml.system.parameter_bindings
+        [binding] = ssd.system.parameter_bindings
         assert binding.source == "parameter_sets/NominalSet.ssv"
         assert binding.prefix == "autopilot"
         assert binding.parameter_mapping is None
@@ -431,7 +431,7 @@ def test_multiple_disjoint_sets_for_one_component_are_supported(
                 (mapping.source, mapping.target)
                 for mapping in binding.parameter_mapping.mapping.mappings
             ]
-            for binding in ssd.xml.system.parameter_bindings
+            for binding in ssd.system.parameter_bindings
         }
     assert bindings == {
         "parameter_sets/Counts.ssv": [("n", "comp.count")],
@@ -600,8 +600,8 @@ def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
     generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
 
     with SSD(output_path, mode="r") as ssd:
-        assert ssd.xml.system.parameter_bindings == []
-        component = ssd.xml.system.elements[0]
+        assert ssd.system.parameter_bindings == []
+        component = ssd.system.elements[0]
         assert sorted(
             (connector.name, connector.kind, connector.type_name)
             for connector in component.connectors

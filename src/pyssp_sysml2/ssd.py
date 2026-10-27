@@ -6,13 +6,9 @@ from pathlib import Path
 
 from pyssp_standard import (
     Component,
-    Connection,
-    Connector,
-    DefaultExperiment,
     ParameterBinding,
-    ParameterMappingReference,
     SSD,
-    Ssp1ParameterMapping,
+    SSM,
     System,
 )
 
@@ -123,23 +119,21 @@ def _parameter_set_source(set_name: str, prefix: str) -> str:
 
 
 def _parameter_binding(
-    spec: MappingSpec, parameter_set_prefix: str
+    system: System, spec: MappingSpec, parameter_set_prefix: str
 ) -> ParameterBinding:
+    """Attach one parameter binding to *system* and return it."""
     source = _parameter_set_source(spec.set_name, parameter_set_prefix)
     if spec.identity:
-        return ParameterBinding(source=source, prefix=f"{spec.component_name}.")
-
-    mapping = Ssp1ParameterMapping(version="1.0")
-    for source_name, target_name in spec.entries:
-        mapping.add_mapping(source_name, target_name)
-    return ParameterBinding(
-        source=source,
-        parameter_mapping=ParameterMappingReference(mapping=mapping),
+        return system.add_parameter_binding(
+            source, prefix=f"{spec.component_name}."
+        )
+    return system.add_parameter_binding(
+        source, mapping=SSM.create_mapping(spec.entries)
     )
 
 
 def _add_part_connectors(
-    element,
+    element: Component | System,
     part_def: PartDefinition,
     architecture: Architecture,
     parameter_model: bool,
@@ -164,29 +158,25 @@ def _add_part_connectors(
                 if flat
                 else f"{port_usage.name}.{attribute.name}"
             )
-            element.connectors.append(
-                Connector(
-                    name=connector_name,
-                    kind=to_fmi_direction_definition(port_usage.direction),
-                    type_name=attribute.effective_type_name,
-                )
+            element.add_connector(
+                name=connector_name,
+                kind=to_fmi_direction_definition(port_usage.direction),
+                type_name=attribute.effective_type_name,
             )
 
     has_interface = parameter_interface(architecture, part_def) is not None
     if parameter_model and has_interface:
         for attribute in parameter_declarations(architecture, part_def):
             for item in parameter_items(attribute):
-                element.connectors.append(
-                    Connector(
-                        name=item.name,
-                        kind="parameter",
-                        type_name=item.type_name,
-                    )
+                element.add_connector(
+                    name=item.name,
+                    kind="parameter",
+                    type_name=item.type_name,
                 )
 
 
 def _add_connections(
-    target_system,
+    target_system: System,
     part_def: PartDefinition,
     architecture: Architecture,
     type_check: bool,
@@ -220,25 +210,23 @@ def _add_connections(
             if is_control_attribute(attribute_name):
                 continue
             target_system.add_connection(
-                Connection(
-                    start_element=conn.source_part,
-                    start_connector=(
-                        conn.source_port
-                        if src_flat
-                        else f"{conn.source_port}.{attribute_name}"
-                    ),
-                    end_element=conn.destination_part,
-                    end_connector=(
-                        conn.destination_port
-                        if dst_flat
-                        else f"{conn.destination_port}.{attribute_name}"
-                    ),
-                )
+                start_element=conn.source_part,
+                start_connector=(
+                    conn.source_port
+                    if src_flat
+                    else f"{conn.source_port}.{attribute_name}"
+                ),
+                end_element=conn.destination_part,
+                end_connector=(
+                    conn.destination_port
+                    if dst_flat
+                    else f"{conn.destination_port}.{attribute_name}"
+                ),
             )
 
 
 def _write_elements(
-    parent,
+    parent: System,
     part_def: PartDefinition,
     architecture: Architecture,
     *,
@@ -259,8 +247,7 @@ def _write_elements(
                     f"{child.name} has both subparts and 'fmu_meta' metadata; "
                     "a nested system cannot also be an FMU component"
                 )
-            nested = System(name=part_name)
-            parent.elements.append(nested)
+            nested = parent.add_subsystem(part_name)
             _add_part_connectors(nested, child, architecture, parameter_model)
             _write_elements(
                 nested,
@@ -271,14 +258,12 @@ def _write_elements(
             )
             continue
 
-        component = Component()
-        component.name = part_name
-        component.component_type = "application/x-fmu-sharedlibrary"
-        component.source = component_source(child, metadata)
-        implementation = component_implementation(metadata)
-        if implementation is not None:
-            component.implementation = implementation
-        parent.elements.append(component)
+        component = parent.add_component(
+            part_name,
+            source=component_source(child, metadata),
+            component_type="application/x-fmu-sharedlibrary",
+            implementation=component_implementation(metadata),
+        )
         _add_part_connectors(component, child, architecture, parameter_model)
 
     _add_connections(parent, part_def, architecture, type_check)
@@ -302,8 +287,8 @@ def build_ssd(
             f"Composition '{system.name}' selects an external SSP source via "
             "'ssp_meta'; it is a study-only boundary and cannot be exported"
         )
-    ssd.xml.name = system.name
-    ssd.xml.version = "1.0"
+    top = ssd.new_system(system.name)
+    ssd.rename(system.name)
 
     if parameter_interface(architecture, system) is not None:
         raise ValueError(
@@ -315,8 +300,6 @@ def build_ssd(
     parameter_model = has_parameter_dialect(architecture, system)
     specs = mapping_specs(architecture, system) if parameter_model else []
 
-    top = System(name=system.name)
-    ssd.xml.system = top
     _add_part_connectors(top, system, architecture, parameter_model)
     _write_elements(
         top,
@@ -328,15 +311,14 @@ def build_ssd(
 
     start = system.attributes.get(DEFAULT_START_ATTR)
     stop = system.attributes.get(DEFAULT_STOP_ATTR)
-    ssd.xml.default_experiment = DefaultExperiment(
+    ssd.set_default_experiment(
         start_time=float(start.value) if start is not None else 0,
         stop_time=float(stop.value) if stop is not None else 3600,
     )
 
     if parameter_model:
-        top.parameter_bindings = [
-            _parameter_binding(spec, parameter_set_prefix) for spec in specs
-        ]
+        for spec in specs:
+            _parameter_binding(top, spec, parameter_set_prefix)
 
 
 def generate_ssd(

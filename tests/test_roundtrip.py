@@ -4,14 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_standard import (
-    Component,
-    Connector,
-    DefaultExperiment,
-    ParameterBinding,
-    SSD,
-    System,
-)
+from pyssp_standard import Component, SSD, System
 
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssd import generate_ssd
@@ -39,28 +32,20 @@ def _write_reference_ssp(root: Path) -> Path:
 
     ssd_path = root / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "RoundTrip"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="RoundTrip")
-        ssd.xml.system.parameter_bindings = [ParameterBinding(source="parameters.ssv")]
+        top = ssd.new_system("RoundTrip")
+        ssd.rename("RoundTrip")
+        top.add_parameter_binding("parameters.ssv")
 
-        gain = Component()
-        gain.name = "gain"
-        gain.source = "resources/Gain.fmu"
-        gain.implementation = "CoSimulation"
-        gain.connectors.extend(
-            [
-                Connector(name="k", kind="parameter", type_name="Real"),
-                Connector(name="u", kind="input", type_name="Real"),
-                Connector(name="y", kind="output", type_name="Real"),
-            ]
+        gain = top.add_component(
+            "gain",
+            source="resources/Gain.fmu",
+            implementation="CoSimulation",
         )
-        ssd.xml.system.elements.append(gain)
+        gain.add_connector(name="k", kind="parameter", type_name="Real")
+        gain.add_connector(name="u", kind="input", type_name="Real")
+        gain.add_connector(name="y", kind="output", type_name="Real")
 
-        experiment = DefaultExperiment()
-        experiment.start_time = 0.0
-        experiment.stop_time = 2.0
-        ssd.xml.default_experiment = experiment
+        ssd.set_default_experiment(start_time=0.0, stop_time=2.0)
     return ssd_path
 
 
@@ -85,14 +70,14 @@ def test_ssd_sysml_ssd_preserves_metadata(tmp_path: Path) -> None:
     generate_ssd(architecture_dir, regenerated, "RoundTrip")
 
     with SSD(regenerated, mode="r") as ssd:
-        assert ssd.xml.default_experiment.start_time == 0.0
-        assert ssd.xml.default_experiment.stop_time == 2.0
-        [binding] = ssd.xml.system.parameter_bindings
+        assert ssd.default_experiment.start_time == 0.0
+        assert ssd.default_experiment.stop_time == 2.0
+        [binding] = ssd.system.parameter_bindings
         assert binding.source == "parameter_sets/parameters.ssv"
         assert binding.prefix == "gain"
         assert binding.parameter_mapping is None
 
-        component = ssd.xml.system.elements[0]
+        component = ssd.system.elements[0]
         assert component.name == "gain"
         assert component.implementation == "CoSimulation"
         connectors = {connector.name: connector.kind for connector in component.connectors}
@@ -152,7 +137,7 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
 
     def binding_summary(path: Path):
         with SSD(path, mode="r") as ssd:
-            [binding] = ssd.xml.system.parameter_bindings
+            [binding] = ssd.system.parameter_bindings
             entries = (
                 []
                 if binding.parameter_mapping is None
@@ -161,7 +146,7 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
                     for mapping in binding.parameter_mapping.mapping.mappings
                 ]
             )
-            component = ssd.xml.system.elements[0]
+            component = ssd.system.elements[0]
             connectors = [
                 (connector.name, connector.kind, connector.type_name)
                 for connector in component.connectors
@@ -215,7 +200,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     )
 
     with SSD(first_ssd, mode="r") as ssd:
-        top = ssd.xml.system
+        top = ssd.system
         assert [element.name for element in top.elements] == ["outer"]
         outer = top.elements[0]
         assert isinstance(outer, System)
@@ -245,7 +230,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     second_ssd = tmp_path / "regenerated.ssd"
     generate_ssd(roundtrip_arch, second_ssd, "SystemComposition")
     with SSD(second_ssd, mode="r") as ssd:
-        top = ssd.xml.system
+        top = ssd.system
         assert [element.name for element in top.elements] == ["outer"]
         [binding] = top.parameter_bindings
         assert [
@@ -328,7 +313,7 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
                         for mapping in binding.parameter_mapping.mapping.mappings
                     ],
                 )
-                for binding in ssd.xml.system.parameter_bindings
+                for binding in ssd.system.parameter_bindings
             )
 
     assert binding_summary(first_ssd) == [
@@ -404,7 +389,7 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
     )
 
     with SSD(first_ssd, mode="r") as ssd:
-        outer = ssd.xml.system.elements[0]
+        outer = ssd.system.elements[0]
         assert isinstance(outer, System)
         assert [
             (connector.name, connector.kind)
@@ -412,7 +397,7 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
         ] == [("gain", "parameter")]
         assert [
             (binding.source, mapping.target)
-            for binding in ssd.xml.system.parameter_bindings
+            for binding in ssd.system.parameter_bindings
             for mapping in binding.parameter_mapping.mapping.mappings
         ] == [
             ("parameter_sets/OuterSet.ssv", "outer.gain"),
@@ -434,7 +419,7 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
     with SSD(second_ssd, mode="r") as ssd:
         assert [
             (binding.source, mapping.target)
-            for binding in ssd.xml.system.parameter_bindings
+            for binding in ssd.system.parameter_bindings
             for mapping in binding.parameter_mapping.mapping.mappings
         ] == [
             ("parameter_sets/OuterSet.ssv", "outer.gain"),
@@ -445,7 +430,7 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
 def _wiring(ssd_path: Path) -> list[tuple[str, str, str | None, str | None]]:
     """All connections of the top system and its nested systems."""
     with SSD(ssd_path, mode="r") as ssd:
-        top = ssd.xml.system
+        top = ssd.system
 
     result = []
     for element in top.elements:

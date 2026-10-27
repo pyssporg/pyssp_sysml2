@@ -36,7 +36,9 @@ Core modules under `src/pyssp_sysml2/`:
 
 - `sysmlpy`, pinned to an exact version, for SysML v2 parsing. It is wrapped by
   the `pyssp_sysml2.sysml_model` adapter; see `INFO-013` and `INFO-014`.
-- `pyssp_standard` for SSP and FMI XML object handling.
+- `pyssp_standard` for SSP and FMI XML object handling. Consumed only through
+  its top-level surface (`from pyssp_standard import ...`) and its facade
+  methods; `tests/test_layering.py` rejects submodule imports.
 
 ## Adapter boundary
 

@@ -5,14 +5,7 @@ from pathlib import Path
 import pytest
 from textwrap import dedent
 
-from pyssp_standard import (
-    Component,
-    Connection,
-    Connector,
-    ParameterBinding,
-    SSD,
-    System,
-)
+from pyssp_standard import SSD
 
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_sets
@@ -94,8 +87,8 @@ def test_sync_sysml_from_ssd_removes_connection_deleted_in_ssd(tmp_path: Path) -
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ssd.xml.system.connections = []
+        assert ssd.system is not None
+        ssd.system.connections = []
 
     output_dir = tmp_path / "synced"
     written = sync_sysml_from_ssd(
@@ -119,8 +112,8 @@ def test_sync_sysml_from_ssd_updates_part_type_from_component_source(tmp_path: P
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        dst_component = next(element for element in ssd.xml.system.elements if element.name == "dst")
+        assert ssd.system is not None
+        dst_component = next(element for element in ssd.system.elements if element.name == "dst")
         dst_component.source = "resources/AltSink.fmu"
 
     output_dir = tmp_path / "synced"
@@ -168,10 +161,10 @@ def test_sync_sysml_from_ssd_rejects_partial_attribute_mapping(tmp_path: Path) -
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ssd.xml.system.connections = [
+        assert ssd.system is not None
+        ssd.system.connections = [
             conn
-            for conn in ssd.xml.system.connections
+            for conn in ssd.system.connections
             if conn.start_connector.endswith(".x")
         ]
 
@@ -190,26 +183,19 @@ def test_sync_sysml_from_ssd_adds_part_from_ssd_component(tmp_path: Path) -> Non
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        alt = Component()
-        alt.name = "alt"
-        alt.source = "resources/AltSink.fmu"
-        ssd.xml.system.elements.append(alt)
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.x",
-                    end_element="alt",
-                    end_connector="inSig.x",
-                ),
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.y",
-                    end_element="alt",
-                    end_connector="inSig.y",
-                ),
-            ]
+        assert ssd.system is not None
+        ssd.system.add_component("alt", source="resources/AltSink.fmu")
+        ssd.system.add_connection(
+            start_element="src",
+            start_connector="outSig.x",
+            end_element="alt",
+            end_connector="inSig.x",
+        )
+        ssd.system.add_connection(
+            start_element="src",
+            start_connector="outSig.y",
+            end_element="alt",
+            end_connector="inSig.y",
         )
 
     output_dir = tmp_path / "synced"
@@ -259,9 +245,9 @@ def test_sync_sysml_from_ssd_removes_part_missing_from_ssd_components(tmp_path: 
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ssd.xml.system.elements = [element for element in ssd.xml.system.elements if element.name != "dst"]
-        ssd.xml.system.connections = []
+        assert ssd.system is not None
+        ssd.system.elements = [element for element in ssd.system.elements if element.name != "dst"]
+        ssd.system.connections = []
 
     output_dir = tmp_path / "synced"
     sync_sysml_from_ssd(
@@ -370,8 +356,8 @@ def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ssd.xml.system.connections = []
+        assert ssd.system is not None
+        ssd.system.connections = []
 
     output_dir = tmp_path / "synced"
     written = sync_sysml_from_ssd(
@@ -428,32 +414,21 @@ def test_sync_sysml_from_ssd_synthesizes_part_def_for_unknown_component_source(
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ext = Component()
-        ext.name = "ext"
-        ext.source = "resources/ExternalSink.fmu"
-        ext.connectors.extend(
-            [
-                Connector(name="inSig.x", kind="input", type_name="Real"),
-                Connector(name="inSig.y", kind="input", type_name="Real"),
-            ]
+        assert ssd.system is not None
+        ext = ssd.system.add_component("ext", source="resources/ExternalSink.fmu")
+        ext.add_connector(name="inSig.x", kind="input", type_name="Real")
+        ext.add_connector(name="inSig.y", kind="input", type_name="Real")
+        ssd.system.add_connection(
+            start_element="src",
+            start_connector="outSig.x",
+            end_element="ext",
+            end_connector="inSig.x",
         )
-        ssd.xml.system.elements.append(ext)
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.x",
-                    end_element="ext",
-                    end_connector="inSig.x",
-                ),
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.y",
-                    end_element="ext",
-                    end_connector="inSig.y",
-                ),
-            ]
+        ssd.system.add_connection(
+            start_element="src",
+            start_connector="outSig.y",
+            end_element="ext",
+            end_connector="inSig.y",
         )
 
     output_dir = tmp_path / "synced"
@@ -482,34 +457,20 @@ def test_sync_sysml_from_ssd_synthesizes_new_port_def_for_unmatched_signature(
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ext_src = Component()
-        ext_src.name = "ext_src"
-        ext_src.source = "resources/ExternalSource.fmu"
-        ext_src.connectors.extend(
-            [
-                Connector(name="sig.value", kind="output", type_name="Boolean"),
-            ]
+        assert ssd.system is not None
+        ext_src = ssd.system.add_component(
+            "ext_src", source="resources/ExternalSource.fmu"
         )
-        ext_dst = Component()
-        ext_dst.name = "ext_dst"
-        ext_dst.source = "resources/ExternalSink.fmu"
-        ext_dst.connectors.extend(
-            [
-                Connector(name="sig.value", kind="input", type_name="Boolean"),
-            ]
+        ext_src.add_connector(name="sig.value", kind="output", type_name="Boolean")
+        ext_dst = ssd.system.add_component(
+            "ext_dst", source="resources/ExternalSink.fmu"
         )
-        ssd.xml.system.elements.append(ext_src)
-        ssd.xml.system.elements.append(ext_dst)
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="ext_src",
-                    start_connector="sig.value",
-                    end_element="ext_dst",
-                    end_connector="sig.value",
-                ),
-            ]
+        ext_dst.add_connector(name="sig.value", kind="input", type_name="Boolean")
+        ssd.system.add_connection(
+            start_element="ext_src",
+            start_connector="sig.value",
+            end_element="ext_dst",
+            end_connector="sig.value",
         )
 
     output_dir = tmp_path / "synced"
@@ -539,25 +500,14 @@ def test_sync_sysml_from_ssd_rejects_unknown_source_without_synthesis(
     generate_ssd(architecture_dir, ssd_path, COMPOSITION_NAME)
 
     with SSD(ssd_path, mode="a") as ssd:
-        assert ssd.xml.system is not None
-        ext = Component()
-        ext.name = "ext"
-        ext.source = "resources/ExternalSink.fmu"
-        ext.connectors.extend(
-            [
-                Connector(name="inSig.x", kind="input", type_name="Real"),
-            ]
-        )
-        ssd.xml.system.elements.append(ext)
-        ssd.xml.system.connections.extend(
-            [
-                Connection(
-                    start_element="src",
-                    start_connector="outSig.x",
-                    end_element="ext",
-                    end_connector="inSig.x",
-                ),
-            ]
+        assert ssd.system is not None
+        ext = ssd.system.add_component("ext", source="resources/ExternalSink.fmu")
+        ext.add_connector(name="inSig.x", kind="input", type_name="Real")
+        ssd.system.add_connection(
+            start_element="src",
+            start_connector="outSig.x",
+            end_element="ext",
+            end_connector="inSig.x",
         )
 
     output_dir = tmp_path / "synced"
@@ -586,18 +536,12 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
 
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
-        ssd.xml.name = "ParamDemo"
-        ssd.xml.version = "1.0"
-        ssd.xml.system = System(name="ParamDemo")
-        ssd.xml.system.parameter_bindings = [
-            ParameterBinding(source="parameters.ssv", prefix="gain")
-        ]
+        top = ssd.new_system("ParamDemo")
+        ssd.rename("ParamDemo")
+        top.add_parameter_binding("parameters.ssv", prefix="gain")
 
-        gain = Component()
-        gain.name = "gain"
-        gain.source = "resources/Gain.fmu"
-        gain.connectors.append(Connector(name="k", kind="parameter", type_name="Real"))
-        ssd.xml.system.elements.append(gain)
+        gain = top.add_component("gain", source="resources/Gain.fmu")
+        gain.add_connector(name="k", kind="parameter", type_name="Real")
 
     architecture_dir = tmp_path / "arch"
     architecture_dir.mkdir()
@@ -614,8 +558,8 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
 """
     )
     with SSD(ssd_path, mode="a") as ssd:
-        gain = ssd.xml.system.elements[0]
-        gain.connectors.append(Connector(name="bias", kind="parameter", type_name="Real"))
+        gain = ssd.system.elements[0]
+        gain.add_connector(name="bias", kind="parameter", type_name="Real")
 
     output_dir = tmp_path / "synced"
     sync_sysml_from_ssd(
@@ -689,14 +633,9 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
 """
     )
     with SSD(ssd_path, mode="a") as ssd:
-        outer = ssd.xml.system.elements[0]
-        extra = Component()
-        extra.name = "inner2"
-        extra.source = "resources/Inner.fmu"
-        extra.connectors.append(
-            Connector(name="k", kind="parameter", type_name="Real")
-        )
-        outer.elements.append(extra)
+        outer = ssd.system.elements[0]
+        extra = outer.add_component("inner2", source="resources/Inner.fmu")
+        extra.add_connector(name="k", kind="parameter", type_name="Real")
 
     output_dir = tmp_path / "synced"
     sync_sysml_from_ssd(
@@ -752,22 +691,16 @@ def test_sync_nested_system_connections(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, architecture_dir / "architecture.sysml")
 
     with SSD(ssd_path, mode="a") as ssd:
-        controller = ssd.xml.system.elements[0]
-        extra = Component()
-        extra.name = "dst2"
-        extra.source = "resources/Sink.fmu"
-        extra.connectors.append(
-            Connector(name="inSig.value", kind="input", type_name="Real")
+        controller = ssd.system.elements[0]
+        extra = controller.add_component("dst2", source="resources/Sink.fmu")
+        extra.add_connector(name="inSig.value", kind="input", type_name="Real")
+        controller.connections = []
+        controller.add_connection(
+            start_element="src",
+            start_connector="outSig.value",
+            end_element="dst2",
+            end_connector="inSig.value",
         )
-        controller.elements.append(extra)
-        controller.connections = [
-            Connection(
-                start_element="src",
-                start_connector="outSig.value",
-                end_element="dst2",
-                end_connector="inSig.value",
-            )
-        ]
 
     output_dir = tmp_path / "synced"
     sync_sysml_from_ssd(
@@ -849,18 +782,16 @@ def test_sync_rewires_boundary_connection(tmp_path: Path) -> None:
     generate_ssd(architecture_dir, ssd_path, "SystemComposition")
 
     with SSD(ssd_path, mode="a") as ssd:
-        [inner] = ssd.xml.system.elements
+        [inner] = ssd.system.elements
         inner.connections = [
             connection
             for connection in inner.connections
             if connection.end_element is not None
         ]
-        inner.connections.append(
-            Connection(
-                start_element="src",
-                start_connector="sig.x",
-                end_connector="v.x",
-            )
+        inner.add_connection(
+            start_element="src",
+            start_connector="sig.x",
+            end_connector="v.x",
         )
 
     output_dir = tmp_path / "synced"

@@ -26,9 +26,6 @@ from pyssp_standard import (
     SSP,
     System,
     copy_resource_directory,
-)
-# No public equivalent yet: SSP1-only FMU/component validation helper.
-from pyssp_standard.standard.ssp1.validation.ssd_fmu_validation import (
     validate_component_fmu,
 )
 
@@ -282,8 +279,8 @@ def generate_ssp(
                 parameter_set_prefix=parameter_set_prefix,
             )
             if validate_fmus:
-                assert ssd.xml.system is not None
-                _validate_ssd_components(ssd.xml.system, unique_resources)
+                assert ssd.system is not None
+                _validate_ssd_components(ssd.system, unique_resources)
 
         ssv_paths = []
         for definition in set_definitions:
