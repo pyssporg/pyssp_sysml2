@@ -58,6 +58,8 @@ through an interface and SysML-defined sets.
 - Set inheritance and union are not implemented; see `IMP-001`.
 - Flat parameter attributes are retired.
 - `pyssp_implementation` and `pyssp_parameter_set` are retired.
+- `generate sysml` and `sync ssd` refuse to rewrite an architecture carrying
+  variation points; SysML export does not represent them and would erase them.
 
 ## Preserved or semantically preserved
 

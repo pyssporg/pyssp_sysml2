@@ -24,7 +24,8 @@ Archive layout:
 
 - `SystemStructure.ssd` at the root;
 - `resources/<PartDefinition>.fmu` for each packaged FMU;
-- `resources/parameter_sets/<SetName>.ssv` for applied sets.
+- `resources/parameter_sets/<SetName>.ssv` for applied sets;
+- `extra/org.pyssp/selection.json` when the build selects variants.
 
 Rules:
 
@@ -47,6 +48,10 @@ Rules:
   check.
 - Archive entries use fixed timestamps, so unchanged inputs produce
   byte-identical `.ssp` files.
+- A non-empty selection mapping is recorded at
+  `extra/org.pyssp/selection.json`: the composition name and the mapping sorted
+  by key, with no time-dependent content.
+- A package built without selections carries no `extra/` entry.
 
 The variable-name check is intentionally strict: an SSD connector absent from
 the FMU would make the packaged system fail to instantiate. This matters for

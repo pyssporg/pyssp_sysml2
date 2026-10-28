@@ -25,7 +25,9 @@ from pyssp_sysml2.sysml_model import (
     PortDefinition,
     PortUsage,
     endpoint_text,
+    load,
 )
+from pyssp_sysml2.variation import refuse_variation_erasure
 
 SCALAR_ATTRIBUTE_NAME = "value"
 
@@ -469,6 +471,8 @@ def generate_sysml_from_ssd(
     output_path: Path,
     composition: str | None = None,
 ) -> Path:
+    if output_path.suffix == ".sysml" and output_path.is_file():
+        refuse_variation_erasure(load(output_path), output_path)
     with SSD(ssd_path, mode="r") as ssd:
         ssd_system = ssd.system
         if ssd_system is None:

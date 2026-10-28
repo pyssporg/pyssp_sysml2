@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -8,9 +10,11 @@ from pyssp_standard import SSD, SSP
 from pyssp_sysml2.cli import _parse_selections, main
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssp import generate_ssp
+from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
-from pyssp_sysml2.variation import resolve
-from tests.test_utils import write_model
+from pyssp_sysml2.variation import has_variation, resolve
+from tests.test_utils import write_bootstrap_ssd, write_model
 
 
 DEFINITION_VARIATION = """\
@@ -473,3 +477,94 @@ def test_cli_generate_ssd_reports_a_malformed_selection(
 
     assert code == 1
     assert "[error] Invalid --select value 'source'" in capsys.readouterr().out
+
+
+ATTRIBUTE_VARIATION = """\
+package AttributeVariation {
+  part def SspModel;
+  variation attribute def Scale;
+
+  part def System :> SspModel {
+    attribute gain : Scale;
+  }
+}
+"""
+
+
+def test_has_variation_covers_definitions_usages_and_attributes(
+    tmp_path: Path,
+) -> None:
+    _, definition = _load_architecture(tmp_path / "definition", DEFINITION_VARIATION)
+    _, usage = _load_architecture(tmp_path / "usage", USAGE_VARIATION)
+    _, attribute = _load_architecture(tmp_path / "attribute", ATTRIBUTE_VARIATION)
+    _, clean = _load_architecture(tmp_path / "clean", NO_VARIATION)
+
+    assert has_variation(definition) is True
+    assert has_variation(usage) is True
+    assert has_variation(attribute) is True
+    assert has_variation(clean) is False
+
+
+def test_generate_ssp_records_selection_deterministically(tmp_path: Path) -> None:
+    """A selected build carries a byte-stable selection record in extra/."""
+    path, _ = _load_architecture(tmp_path, DEFINITION_VARIATION)
+
+    first = generate_ssp(
+        path,
+        tmp_path / "one.ssp",
+        "System",
+        selections={"source": "stepImplementation"},
+    )
+    second = generate_ssp(
+        path,
+        tmp_path / "two.ssp",
+        "System",
+        selections={"source": "stepImplementation"},
+    )
+
+    with zipfile.ZipFile(first) as archive:
+        assert json.loads(
+            archive.read("extra/org.pyssp/selection.json")
+        ) == {
+            "composition": "System",
+            "selections": {"source": "stepImplementation"},
+        }
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_generate_ssp_without_selection_adds_no_provenance(
+    tmp_path: Path,
+) -> None:
+    path, _ = _load_architecture(tmp_path, NO_VARIATION)
+
+    output = generate_ssp(path, tmp_path / "plain.ssp", "System")
+
+    with zipfile.ZipFile(output) as archive:
+        assert not [
+            name for name in archive.namelist() if name.startswith("extra/")
+        ]
+
+
+def test_generate_sysml_refuses_to_overwrite_variation(tmp_path: Path) -> None:
+    target = tmp_path / "authored.sysml"
+    write_model(target, DEFINITION_VARIATION)
+    ssd_path = write_bootstrap_ssd(tmp_path / "in.ssd", "System")
+
+    with pytest.raises(
+        ValueError,
+        match="SysML export does not represent variation points.*SourceChoice",
+    ):
+        generate_sysml_from_ssd(ssd_path, target)
+
+    assert "variation part def SourceChoice" in target.read_text()
+
+
+def test_sync_refuses_to_rewrite_variation(tmp_path: Path) -> None:
+    path, _ = _load_architecture(tmp_path / "arch", DEFINITION_VARIATION)
+    ssd_path = write_bootstrap_ssd(tmp_path / "in.ssd", "System")
+
+    with pytest.raises(
+        ValueError,
+        match="SysML export does not represent variation points.*SourceChoice",
+    ):
+        sync_sysml_from_ssd(path, ssd_path, "System")

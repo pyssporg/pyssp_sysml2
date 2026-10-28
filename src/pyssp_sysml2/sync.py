@@ -39,6 +39,7 @@ from pyssp_sysml2.sysml_model import (
     endpoint_text,
     load,
 )
+from pyssp_sysml2.variation import refuse_variation_erasure
 
 INFERRED_PARTS_FILENAME = "inferred_external_parts.sysml"
 
@@ -465,6 +466,7 @@ def sync_sysml_from_ssd(
         loaded = False
 
     if loaded:
+        refuse_variation_erasure(architecture, architecture_path)
         validate_parameter_dialect(architecture, system)
     parameter_dialect = loaded and has_parameter_dialect(architecture, system)
 

@@ -14,6 +14,7 @@ inputs produce byte-identical ``.ssp`` archives.
 
 from __future__ import annotations
 
+import json
 import tempfile
 import warnings
 from collections.abc import Mapping
@@ -51,6 +52,7 @@ from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 from pyssp_sysml2.variation import resolve
 
 DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
+SELECTION_ENTRY = "extra/org.pyssp/selection.json"
 
 
 @dataclass(frozen=True)
@@ -203,6 +205,22 @@ def _normalise_parameter_set_prefix(prefix: str) -> str:
     return path.as_posix()
 
 
+def _selection_document(
+    composition: str, selections: Mapping[str, str]
+) -> str:
+    """Deterministic JSON record of one build's variant selection."""
+    return (
+        json.dumps(
+            {
+                "composition": composition,
+                "selections": dict(sorted(selections.items())),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+
 def generate_ssp(
     architecture_path: Path,
     output_path: Path,
@@ -235,7 +253,8 @@ def generate_ssp(
     flag, a missing declared source is an error.
 
     ``selections`` resolves variation points before generation; see
-    :func:`pyssp_sysml2.variation.resolve`.
+    :func:`pyssp_sysml2.variation.resolve`. A non-empty mapping is also
+    recorded in the archive at ``extra/org.pyssp/selection.json``.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
@@ -298,6 +317,15 @@ def generate_ssp(
 
         with SSP(output_path, mode="w") as archive:
             archive.runtime.add_file(ssd_path, target_name="SystemStructure.ssd")
+            if selections:
+                selection_path = temp_path / "selection.json"
+                selection_path.write_text(
+                    _selection_document(composition, selections),
+                    encoding="utf-8",
+                )
+                archive.runtime.add_file(
+                    selection_path, target_name=SELECTION_ENTRY
+                )
             for resource_name, source in sorted(unique_resources.items()):
                 if source is None:
                     continue

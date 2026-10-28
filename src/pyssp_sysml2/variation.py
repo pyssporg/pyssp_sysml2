@@ -20,6 +20,7 @@ from __future__ import annotations
 import copy
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from pyssp_sysml2.sysml_model import (
     Architecture,
@@ -28,7 +29,7 @@ from pyssp_sysml2.sysml_model import (
     VariantMember,
 )
 
-__all__ = ["resolve"]
+__all__ = ["has_variation", "refuse_variation_erasure", "resolve"]
 
 
 @dataclass(frozen=True)
@@ -57,6 +58,61 @@ class _Usage:
     @property
     def variants(self) -> list[VariantMember]:
         return self.variation.variants if self.variation is not None else []
+
+
+def _variation_names(architecture: Architecture) -> list[str]:
+    """Names of every variation point the architecture carries, sorted."""
+    points: set[str] = set()
+    for part_def in architecture.part_definitions.values():
+        if part_def.is_variation or part_def.variants:
+            points.add(part_def.name)
+        for usage in part_def.parts.values():
+            if usage.is_variation:
+                points.add(f"{part_def.name}.{usage.name}")
+
+    definitions = [
+        *architecture.part_definitions.values(),
+        *architecture.port_definitions.values(),
+        *architecture.attribute_definitions.values(),
+    ]
+    for definition in definitions:
+        for name, attribute in definition.attributes.items():
+            attribute_def = architecture.resolve_attribute_def(attribute)
+            if attribute_def is not None and attribute_def.is_variation:
+                points.add(f"{definition.name}.{name}")
+
+    for attribute_def in architecture.attribute_definitions.values():
+        if attribute_def.is_variation:
+            points.add(attribute_def.name)
+    return sorted(points)
+
+
+def has_variation(architecture: Architecture) -> bool:
+    """Whether the architecture declares any variation point or variant member.
+
+    Covers variation part and attribute definitions, variation part usages, and
+    attribute usages typed by a variation attribute definition.
+    """
+    return bool(_variation_names(architecture))
+
+
+def refuse_variation_erasure(
+    architecture: Architecture, target: str | Path
+) -> None:
+    """Raise when rewriting *target* would drop variation points.
+
+    SysML export emits only the documented simulation dialect, so a variation
+    point or variant member has no representation and would vanish silently.
+    """
+    names = _variation_names(architecture)
+    if not names:
+        return
+    listed = ", ".join(f"'{name}'" for name in names)
+    raise ValueError(
+        "SysML export does not represent variation points; writing "
+        f"'{target}' would erase {listed}. Remove the variation points or "
+        "keep the authored architecture."
+    )
 
 
 def _reject_attribute_variation(
