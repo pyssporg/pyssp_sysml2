@@ -23,6 +23,7 @@ from pyssp_sysml2.sysml_model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
+    VariantBody,
     VariantMember,
     endpoint_text,
 )
@@ -39,6 +40,7 @@ __all__ = [
     "PortDefinition",
     "PortUsage",
     "RequirementDefinition",
+    "VariantBody",
     "VariantMember",
     "endpoint_text",
     "load",

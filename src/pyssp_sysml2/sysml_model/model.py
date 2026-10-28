@@ -34,6 +34,7 @@ __all__ = [
     "PortDefinition",
     "PortUsage",
     "RequirementDefinition",
+    "VariantBody",
     "VariantMember",
     "endpoint_text",
 ]
@@ -139,29 +140,15 @@ class PartUsage:
     """A typed part usage inside a composition (``part src : Source;``).
 
     ``is_variation`` marks a usage-level variation point
-    (``variation part source : SignalSource;``): the usage is the point, and the
-    alternatives are its definition's ``variants``.
+    (``variation part source : SignalSource;``): the usage is the point, and its
+    alternatives live in ``variants``.
     """
 
     name: str
     type_name: str
     doc: str | None = None
     is_variation: bool = False
-
-
-@dataclass
-class VariantMember:
-    """One ``variant`` member of a variation point.
-
-    ``kind`` is the SysML usage kind of the member (``"part"`` or
-    ``"attribute"``); it keeps room for ``connect`` and ``bind`` variants
-    without changing this contract. ``type_name`` is the declared type as
-    written, or ``None`` for a variant with a body but no type.
-    """
-
-    name: str
-    kind: str
-    type_name: str | None = None
+    variants: list[VariantMember] = field(default_factory=list)
 
 
 def endpoint_text(part: str | None, port: str) -> str:
@@ -220,6 +207,41 @@ class Binding:
     @property
     def key(self) -> str:
         return f"{'.'.join(self.source)}={'.'.join(self.target)}"
+
+
+@dataclass
+class VariantBody:
+    """The members a ``variant part name { ... }`` declares for itself.
+
+    A body is the implicit anonymous definition of that variant usage. It
+    carries its own subparts, connections, and the bindings it would apply; a
+    binding inside a body is captured but not resolvable, see
+    :func:`pyssp_sysml2.variation.resolve`.
+
+    ``connections`` is keyed by :attr:`Connection.key`, ``parts`` by name, both
+    in declaration order.
+    """
+
+    parts: dict[str, PartUsage] = field(default_factory=dict)
+    connections: dict[str, Connection] = field(default_factory=dict)
+    bindings: list[Binding] = field(default_factory=list)
+
+
+@dataclass
+class VariantMember:
+    """One ``variant`` member of a variation point.
+
+    ``kind`` is the SysML usage kind of the member (``"part"`` or
+    ``"attribute"``); it keeps room for ``connect`` and ``bind`` variants
+    without changing this contract. ``type_name`` is the declared type as
+    written, or ``None`` for a variant with a body but no type. ``body`` is the
+    member's own definition body, or ``None`` for a plain typed variant.
+    """
+
+    name: str
+    kind: str
+    type_name: str | None = None
+    body: VariantBody | None = None
 
 
 @dataclass

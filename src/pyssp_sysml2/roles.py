@@ -127,17 +127,18 @@ def require_resolved_variation(
 ) -> None:
     """Reject generation of a composition that still carries a variation point.
 
-    Selection is not implemented, so a variation point cannot be resolved and
-    generation would silently emit a variant-less artifact. Reject instead, and
-    name the point (IMP-006).
+    Generation is called without a selection here, so the point cannot be
+    resolved and a variant-less artifact would be emitted silently. Reject
+    instead and name the point; the caller passes ``--select`` to resolve it
+    (IMP-006).
     """
     point = _variation_point(architecture, composition)
     if point is None:
         return
     raise ValueError(
         f"Variation point '{point}' in composition '{composition.name}' is not "
-        "resolved: selecting a variant is not supported yet. Write one "
-        "composition per alternative, or remove the variation point."
+        "selected; pass a selection for it (for example "
+        f"--select <usage>=<variant>)."
     )
 
 

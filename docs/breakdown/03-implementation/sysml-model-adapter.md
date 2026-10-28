@@ -52,7 +52,14 @@ again, only `loader.py` needs rewriting.
 - `variant` members, usage-level `variation` flags, and `variation attribute
   def` flags are recovered from the raw parse tree, because sysmlpy drops
   them; only `loader.py` reads that tree.
+- A variant body (`variant part name { ... }`) is read from the same tree and
+  becomes a repo-owned `VariantBody`: its direct part usages, its connections
+  (with `part.port` or boundary-port ends), and its bindings. Nested variant
+  members inside a body are not captured; variation inside a variant is out of
+  scope.
 - The model exposes variation as `is_variation` and `variants` on part and
-  attribute definitions and on part usages.
+  attribute definitions and on part usages; a usage-level point's members live
+  in the usage's own `variants`, keyed by its enclosing definition and usage
+  name during the walk.
 - A redefining port (`out port :>> y : T;`) keeps its declared name; sysmlpy
   gives its parsed name a UUID.

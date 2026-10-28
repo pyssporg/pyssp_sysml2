@@ -62,12 +62,18 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
 
 - A `variation part def` carries `is_variation`; its `variant` members sit in
   `variants` and never in `parts`.
-- A `variation part` usage carries `is_variation`; its `variant` members are
-  captured only in the raw parse tree and are not model members.
+- A `variation part` usage carries `is_variation` and its own `variants`; the
+  members belong to the usage, not to the definition that encloses it.
 - A `variation attribute def` carries `is_variation`; its `variant attribute`
   members sit in `variants` and never in `attributes`.
-- A `VariantMember` has a name, a usage kind (`part` or `attribute`), and an
-  optional declared type.
+- A `VariantMember` has a name, a usage kind (`part` or `attribute`), an
+  optional declared type, and an optional body.
+- A variant body (`variant part name { ... }`) is a `VariantBody` with the
+  variant's own subparts, connections, and bindings. It is the implicit
+  anonymous definition of that variant usage; the members never enter the
+  enclosing definition.
+- Bodies and usage-level members are recovered from the raw parse tree, because
+  sysmlpy drops them; the model exposes them as repo-owned dataclasses.
 
 ## Top-level composition
 

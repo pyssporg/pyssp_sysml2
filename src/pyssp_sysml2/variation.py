@@ -8,10 +8,20 @@ Two variation kinds are resolved:
 
 - **Part variation**: the key names a part usage and the selected variant's
   type replaces the usage type. The usage keeps its name and ports, so the SSD
-  element name is stable across selections.
+  element name is stable across selections. The point may sit on a definition
+  (``variation part def SourceChoice``) or on the usage itself
+  (``variation part source : SignalSource { ... }``).
 - **Attribute variation**: the key names an attribute usage and the selected
   variant's type replaces the usage type, so parameter binds resolve against
   the selected set.
+
+A variant without a type but with a body (``variant part directPath { part g
+: Gain; connect u to g.u; }``) becomes an anonymous part definition synthesized
+from that body. It carries the variation point's ports, gets a deterministic
+name (``<Point>__<variant>``), and the usage is retyped to it, so generation
+emits a subsystem whose subparts and connections come from the body. The
+body's parameter-port connections are not emitted as SSD connections; see
+``docs/breakdown/02-architecture/generation-pipeline.md``.
 
 A selection key is the usage name, dotted for nesting (``source=stepImplementation``,
 ``scenario=baseline``, ``path.inner=variantName``). A bare name is accepted
@@ -19,8 +29,9 @@ only when exactly one reachable usage carries it. Attribute usages are
 collected on the composition and on any study that composes it, so a study
 scenario stays selectable when its model is generated.
 
-Usage-level variation, variant bodies, and connect or bind variants are out of
-scope and raise ``ValueError`` rather than producing a partial artifact.
+Connect variants, nested variants inside a variant body, and binding statements
+inside variants are out of scope and raise ``ValueError`` rather than producing
+a partial artifact.
 """
 
 from __future__ import annotations
@@ -30,13 +41,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from pyssp_sysml2.parameters import is_parameter_interface
 from pyssp_sysml2.roles import is_study
 from pyssp_sysml2.sysml_model import (
     Architecture,
     Attribute,
     AttributeDefinition,
+    Connection,
     PartDefinition,
     PartUsage,
+    PortUsage,
+    VariantBody,
     VariantMember,
 )
 
@@ -73,7 +88,9 @@ class _Usage:
 
     @property
     def variants(self) -> list[VariantMember]:
-        return self.variation.variants if self.variation is not None else []
+        if self.variation is not None:
+            return self.variation.variants
+        return self.usage.variants
 
 
 @dataclass(frozen=True)
@@ -298,14 +315,6 @@ def _lookup(
     return matches[0]
 
 
-def _usage_level_error(key: str, composition: PartDefinition) -> ValueError:
-    return ValueError(
-        f"Selection key '{key}' names usage-level variation point '{key}'; "
-        "usage-level variation is not supported. Move 'variation' to a part "
-        "definition and select the usage typed by it."
-    )
-
-
 def _choice(
     record: _Usage | _AttributeUsage,
     key: str,
@@ -329,46 +338,51 @@ def _part_choice(
     composition: PartDefinition,
 ) -> VariantMember:
     """Validate one part selection and return its variant."""
-    if record.usage_level:
-        raise _usage_level_error(key, composition)
-    if record.variation is None:
+    if record.variation is None and not record.usage_level:
         raise ValueError(
             f"Selection key '{key}' names part usage '{record.key}', which is "
             "not a variation point; select a variation point instead."
         )
 
-    point = record.variation
-    if not point.variants:
+    point_name = record.point_name
+    if not record.variants:
         raise ValueError(
-            f"Variation point '{point.name}' has no captured part variants; "
+            f"Variation point '{point_name}' has no captured part variants; "
             "only 'variant part <name> : <PartDef>;' members are supported."
         )
     variant = next(
-        (member for member in point.variants if member.name == variant_name), None
+        (member for member in record.variants if member.name == variant_name),
+        None,
     )
     if variant is None:
-        names = ", ".join(member.name for member in point.variants) or "none"
+        names = ", ".join(member.name for member in record.variants) or "none"
         raise ValueError(
             f"Unknown variant '{variant_name}' for variation point "
-            f"'{point.name}'; expected one of {names}."
+            f"'{point_name}'; expected one of {names}."
         )
     if variant.kind != "part":
         raise ValueError(
-            f"Selected variant '{variant_name}' of variation point '{point.name}' "
+            f"Selected variant '{variant_name}' of variation point '{point_name}' "
             f"is a '{variant.kind}' variant; only part variants are supported."
         )
-    if variant.type_name is None:
+    if variant.body is not None and variant.type_name is not None:
         raise ValueError(
-            f"Selected variant '{variant_name}' of variation point '{point.name}' "
-            "has no resolvable type; variant bodies are not supported. Write "
-            f"'variant part {variant_name} : <PartDef>;'."
+            f"Selected variant '{variant_name}' of variation point '{point_name}' "
+            f"declares both type '{variant.type_name}' and a body; use one."
         )
-    if variant.type_name not in architecture.part_definitions:
-        raise ValueError(
-            f"Selected variant '{variant_name}' of variation point '{point.name}' "
-            f"has type '{variant.type_name}', which is not a part definition; "
-            "only part variants are supported."
-        )
+    if variant.body is None:
+        if variant.type_name is None:
+            raise ValueError(
+                f"Selected variant '{variant_name}' of variation point "
+                f"'{point_name}' has no resolvable type and no body; write "
+                f"'variant part {variant_name} : <PartDef>;' or give it a body."
+            )
+        if variant.type_name not in architecture.part_definitions:
+            raise ValueError(
+                f"Selected variant '{variant_name}' of variation point "
+                f"'{point_name}' has type '{variant.type_name}', which is not a "
+                "part definition; only part variants are supported."
+            )
     return variant
 
 
@@ -424,8 +438,6 @@ def _attribute_choice(
 
 
 def _missing(record: _Usage, composition: PartDefinition) -> ValueError:
-    if record.usage_level:
-        return _usage_level_error(record.key, composition)
     return ValueError(
         f"Variation point '{record.point_name}' at '{record.key}' in "
         f"composition '{composition.name}' is not selected; pass "
@@ -441,6 +453,122 @@ def _missing_attribute(
         f"composition '{composition.name}' is not selected; pass "
         f"{record.key}=<variant>."
     )
+
+
+def _body_definition(
+    record: _Usage,
+    variant: VariantMember,
+    architecture: Architecture,
+) -> PartDefinition:
+    """Synthesize the anonymous part definition a variant body declares.
+
+    The definition carries the variation point's ports and the body's own
+    subparts and connections. Parameter-port connections are kept on the
+    captured body but not copied: the SSD represents parameter application
+    with binds and mappings, not with connections.
+    """
+    body = variant.body
+    assert body is not None
+    if body.bindings:
+        raise ValueError(
+            f"Selected variant '{variant.name}' of variation point "
+            f"'{record.point_name}' declares bindings; binding statements "
+            "inside variant bodies are out of scope. Select a parameter set "
+            "through an attribute variation point, or write one composition "
+            "per alternative."
+        )
+
+    point = record.variation if record.variation is not None else record.definition
+    ports = copy.deepcopy(point.ports) if point is not None else {}
+    for connection in body.connections.values():
+        _check_body_connection(record, variant, body, connection, ports)
+
+    if record.variation is not None:
+        name = f"{record.variation.name}__{variant.name}"
+    else:
+        name = f"{record.owner.name}__{record.usage.name}__{variant.name}"
+    if name in architecture.part_definitions:
+        raise ValueError(
+            f"Synthesized variant definition '{name}' for variation point "
+            f"'{record.point_name}' collides with an existing part definition; "
+            "rename the variant."
+        )
+    return PartDefinition(
+        name=name,
+        source_file=point.source_file if point is not None else None,
+        ports=ports,
+        parts=copy.deepcopy(body.parts),
+        connections={
+            key: connection
+            for key, connection in body.connections.items()
+            if not _touches_parameter_port(body, connection, ports, architecture)
+        },
+    )
+
+
+def _check_body_connection(
+    record: _Usage,
+    variant: VariantMember,
+    body: VariantBody,
+    connection: Connection,
+    ports: dict[str, PortUsage],
+) -> None:
+    """Reject a body connection that leaves the point's declared interface."""
+    for part_name, port_name in (
+        (connection.source_part, connection.source_port),
+        (connection.destination_part, connection.destination_port),
+    ):
+        if part_name is None:
+            if port_name not in ports:
+                raise ValueError(
+                    f"Variant '{variant.name}' of variation point "
+                    f"'{record.point_name}' connects to port '{port_name}', "
+                    "which the point does not declare; declare it as a port of "
+                    "the variation point."
+                )
+        elif part_name not in body.parts:
+            raise ValueError(
+                f"Variant '{variant.name}' of variation point "
+                f"'{record.point_name}' connects to part '{part_name}', which "
+                "its body does not declare."
+            )
+
+
+def _touches_parameter_port(
+    body: VariantBody,
+    connection: Connection,
+    ports: dict[str, PortUsage],
+    architecture: Architecture,
+) -> bool:
+    """True when either end of *connection* is a parameter-interface port."""
+    return any(
+        _is_parameter_endpoint(body, part_name, port_name, ports, architecture)
+        for part_name, port_name in (
+            (connection.source_part, connection.source_port),
+            (connection.destination_part, connection.destination_port),
+        )
+    )
+
+
+def _is_parameter_endpoint(
+    body: VariantBody,
+    part_name: str | None,
+    port_name: str,
+    ports: dict[str, PortUsage],
+    architecture: Architecture,
+) -> bool:
+    if part_name is None:
+        port_usage = ports.get(port_name)
+    else:
+        part = body.parts.get(part_name)
+        definition = architecture.resolve_part(part) if part is not None else None
+        port_usage = (
+            definition.ports.get(port_name) if definition is not None else None
+        )
+    if port_usage is None:
+        return False
+    port_definition = architecture.resolve_port(port_usage)
+    return port_definition is not None and is_parameter_interface(port_definition)
 
 
 def require_resolved_attribute_variation(
@@ -497,7 +625,7 @@ def resolve(
         (record.owner_name, record.name): record
         for record in _attribute_records(resolved, resolved_source)
     }
-    for record, variant in choices:
+    for record, variant in sorted(choices, key=lambda choice: choice[0].key):
         if isinstance(record, _AttributeUsage):
             target = resolved_attributes.get((record.owner_name, record.name))
             if target is None:
@@ -513,7 +641,12 @@ def resolve(
                 f"Selection key '{record.key}' no longer resolves after "
                 "resolution; select one variation point per path."
             )
-        target.usage.type_name = variant.type_name
+        if variant.body is not None:
+            definition = _body_definition(target, variant, resolved)
+            resolved.add_part_def(definition)
+            target.usage.type_name = definition.name
+        else:
+            target.usage.type_name = variant.type_name
         target.usage.is_variation = False
 
     final_parts = _usage_records(resolved, resolved_source)

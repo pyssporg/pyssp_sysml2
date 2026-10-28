@@ -51,6 +51,7 @@ from pyssp_sysml2.sysml_model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
+    VariantBody,
     VariantMember,
     endpoint_text,
 )
@@ -233,6 +234,9 @@ def _part_definition(element, file: Path, variation: _VariationFacts) -> PartDef
             name=part.name,
             type_name=part.typed_by_name,
             is_variation=part.name in variation_usages,
+            variants=list(
+                variation.usage_variants.get((element.name, part.name), ())
+            ),
         )
     for connect in element.connections:
         connection = _connection(connect, file)
@@ -313,12 +317,15 @@ def _connection(connect, file: Path) -> Connection:
     )
 
 
-def _connection_endpoint(names: list[str], file: Path) -> tuple[str | None, str]:
+def _connection_endpoint(
+    names: list[str], file: Path | None = None
+) -> tuple[str | None, str]:
     """Split one connection end into ``(part, port)``; a bare name is a boundary port."""
     if not names:
+        where = f" in {file}" if file is not None else " in a variant body"
         raise ValueError(
             "Connection ends must be 'part.port' or a boundary 'port', "
-            f"got an empty end in {file}"
+            f"got an empty end{where}"
         )
     if len(names) == 1:
         return None, names[0]
@@ -645,6 +652,9 @@ class _VariationFacts:
 
     variants: dict[str, list[VariantMember]] = field(default_factory=dict)
     attribute_variants: dict[str, list[VariantMember]] = field(default_factory=dict)
+    usage_variants: dict[tuple[str, str], list[VariantMember]] = field(
+        default_factory=dict
+    )
     usage_points: dict[str, set[str]] = field(default_factory=dict)
     attribute_points: set[str] = field(default_factory=set)
 
@@ -686,18 +696,23 @@ def _tree_nodes(node) -> Iterator:
 
 
 def _capture_variant(node, facts: _VariationFacts) -> None:
-    """Add one variant member to its owning definition's variants.
+    """Add one variant member to the point that declares it.
 
-    A ``variant part`` belongs to a part definition; a ``variant attribute``
-    belongs to an attribute definition. A member of a usage-level point or a
-    variant body has no definition owner and is skipped.
+    A ``variant part`` belongs either to its enclosing part definition or, when
+    the point is a usage, to that usage (keyed by definition and usage name). A
+    ``variant attribute`` belongs to an attribute definition. A member declared
+    inside another variant's body is skipped: nested variation is out of scope.
     """
     if node.partUsage() is not None:
-        owner = _owning_part_definition(node)
-        name = _definition_name(owner) if owner is not None else None
+        owner = _variant_owner(node)
         member = _variant_member(node)
-        if name is not None and member is not None:
-            facts.variants.setdefault(name, []).append(member)
+        if owner is None or member is None:
+            return
+        kind, key = owner
+        if kind == "definition":
+            facts.variants.setdefault(key, []).append(member)
+        else:
+            facts.usage_variants.setdefault(key, []).append(member)
         return
 
     if node.attributeUsage() is not None:
@@ -706,6 +721,59 @@ def _capture_variant(node, facts: _VariationFacts) -> None:
         member = _variant_member(node)
         if name is not None and member is not None:
             facts.attribute_variants.setdefault(name, []).append(member)
+
+
+def _variant_owner(
+    node,
+) -> tuple[str, str] | tuple[str, tuple[str, str]] | None:
+    """Where a ``variant part`` belongs: a definition name or a usage key.
+
+    Returns ``("definition", <PartDefinition name>)`` for a definition-level
+    point and ``("usage", (<owning definition>, <usage name>))`` for a
+    usage-level point. A member inside a variant body has no owner.
+    """
+    parent = getattr(node, "parentCtx", None)
+    while parent is not None:
+        kind = type(parent).__name__
+        if kind == "PartDefinitionContext":
+            name = _definition_name(parent)
+            return ("definition", name) if name is not None else None
+        if kind == "PartUsageContext":
+            if _inside_variant_body(parent):
+                return None
+            usage = _usage_name(parent)
+            definition = _enclosing_part_definition(parent)
+            owner = _definition_name(definition) if definition is not None else None
+            if usage is None or owner is None:
+                return None
+            return ("usage", (owner, usage))
+        if kind in {"AttributeDefinitionContext", "AttributeUsageContext"}:
+            return None
+        parent = getattr(parent, "parentCtx", None)
+    return None
+
+
+def _inside_variant_body(ctx) -> bool:
+    """True when *ctx* is itself a variant body, i.e. declared by a variant."""
+    parent = getattr(ctx, "parentCtx", None)
+    while parent is not None:
+        kind = type(parent).__name__
+        if kind == "VariantUsageElementContext":
+            return True
+        if kind == "PartDefinitionContext":
+            return False
+        parent = getattr(parent, "parentCtx", None)
+    return False
+
+
+def _enclosing_part_definition(ctx):
+    """The nearest raw ``PartDefinitionContext`` above *ctx*, or ``None``."""
+    parent = getattr(ctx, "parentCtx", None)
+    while parent is not None:
+        if type(parent).__name__ == "PartDefinitionContext":
+            return parent
+        parent = getattr(parent, "parentCtx", None)
+    return None
 
 
 def _capture_usage_point(node, facts: _VariationFacts) -> None:
@@ -797,7 +865,8 @@ def _variant_member(node) -> VariantMember | None:
     """Repo VariantMember for one raw ``VariantUsageElementContext``.
 
     ``variant part`` and ``variant attribute`` are captured; a connect or bind
-    variant has neither usage and is skipped.
+    variant has neither usage and is skipped. A part variant with a body keeps
+    that body's own parts, connections, and bindings.
     """
     usage = node.partUsage()
     kind = "part"
@@ -809,7 +878,128 @@ def _variant_member(node) -> VariantMember | None:
     name = _usage_name(usage)
     if name is None:
         return None
-    return VariantMember(name=name, kind=kind, type_name=_usage_type(usage))
+    body = _variant_body(usage) if kind == "part" else None
+    return VariantMember(
+        name=name, kind=kind, type_name=_usage_type(usage), body=body
+    )
+
+
+def _variant_body(usage) -> VariantBody | None:
+    """Members declared inside ``variant part name { ... }``, or ``None``.
+
+    The body is the variant usage's own anonymous definition: its direct
+    members are nested part usages, connections, and bindings. Nested variant
+    members are skipped; variation inside a variant is out of scope.
+    """
+    completion = usage.usage().usageCompletion()
+    body = completion.usageBody() if completion is not None else None
+    definition_body = body.definitionBody() if body is not None else None
+    if definition_body is None:
+        return None
+
+    captured = VariantBody()
+    for item in _as_list(definition_body.children):
+        if type(item).__name__ != "DefinitionBodyItemContext":
+            continue
+        if _first_descendant(item, "VariantUsageElementContext") is not None:
+            continue
+        part = _first_descendant(item, "PartUsageContext")
+        if part is not None:
+            name = _usage_name(part)
+            if name is not None:
+                captured.parts[name] = PartUsage(
+                    name=name, type_name=_usage_type(part)
+                )
+            continue
+        connect = _first_descendant(item, "ConnectionUsageContext")
+        if connect is not None:
+            connection = _raw_connection(connect)
+            captured.connections[connection.key] = connection
+            continue
+        bind = _first_descendant(item, "BindingConnectorAsUsageContext")
+        if bind is not None:
+            captured.bindings.append(_raw_binding(bind))
+    if not (captured.parts or captured.connections or captured.bindings):
+        return None
+    return captured
+
+
+def _first_descendant(node, kind: str):
+    """First descendant context of *kind* below *node*, pre-order, or ``None``."""
+    for child in getattr(node, "children", None) or []:
+        if type(child).__name__ == kind:
+            return child
+        found = _first_descendant(child, kind)
+        if found is not None:
+            return found
+    return None
+
+
+def _raw_connection(ctx) -> Connection:
+    """Repo Connection from a raw ``ConnectionUsageContext`` in a variant body."""
+    connector_part = ctx.connectorPart()
+    binary = (
+        connector_part.binaryConnectorPart()
+        if connector_part is not None
+        else None
+    )
+    ends = (
+        [
+            _raw_end_names(end)
+            for end in _as_list(binary.children)
+            if type(end).__name__ == "ConnectorEndMemberContext"
+        ]
+        if binary is not None
+        else []
+    )
+    if len(ends) != 2:
+        raise ValueError(
+            "Only binary connections are supported "
+            "('connect a.p to b.q;'), got "
+            f"{len(ends)} ends in a variant body"
+        )
+    source_part, source_port = _connection_endpoint(ends[0])
+    destination_part, destination_port = _connection_endpoint(ends[1])
+    return Connection(
+        name=(
+            f"{endpoint_text(source_part, source_port)}"
+            f"_to_{endpoint_text(destination_part, destination_port)}"
+        ),
+        source_part=source_part,
+        source_port=source_port,
+        destination_part=destination_part,
+        destination_port=destination_port,
+    )
+
+
+def _raw_binding(ctx) -> Binding:
+    """Repo Binding from a raw ``BindingConnectorAsUsageContext``."""
+    ends = [_raw_end_names(end) for end in _as_list(ctx.connectorEndMember())]
+    if len(ends) != 2 or not ends[0] or not ends[1]:
+        raise ValueError(
+            "Binding ends must be feature references "
+            "('bind a.x = b.y;'), got a malformed bind in a variant body"
+        )
+    return Binding(source=tuple(ends[0]), target=tuple(ends[1]))
+
+
+def _raw_end_names(end_member) -> list[str]:
+    """Feature-chain names of one raw ``ConnectorEndMemberContext``.
+
+    Mirrors :func:`_end_names`, which reads sysmlpy wrapper objects; the body
+    walk has only raw contexts, where a dotted chain is a list of
+    ``QualifiedNameContext`` children.
+    """
+    names: list[str] = []
+    for end in _as_list(getattr(end_member, "children", None)):
+        if type(end).__name__ != "ConnectorEndContext":
+            continue
+        for subsetting in _as_list(getattr(end, "children", None)):
+            if type(subsetting).__name__ != "OwnedReferenceSubsettingContext":
+                continue
+            for qualified in _as_list(subsetting.qualifiedName()):
+                names.append(qualified.getText())
+    return names
 
 
 def _usage_type(ctx) -> str | None:

@@ -16,6 +16,11 @@ from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
 from pyssp_sysml2.variation import has_variation, resolve
 from tests.test_utils import write_bootstrap_ssd, write_model
+from tests.variation_examples import (
+    CONNECTION_VARIATION,
+    PARAMETER_BINDING_VARIATION,
+    USAGE_LEVEL_VARIATION,
+)
 
 
 DEFINITION_VARIATION = """\
@@ -235,13 +240,18 @@ def test_definition_variation_captures_variants(tmp_path: Path) -> None:
     assert source_choice.parts == {}
 
 
-def test_usage_level_variation_is_flagged(tmp_path: Path) -> None:
-    """A ``variation part`` usage keeps its flag; its alternatives stay nested."""
+def test_usage_level_variation_captures_variants(tmp_path: Path) -> None:
+    """A ``variation part`` usage keeps its flag and its own variants."""
     _, architecture = _load_architecture(tmp_path, USAGE_VARIATION)
 
     system = architecture.part_definitions["System"]
     assert system.is_variation is False
-    assert system.parts["source"].is_variation is True
+    source = system.parts["source"]
+    assert source.is_variation is True
+    assert [(variant.name, variant.type_name) for variant in source.variants] == [
+        ("stepSource", "Step"),
+        ("sineSource", "Sine"),
+    ]
     assert system.variants == []
 
 
@@ -261,8 +271,8 @@ def test_generate_ssd_rejects_unresolved_variation(tmp_path: Path) -> None:
 
     with pytest.raises(
         ValueError,
-        match="'SourceChoice' in composition 'System' is not resolved.*"
-        "not supported yet",
+        match="'SourceChoice' in composition 'System' is not selected.*"
+        "--select",
     ):
         generate_ssd(path, tmp_path / "out" / "SystemStructure.ssd", "System")
 
@@ -276,7 +286,7 @@ def test_generate_ssd_still_succeeds_without_variation(tmp_path: Path) -> None:
 
 
 def test_variant_member_with_a_body_loads(tmp_path: Path) -> None:
-    """A variant with a body is captured and does not crash the load."""
+    """A variant with a body keeps its nested parts and connections."""
     _, architecture = _load_architecture(tmp_path, BODY_VARIATION)
 
     path_choice = architecture.part_definitions["PathChoice"]
@@ -284,6 +294,20 @@ def test_variant_member_with_a_body_loads(tmp_path: Path) -> None:
     assert [(variant.name, variant.type_name) for variant in path_choice.variants] == [
         ("directPath", None)
     ]
+    body = path_choice.variants[0].body
+    assert body is not None
+    assert [(name, usage.type_name) for name, usage in body.parts.items()] == [
+        ("gain", "Gain")
+    ]
+    assert [
+        (
+            conn.source_part,
+            conn.source_port,
+            conn.destination_part,
+            conn.destination_port,
+        )
+        for conn in body.connections.values()
+    ] == [(None, "u", "gain", "u"), ("gain", "y", None, "y")]
     assert path_choice.parts == {}
 
 
@@ -412,21 +436,219 @@ def test_resolve_rejects_an_unselected_variation_point(tmp_path: Path) -> None:
         resolve(architecture, "System", {})
 
 
-def test_resolve_rejects_usage_level_variation(tmp_path: Path) -> None:
+def test_resolve_substitutes_a_usage_level_variant(tmp_path: Path) -> None:
+    """A usage-level point is selected by its usage path and keeps the name."""
     _, architecture = _load_architecture(tmp_path, USAGE_VARIATION)
 
-    with pytest.raises(ValueError, match="usage-level variation is not supported"):
-        resolve(architecture, "System", {"source": "stepSource"})
+    resolved = resolve(architecture, "System", {"source": "stepSource"})
+
+    source = resolved.part_definitions["System"].parts["source"]
+    assert source.type_name == "Step"
+    assert source.name == "source"
+    assert source.is_variation is False
 
 
-def test_resolve_rejects_a_body_variant(tmp_path: Path) -> None:
+def test_resolve_synthesises_a_body_variant(tmp_path: Path) -> None:
+    """A body variant becomes a definition carrying the point's ports."""
     _, architecture = _load_architecture(tmp_path, BODY_VARIATION)
+
+    resolved = resolve(architecture, "System", {"path": "directPath"})
+
+    usage = resolved.part_definitions["System"].parts["path"]
+    assert usage.type_name == "PathChoice__directPath"
+    definition = resolved.part_definitions[usage.type_name]
+    assert list(definition.ports) == ["u", "y"]
+    assert list(definition.parts) == ["gain"]
+    assert [conn.key for conn in definition.connections.values()] == [
+        "u->gain.u",
+        "gain.y->y",
+    ]
+    assert architecture.part_definitions["System"].parts["path"].type_name == (
+        "PathChoice"
+    )
+
+
+def _ssd_tree(system) -> dict:
+    """Name, nested elements, and connections of one SSD system."""
+    elements = [
+        _ssd_tree(element) if hasattr(element, "elements") else {
+            "name": element.name,
+            "source": element.source,
+        }
+        for element in system.elements
+    ]
+    return {
+        "name": system.name,
+        "elements": elements,
+        "connections": [
+            (
+                connection.start_element,
+                connection.start_connector,
+                connection.end_element,
+                connection.end_connector,
+            )
+            for connection in system.connections
+        ],
+    }
+
+
+def _generated_ssd_tree(output: Path) -> dict:
+    with SSD(output, mode="r") as ssd:
+        assert ssd.system is not None
+        return _ssd_tree(ssd.system)
+
+
+def test_example_03_selects_a_usage_level_variant(tmp_path: Path) -> None:
+    """Example 03: the point sits on the usage, the SSD name stays 'source'."""
+    path, architecture = _load_architecture(tmp_path, USAGE_LEVEL_VARIATION)
+
+    source = architecture.part_definitions["System"].parts["source"]
+    assert source.is_variation is True
+    assert [(variant.name, variant.type_name) for variant in source.variants] == [
+        ("stepSource", "Step"),
+        ("sineSource", "Sine"),
+    ]
+
+    sources = {}
+    for variant in ("stepSource", "sineSource"):
+        output = generate_ssd(
+            path,
+            tmp_path / "out" / f"{variant}.ssd",
+            "System",
+            selections={"source": variant},
+        )
+        sources[variant] = _component_sources(output)["source"]
+    assert sources == {
+        "stepSource": "resources/Step.fmu",
+        "sineSource": "resources/Sine.fmu",
+    }
+
+
+def test_example_08_path_variants_differ_in_nested_structure(
+    tmp_path: Path,
+) -> None:
+    """Example 08: each body yields a subsystem with its own decomposition."""
+    path, _ = _load_architecture(tmp_path, CONNECTION_VARIATION)
+
+    direct = _generated_ssd_tree(
+        generate_ssd(
+            path,
+            tmp_path / "out" / "direct.ssd",
+            "System",
+            selections={"path": "directPath"},
+        )
+    )
+    filtered = _generated_ssd_tree(
+        generate_ssd(
+            path,
+            tmp_path / "out" / "filtered.ssd",
+            "System",
+            selections={"path": "filteredPath"},
+        )
+    )
+
+    assert direct["elements"][1] == {
+        "name": "path",
+        "elements": [{"name": "gain", "source": "resources/Gain.fmu"}],
+        "connections": [
+            (None, "u", "gain", "u"),
+            ("gain", "y", None, "y"),
+        ],
+    }
+    assert filtered["elements"][1] == {
+        "name": "path",
+        "elements": [
+            {"name": "firstStage", "source": "resources/Gain.fmu"},
+            {"name": "gain", "source": "resources/Gain.fmu"},
+        ],
+        "connections": [
+            (None, "u", "firstStage", "u"),
+            ("firstStage", "y", "gain", "u"),
+            ("gain", "y", None, "y"),
+        ],
+    }
+    assert direct["connections"] == filtered["connections"]
+
+
+def test_example_08_filtered_build_is_byte_identical(tmp_path: Path) -> None:
+    """The same selection twice produces the same SSD bytes."""
+    path, _ = _load_architecture(tmp_path, CONNECTION_VARIATION)
+
+    written = [
+        generate_ssd(
+            path,
+            tmp_path / f"filtered-{index}.ssd",
+            "System",
+            selections={"path": "filteredPath"},
+        ).read_bytes()
+        for index in range(2)
+    ]
+    assert written[0] == written[1]
+
+
+def test_example_08_rejects_an_unselected_body_point(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, CONNECTION_VARIATION)
 
     with pytest.raises(
         ValueError,
-        match="'directPath' of variation point 'PathChoice' has no resolvable type",
+        match="Variation point 'PathChoice' at 'path'.*is not selected",
+    ):
+        resolve(architecture, "System", {})
+
+
+UNDECLARED_BODY_PORT = """\
+package UndeclaredBodyPort {
+  part def SspModel;
+  port def RealSignal {
+    attribute pyssp_flat_connector : Boolean = true;
+    attribute value : Real;
+  }
+
+  part def Gain {
+    in port u : RealSignal;
+    out port y : RealSignal;
+  }
+
+  variation part def PathChoice {
+    in port u : RealSignal;
+
+    variant part directPath {
+      part gain : Gain;
+      connect u to gain.u;
+      connect gain.y to missing;
+    }
+  }
+
+  part def System :> SspModel {
+    part path : PathChoice;
+  }
+}
+"""
+
+
+def test_resolve_rejects_a_body_port_the_point_does_not_declare(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, UNDECLARED_BODY_PORT)
+
+    with pytest.raises(
+        ValueError,
+        match="Variant 'directPath' of variation point 'PathChoice' connects to "
+        "port 'missing', which the point does not declare",
     ):
         resolve(architecture, "System", {"path": "directPath"})
+
+
+def test_example_09_rejects_bindings_inside_a_variant(tmp_path: Path) -> None:
+    """Example 09: binding statements inside variants stay out of scope."""
+    _, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="'baselineBinding' of variation point 'parameters' declares "
+        "bindings; binding statements inside variant bodies are out of scope",
+    ):
+        resolve(architecture, "test_selected", {"parameters": "baselineBinding"})
 
 
 def test_parse_selections_rejects_a_malformed_value() -> None:
