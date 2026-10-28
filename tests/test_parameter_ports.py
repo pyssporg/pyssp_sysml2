@@ -14,6 +14,7 @@ from pyssp_sysml2.parameters import (
 )
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -31,33 +32,14 @@ def _model(
         "    attribute xs : Real[2];"
     ),
 ) -> str:
-    return f"""
-    package Ports {{
-      {markers}
-
-      {interface_decl} {{
-        {interface_members}
-      }}
-
-      attribute def Nom :> ParameterSet {{
-        attribute gain_value = 3.0;
-        attribute n = 7;
-        attribute xs_value = (1.0, 2.0);
-      }}
-
-      part def Comp {{
-        {port}
-      }}
-
-      part def {COMPOSITION_NAME} {{
-        part comp : Comp;
-        attribute nominal : Nom;
-        bind comp.parameters.gain = nominal.gain_value;
-        bind comp.parameters.count = nominal.n;
-        bind comp.parameters.xs = nominal.xs_value;
-      }}
-    }}
-    """
+    return render_fixture(
+        "parameter-ports/template.sysml",
+        port=port,
+        markers=markers,
+        interface_decl=interface_decl,
+        interface_members=interface_members,
+        COMPOSITION_NAME=COMPOSITION_NAME,
+    )
 
 
 def _load(tmp_path: Path, text: str):
@@ -143,26 +125,9 @@ def test_flat_connector_marker_is_rejected(tmp_path) -> None:
 
 def test_parameter_port_cannot_be_connected(tmp_path) -> None:
     """Parameter ports are bound, not wired with 'connect'."""
-    model = f"""
-    package Ports {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-
-      port def Params :> ParameterInterface {{
-        attribute gain : Real;
-      }}
-
-      part def Comp {{
-        in port parameters : Params;
-      }}
-
-      part def {COMPOSITION_NAME} {{
-        part left : Comp;
-        part right : Comp;
-        connect left.parameters to right.parameters;
-      }}
-    }}
-    """
+    model = render_fixture(
+        "parameter-ports/connected-ports.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+    )
     architecture_dir, _ = _load(tmp_path, model)
 
     with pytest.raises(ValueError, match="cannot be connected"):

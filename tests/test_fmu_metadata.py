@@ -14,6 +14,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -33,21 +34,13 @@ def _metadata_model(
     """,
     part_body: str = "attribute fmu_meta : CompFmu;",
 ) -> str:
-    return f"""
-    package Example {{
-      {marker}
-
-      {concrete}
-
-      part def Comp {{
-        {part_body}
-      }}
-
-      part def {COMPOSITION_NAME} {{
-        part comp : Comp;
-      }}
-    }}
-    """
+    return render_fixture(
+        "fmu-metadata/template.sysml",
+        marker=marker,
+        concrete=concrete,
+        part_body=part_body,
+        COMPOSITION_NAME=COMPOSITION_NAME,
+    )
 
 
 def _load(tmp_path: Path, text: str):
@@ -142,31 +135,9 @@ def test_component_source_is_empty_without_a_source(tmp_path) -> None:
 def test_metadata_is_not_emitted_as_a_parameter_connector(tmp_path) -> None:
     architecture_dir, _ = _load(
         tmp_path,
-        f"""
-        package Example {{
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          attribute def FmuMetadata {{ attribute implementation : String; }}
-
-          attribute def CompFmu :> FmuMetadata {{
-            attribute implementation = "CoSimulation";
-          }}
-
-          port def CompParameters :> ParameterInterface {{
-            attribute gain : Real;
-          }}
-
-          part def Comp {{
-            attribute fmu_meta : CompFmu;
-            in port parameters : CompParameters;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part comp : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "fmu-metadata/parameter-connector.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+        ),
     )
     output_path = tmp_path / "SystemStructure.ssd"
 
@@ -345,17 +316,10 @@ def test_retired_implementation_attribute_is_rejected(tmp_path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        f"""
-        package Example {{
-          part def Comp {{
-            attribute pyssp_implementation = "CoSimulation";
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part comp : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "fmu-metadata/retired-implementation.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     with pytest.raises(

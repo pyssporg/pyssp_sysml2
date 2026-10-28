@@ -10,6 +10,7 @@ from pyssp_standard import FMU, SSP, SSV
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssp import generate_ssp
+from tests.fixture_files import fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -52,36 +53,19 @@ def _write_architecture(
 
     write_model(
         root / "model.sysml",
-        f"""
-        package Example {{
-          {parameter_defs}
-
-          attribute def FmuMetadata {{
-            attribute source : String;
-            attribute implementation : String;
-          }}
-
-          attribute def CompFmu :> FmuMetadata {{
-            {metadata_fields}
-          }}
-
-          port def Signal {{
-            attribute y : Real;
-            {"attribute pyssp_flat_connector : Boolean = true;" if flat_connector else ""}
-          }}
-
-          part def Comp {{
-            attribute fmu_meta : CompFmu;
-            {parameter_port}
-            out port output : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part comp : Comp;
-            {composition_parameters}
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-ssp/template.sysml",
+            parameter_defs=parameter_defs,
+            metadata_fields=metadata_fields,
+            parameter_port=parameter_port,
+            composition_parameters=composition_parameters,
+            flat_connector=(
+                "attribute pyssp_flat_connector : Boolean = true;"
+                if flat_connector
+                else ""
+            ),
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
     return root
 
@@ -103,21 +87,9 @@ def _build_fmu(
 
 
 def _write_mismatched_fmu(fmu_path: Path) -> Path:
-    model_description = """<?xml version="1.0" encoding="UTF-8"?>
-<fmiModelDescription xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" fmiVersion="2.0" modelName="Comp" guid="{00000000-0000-0000-0000-000000000001}" generationTool="test" variableNamingConvention="structured">
-  <CoSimulation modelIdentifier="Comp" canHandleVariableCommunicationStepSize="true"/>
-  <ModelVariables>
-    <ScalarVariable name="other" valueReference="0" causality="output">
-      <Real/>
-    </ScalarVariable>
-  </ModelVariables>
-  <ModelStructure>
-    <Outputs>
-      <Unknown index="1"/>
-    </Outputs>
-  </ModelStructure>
-</fmiModelDescription>
-"""
+    model_description = fixture_text(
+        "generate-ssp/mismatched-model-description.xml"
+    )
     with zipfile.ZipFile(fmu_path, "w") as archive:
         archive.writestr("modelDescription.xml", model_description)
     return fmu_path
@@ -331,36 +303,11 @@ def test_generate_ssp_packages_nested_component(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        f"""
-        package Example {{
-          attribute def FmuMetadata {{
-            attribute source : String;
-            attribute implementation : String;
-          }}
-
-          attribute def LeafFmu :> FmuMetadata {{
-            attribute source = "{tmp_path / 'Leaf.fmu'}";
-            attribute implementation = "CoSimulation";
-          }}
-
-          port def Signal {{
-            attribute y : Real;
-          }}
-
-          part def Leaf {{
-            attribute fmu_meta : LeafFmu;
-            out port output : Signal;
-          }}
-
-          part def Sub {{
-            part leaf : Leaf;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part sub : Sub;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-ssp/nested-component.sysml",
+            leaf_fmu=str(tmp_path / "Leaf.fmu"),
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
     _build_fmu(architecture_dir, tmp_path / "Leaf.fmu", part_name="Leaf")
     output_path = tmp_path / "model.ssp"

@@ -9,6 +9,7 @@ import pytest
 
 from pyssp_sysml2 import fmi
 from pyssp_sysml2.fmi import generate_model_descriptions
+from tests.fixture_files import fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -25,21 +26,10 @@ def _write_status_component(root: Path) -> Path:
     """A composition with one leaf component exposing a single output port."""
     write_model(
         root / "model.sysml",
-        f"""
-        package Example {{
-          port def Status {{
-            attribute ok: Boolean;
-          }}
-
-          part def Comp {{
-            out port status : Status;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part c : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-model-descriptions/status-component.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
     return root
 
@@ -78,37 +68,14 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
 
     write_model(
         architecture_dir / "ports.sysml",
-        """
-        package Example {
-          port def Status {
-            attribute ok: Boolean;
-          }
-        }
-        """,
+        fixture_text("generate-model-descriptions/ports.sysml"),
     )
 
     write_model(
         architecture_dir / "parts.sysml",
-        f"""
-        package Example {{
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def CompParameters :> ParameterInterface {{
-            attribute int_list : Integer[2] = (1, 2);
-            attribute bool_list : Boolean[2] = (true, false);
-          }}
-
-          part def Comp {{
-            in port parameters : CompParameters;
-            out port status : Status;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part c : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-model-descriptions/parts.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+        ),
     )
 
     output_dir = tmp_path / "model_descriptions"
@@ -137,17 +104,10 @@ def test_generate_model_descriptions_from_small_snippet(tmp_path) -> None:
 def test_generate_model_descriptions_rejects_flat_parameters(tmp_path: Path) -> None:
     write_model(
         tmp_path / "arch" / "model.sysml",
-        f"""
-        package Example {{
-          part def Comp {{
-            attribute gain : Real = 1.0;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part c : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-model-descriptions/flat-parameters.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     with pytest.raises(ValueError, match="flat parameter attribute"):
@@ -160,21 +120,10 @@ def test_generate_model_descriptions_writes_expected_root_metadata(tmp_path: Pat
     """Generated FMI metadata includes stable identifiers and output model structure."""
     write_model(
         tmp_path / "arch" / "model.sysml",
-        f"""
-        package Example {{
-          port def Status {{
-            attribute ok: Boolean;
-          }}
-
-          part def Comp {{
-            out port status : Status;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part c : Comp;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-model-descriptions/status-component.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     output_dir = tmp_path / "model_descriptions"
@@ -201,26 +150,10 @@ def test_generate_model_descriptions_writes_one_file_per_component_type(tmp_path
     """Each referenced part definition gets its own model description output."""
     write_model(
         tmp_path / "arch" / "model.sysml",
-        f"""
-        package Example {{
-          port def Status {{
-            attribute ok: Boolean;
-          }}
-
-          part def Sensor {{
-            out port status : Status;
-          }}
-
-          part def Controller {{
-            in port status : Status;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part sensor : Sensor;
-            part controller : Controller;
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-model-descriptions/two-components.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     output_dir = tmp_path / "model_descriptions"

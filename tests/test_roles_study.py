@@ -9,54 +9,10 @@ from pyssp_sysml2.study import generate_study
 from pyssp_sysml2.sysml_model import load
 from pyssp_sysml2.sysml_model.exporter import export_declared
 from pyssp_sysml2.roles import is_ssp_model, is_study
+from tests.fixture_files import fixture_text
 
 
-ARCHITECTURE = """\
-package RoleModel {
-  part def SspModel;
-  part def Study;
-
-  port def ParameterInterface;
-  attribute def ParameterSet;
-
-  port def LeafParameters :> ParameterInterface {
-    attribute k : Real;
-  }
-
-  attribute def ScenarioSet :> ParameterSet {
-    attribute k = 2.0;
-  }
-
-  attribute def Experiment {
-    attribute startTime : Real;
-    attribute stopTime : Real;
-    attribute stepSize : Real;
-    attribute tolerance : Real;
-  }
-
-  attribute def BaselineExperiment :> Experiment {
-    attribute startTime = 0.0;
-    attribute stopTime = 1.0;
-    attribute stepSize = 0.1;
-    attribute tolerance = 0.0001;
-  }
-
-  part def Leaf {
-    in port parameters : LeafParameters;
-  }
-
-  part def System :> SspModel {
-    part leaf : Leaf;
-  }
-
-  part def test_baseline :> Study {
-    attribute experiment_baseline : BaselineExperiment;
-    attribute scenario : ScenarioSet;
-    part sut : System;
-    bind sut.leaf.parameters.k = scenario.k;
-  }
-}
-"""
+ARCHITECTURE = fixture_text("roles-study/architecture.sysml")
 
 
 def _write_architecture(tmp_path: Path) -> Path:
@@ -114,31 +70,7 @@ def test_generate_study_writes_scenario_and_descriptor(tmp_path: Path) -> None:
     assert 'target="sut.' not in ssm
 
 
-EXPERIMENT_ONLY_ARCHITECTURE = """\
-package LegacyStudy {
-  part def SspModel;
-  part def Study;
-
-  attribute def Experiment {
-    attribute startTime : Real;
-    attribute stopTime : Real;
-    attribute stepSize : Real;
-  }
-
-  attribute def BaselineExperiment :> Experiment {
-    attribute startTime = 0.0;
-    attribute stopTime = 1.0;
-    attribute stepSize = 0.001;
-  }
-
-  part def LegacyModel :> SspModel;
-
-  part def baseline :> Study {
-    attribute experiment_baseline : BaselineExperiment;
-    part sut : LegacyModel;
-  }
-}
-"""
+EXPERIMENT_ONLY_ARCHITECTURE = fixture_text("roles-study/experiment-only.sysml")
 
 
 def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) -> None:
@@ -195,50 +127,9 @@ def test_generate_study_writes_study_doc_as_description(tmp_path: Path) -> None:
     assert descriptor["description"] == "Baseline body over the default window."
 
 
-MODEL_OWNED_SCENARIO_ARCHITECTURE = """\
-package ModelOwnedStudy {
-  part def SspModel;
-  part def Study;
-
-  port def ParameterInterface;
-  attribute def ParameterSet;
-
-  port def LeafParameters :> ParameterInterface {
-    attribute k : Real;
-  }
-
-  attribute def ScenarioSet :> ParameterSet {
-    attribute k = 2.0;
-  }
-
-  attribute def Experiment {
-    attribute startTime : Real;
-    attribute stopTime : Real;
-    attribute stepSize : Real;
-  }
-
-  attribute def BaselineExperiment :> Experiment {
-    attribute startTime = 0.0;
-    attribute stopTime = 1.0;
-    attribute stepSize = 0.1;
-  }
-
-  part def Leaf {
-    in port parameters : LeafParameters;
-  }
-
-  part def System :> SspModel {
-    attribute scenario : ScenarioSet;
-    part leaf : Leaf;
-    bind leaf.parameters.k = scenario.k;
-  }
-
-  part def baseline :> Study {
-    attribute experiment_baseline : BaselineExperiment;
-    part sut : System;
-  }
-}
-"""
+MODEL_OWNED_SCENARIO_ARCHITECTURE = fixture_text(
+    "roles-study/model-owned-scenario.sysml"
+)
 
 
 def test_generate_study_with_model_owned_scenario_writes_experiment_only(

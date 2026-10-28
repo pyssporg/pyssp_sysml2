@@ -17,6 +17,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -48,27 +49,14 @@ def _model(
         bind autopilot.parameters.waypointCount = nominal.n_waypoints;
         bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
         """
-    return f"""
-    package Example {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-
-      port def AutopilotParameters {interface_marker} {{
-        {interface_members}
-      }}
-
-      {sets}
-
-      part def AutopilotModule {{
-        in port parameters : AutopilotParameters;
-      }}
-
-      part def {COMPOSITION_NAME} {{
-        part autopilot : AutopilotModule;
-        {composition}
-      }}
-    }}
-    """
+    return render_fixture(
+        "parameter-sets/template.sysml",
+        interface_marker=interface_marker,
+        interface_members=interface_members,
+        sets=sets,
+        composition=composition,
+        COMPOSITION_NAME=COMPOSITION_NAME,
+    )
 
 
 def _write(tmp_path: Path, text: str) -> Path:
@@ -364,25 +352,9 @@ def test_unbounded_parameter_multiplicity_is_rejected(tmp_path) -> None:
 
 def test_multiple_sets_binding_same_member_are_rejected(tmp_path) -> None:
     """Disjoint multiple sets are allowed; overlapping targets are not."""
-    model = f"""
-    package Example {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-      port def Params :> ParameterInterface {{
-        attribute count : Integer;
-      }}
-      attribute def CountsA :> ParameterSet {{ attribute n = 10; }}
-      attribute def CountsB :> ParameterSet {{ attribute m = 20; }}
-      part def Comp {{ in port parameters : Params; }}
-      part def {COMPOSITION_NAME} {{
-        part comp : Comp;
-        attribute counts_a : CountsA;
-        attribute counts_b : CountsB;
-        bind comp.parameters.count = counts_a.n;
-        bind comp.parameters.count = counts_b.m;
-      }}
-    }}
-    """
+    model = render_fixture(
+        "parameter-sets/two-sets-one-member.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+    )
     architecture_dir = _write(tmp_path, model)
 
     with pytest.raises(
@@ -397,26 +369,9 @@ def test_multiple_disjoint_sets_for_one_component_are_supported(
     tmp_path,
 ) -> None:
     """Multiple sets may target different members of the same component."""
-    model = f"""
-    package Example {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-      port def Params :> ParameterInterface {{
-        attribute count : Integer;
-        attribute gain : Real;
-      }}
-      attribute def Counts :> ParameterSet {{ attribute n = 10; }}
-      attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
-      part def Comp {{ in port parameters : Params; }}
-      part def {COMPOSITION_NAME} {{
-        part comp : Comp;
-        attribute counts : Counts;
-        attribute gains : Gains;
-        bind comp.parameters.count = counts.n;
-        bind comp.parameters.gain = gains.k;
-      }}
-    }}
-    """
+    model = render_fixture(
+        "parameter-sets/two-disjoint-sets.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+    )
     architecture_dir = _write(tmp_path, model)
 
     written = generate_parameter_sets(
@@ -624,22 +579,9 @@ def test_applied_set_is_not_reported_as_unapplied(tmp_path) -> None:
 
 def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
     """Interfaces without an applied set still define SSD parameter connectors."""
-    model = f"""
-    package Example {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-      port def AutopilotParameters :> ParameterInterface {{
-        attribute waypointCount : Integer;
-        attribute waypointX_km : Real[3];
-      }}
-      part def AutopilotModule {{
-        in port parameters : AutopilotParameters;
-      }}
-      part def {COMPOSITION_NAME} {{
-        part autopilot : AutopilotModule;
-      }}
-    }}
-    """
+    model = render_fixture(
+        "parameter-sets/interface-only.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+    )
     architecture_dir = _write(tmp_path, model)
     output_path = tmp_path / "SystemStructure.ssd"
 
@@ -661,26 +603,9 @@ def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:
 
 def test_generate_ssm_for_multiple_disjoint_sets(tmp_path) -> None:
     """Each applied set gets its own standalone SSM file."""
-    model = f"""
-    package Example {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-      port def Params :> ParameterInterface {{
-        attribute count : Integer;
-        attribute gain : Real;
-      }}
-      attribute def Counts :> ParameterSet {{ attribute n = 10; }}
-      attribute def Gains :> ParameterSet {{ attribute k = 2.5; }}
-      part def Comp {{ in port parameters : Params; }}
-      part def {COMPOSITION_NAME} {{
-        part comp : Comp;
-        attribute counts : Counts;
-        attribute gains : Gains;
-        bind comp.parameters.count = counts.n;
-        bind comp.parameters.gain = gains.k;
-      }}
-    }}
-    """
+    model = render_fixture(
+        "parameter-sets/two-disjoint-sets.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+    )
     architecture_dir = _write(tmp_path, model)
     output_dir = tmp_path / "mappings"
 

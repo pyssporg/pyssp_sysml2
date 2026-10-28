@@ -12,6 +12,7 @@ from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import fixture_text
 from tests.testhelpers import write_model
 
 
@@ -19,15 +20,7 @@ def _write_reference_ssp(root: Path) -> Path:
     root.mkdir(parents=True)
     parameter_path = root / "parameters.ssv"
     parameter_path.write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
-  <ssv:Parameters>
-    <ssv:Parameter name="gain.k">
-      <ssv:Real value="3.0" />
-    </ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("roundtrip/parameters.ssv")
     )
 
     ssd_path = root / "SystemStructure.ssd"
@@ -91,33 +84,7 @@ def test_sysml_ssd_sysml_ssd_preserves_explicit_parameter_mapping(
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def Params :> ParameterInterface {
-            attribute count : Integer;
-            attribute xs : Real[2];
-          }
-
-          attribute def Nom :> ParameterSet {
-            attribute n = 5;
-            attribute x = (1.0, 2.0);
-          }
-
-          part def Comp {
-            in port parameters : Params;
-          }
-
-          part def SystemComposition {
-            part c : Comp;
-            attribute nominal : Nom;
-            bind c.parameters.count = nominal.n;
-            bind c.parameters.xs = nominal.x;
-          }
-        }
-        """,
+        fixture_text("roundtrip/explicit-parameter-mapping.sysml")
     )
 
     first_ssd = tmp_path / "source" / "SystemStructure.ssd"
@@ -161,34 +128,7 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def InnerParams :> ParameterInterface {
-            attribute k : Real = 1.0;
-          }
-
-          attribute def Nom :> ParameterSet {
-            attribute k = 3.0;
-          }
-
-          part def Inner {
-            in port parameters : InnerParams;
-          }
-
-          part def Outer {
-            part inner : Inner;
-          }
-
-          part def SystemComposition {
-            part outer : Outer;
-            attribute nominal : Nom;
-            bind outer.inner.parameters.k = nominal.k;
-          }
-        }
-        """,
+        fixture_text("roundtrip/nested-parameter-model.sysml")
     )
 
     first_ssd = tmp_path / "source" / "SystemStructure.ssd"
@@ -251,41 +191,7 @@ def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def InnerParams :> ParameterInterface {
-            attribute count : Integer;
-            attribute gain : Real;
-          }
-
-          attribute def Counts :> ParameterSet {
-            attribute n = 10;
-          }
-
-          attribute def Gains :> ParameterSet {
-            attribute k = 2.5;
-          }
-
-          part def Inner {
-            in port parameters : InnerParams;
-          }
-
-          part def Outer {
-            part inner : Inner;
-          }
-
-          part def SystemComposition {
-            part outer : Outer;
-            attribute counts : Counts;
-            attribute gains : Gains;
-            bind outer.inner.parameters.count = counts.n;
-            bind outer.inner.parameters.gain = gains.k;
-          }
-        }
-        """,
+        fixture_text("roundtrip/multiple-disjoint-sets.sysml")
     )
 
     first_ssd = tmp_path / "source" / "SystemStructure.ssd"
@@ -339,45 +245,7 @@ def test_nested_system_parameter_port_roundtrip(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def InnerParams :> ParameterInterface {
-            attribute k : Real;
-          }
-
-          port def OuterParams :> ParameterInterface {
-            attribute gain : Real = 2.0;
-          }
-
-          attribute def InnerSet :> ParameterSet {
-            attribute k = 3.0;
-          }
-
-          attribute def OuterSet :> ParameterSet {
-            attribute g = 4.0;
-          }
-
-          part def Inner {
-            in port parameters : InnerParams;
-          }
-
-          part def Outer {
-            in port parameters : OuterParams;
-            part inner : Inner;
-          }
-
-          part def SystemComposition {
-            part outer : Outer;
-            attribute inner_set : InnerSet;
-            attribute outer_set : OuterSet;
-            bind outer.inner.parameters.k = inner_set.k;
-            bind outer.parameters.gain = outer_set.g;
-          }
-        }
-        """,
+        fixture_text("roundtrip/nested-system-parameter-port.sysml")
     )
 
     first_ssd = tmp_path / "source" / "SystemStructure.ssd"
@@ -454,39 +322,7 @@ def test_boundary_connections_roundtrip(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "source_arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x : Real;
-            attribute y : Real;
-          }
-
-          part def Source {
-            out port sig : Signal;
-          }
-
-          part def Sink {
-            in port sigIn : Signal;
-            out port sig : Signal;
-          }
-
-          part def Inner {
-            in port u : Signal;
-            out port v : Signal;
-            part src : Source;
-            part dst : Sink;
-            connect u to src.sig;
-            connect src.sig to dst.sigIn;
-            connect dst.sig to v;
-          }
-
-          part def SystemComposition {
-            out port y : Signal;
-            part inner : Inner;
-            connect inner.v to y;
-          }
-        }
-        """,
+        fixture_text("roundtrip/boundary-connections.sysml")
     )
 
     first_ssd = tmp_path / "source" / "SystemStructure.ssd"
@@ -513,14 +349,7 @@ def test_string_escapes_roundtrip(tmp_path: Path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        r"""
-        package Example {
-          part def Text {
-            attribute lines = "one\ntwo";
-            attribute path = "C:\\temp\\new";
-          }
-        }
-        """,
+        fixture_text("roundtrip/string-escapes.sysml")
     )
 
     architecture = load(architecture_dir)

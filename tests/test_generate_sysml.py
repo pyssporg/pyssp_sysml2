@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
-from textwrap import dedent
 
 import pytest
 from pyssp_standard import SSD, SSM, SSV
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import assert_matches_fixture, fixture_text
 from tests.testhelpers import write_bootstrap_ssd
 
 
@@ -24,30 +24,7 @@ def test_generate_sysml_from_ssd_uses_ssd_system_name_by_default(tmp_path: Path)
     written = generate_sysml_from_ssd(ssd_path, output)
 
     assert written == output
-    assert _architecture_text(output) == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute x : Real;
-            attribute y : Real;
-          }
-
-          part def Sink {
-            in port inSig : Port_1;
-          }
-
-          part def Source {
-            out port outSig : Port_1;
-          }
-
-          part def SystemComposition {
-            part dst : Sink;
-            part src : Source;
-            connect src.outSig to dst.inSig;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output), "generate-sysml/ssd-system-name.sysml")
 
 
 def test_generate_sysml_from_ssd_allows_overriding_composition_name(tmp_path: Path) -> None:
@@ -57,30 +34,7 @@ def test_generate_sysml_from_ssd_allows_overriding_composition_name(tmp_path: Pa
 
     generate_sysml_from_ssd(ssd_path, output, composition="RecoveredComposition")
 
-    assert _architecture_text(output) == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute x : Real;
-            attribute y : Real;
-          }
-
-          part def RecoveredComposition {
-            part dst : Sink;
-            part src : Source;
-            connect src.outSig to dst.inSig;
-          }
-
-          part def Sink {
-            in port inSig : Port_1;
-          }
-
-          part def Source {
-            out port outSig : Port_1;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output), "generate-sysml/composition-override.sysml")
 
 
 def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> None:
@@ -106,30 +60,7 @@ def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> N
     output = tmp_path / "scalar.sysml"
     generate_sysml_from_ssd(ssd_path, output)
 
-    assert _architecture_text(output) == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute pyssp_flat_connector : Boolean = true;
-            attribute value : Real;
-          }
-
-          part def ScalarExample {
-            part dst : Sink;
-            part src : Source;
-            connect src.signal to dst.signal;
-          }
-
-          part def Sink {
-            in port signal : Port_1;
-          }
-
-          part def Source {
-            out port signal : Port_1;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output), "generate-sysml/scalar-connectors.sysml")
 
 
 def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer_mix(
@@ -172,30 +103,7 @@ def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute Aircraft_State : Integer;
-            attribute TLiquid : Real;
-          }
-
-          part def EnumMix {
-            part dst : Sink;
-            part src : Source;
-            connect src.signal to dst.signal;
-          }
-
-          part def Sink {
-            in port signal : Port_1;
-          }
-
-          part def Source {
-            out port signal : Port_1;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/enum-integer-mix.sysml")
 
 
 def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_path: Path) -> None:
@@ -221,29 +129,7 @@ def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_pat
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute value : Real;
-          }
-
-          part def ScalarGroup {
-            part dst : Sink;
-            part src : Source;
-            connect src.signal to dst.signal;
-          }
-
-          part def Sink {
-            in port signal : Port_1;
-          }
-
-          part def Source {
-            out port signal : Port_1;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/scalar-group-names.sysml")
 
 
 def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
@@ -251,13 +137,7 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
 ) -> None:
     """A prefixed SSD ParameterBinding becomes an interface, set, and identity bind."""
     (tmp_path / "parameters.ssv").write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
-  <ssv:Parameters>
-    <ssv:Parameter name="k"><ssv:Real value="3.0" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("generate-sysml/identity-binding.ssv")
     )
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
@@ -272,33 +152,7 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def GainParameters :> ParameterInterface {
-            attribute k : Real;
-          }
-
-          port def ParameterInterface;
-
-          attribute def ParameterSet;
-
-          attribute def parameters :> ParameterSet {
-            attribute k : Real = 3.0;
-          }
-
-          part def Gain {
-            in port parameters : GainParameters;
-          }
-
-          part def ParamDemo {
-            attribute parameters_set : parameters;
-            part gain : Gain;
-            bind gain.parameters = parameters_set;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/identity-binding.sysml")
 
 
 def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
@@ -328,36 +182,7 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def CompParameters :> ParameterInterface {
-            attribute count : Integer;
-            attribute xs : Real[2];
-          }
-
-          port def ParameterInterface;
-
-          attribute def Nom :> ParameterSet {
-            attribute n : Integer = 5;
-            attribute x : Real[2] = (1.0, 2.0);
-          }
-
-          attribute def ParameterSet;
-
-          part def Comp {
-            in port parameters : CompParameters;
-          }
-
-          part def ParamDemo {
-            attribute Nom : Nom;
-            part comp : Comp;
-            bind comp.parameters.count = Nom.n;
-            bind comp.parameters.xs = Nom.x;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/explicit-parameter-mapping.sysml")
 
 
 def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
@@ -380,33 +205,7 @@ def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def GainParameters :> ParameterInterface {
-            attribute k : Real;
-          }
-
-          port def ParameterInterface;
-
-          attribute def ParameterSet;
-
-          attribute def parameters :> ParameterSet {
-            attribute k : Real = 4.0;
-          }
-
-          part def Gain {
-            in port parameters : GainParameters;
-          }
-
-          part def ParamDemo {
-            attribute parameters_set : parameters;
-            part gain : Gain;
-            bind gain.parameters = parameters_set;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/component-inline-parameter-set.sysml")
 
 
 def test_generate_sysml_from_ssd_keeps_interface_without_binding(
@@ -425,41 +224,13 @@ def test_generate_sysml_from_ssd_keeps_interface_without_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def GainParameters :> ParameterInterface {
-            attribute k : Real;
-          }
-
-          port def ParameterInterface;
-
-          attribute def ParameterSet;
-
-          part def Gain {
-            in port parameters : GainParameters;
-          }
-
-          part def ParamDemo {
-            part gain : Gain;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/interface-without-binding.sysml")
 
 
 def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
     """ParameterMapping/@source is resolved relative to the SSD."""
     (tmp_path / "parameters.ssv").write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
-  <ssv:Parameters>
-    <ssv:Parameter name="n"><ssv:Integer value="5" /></ssv:Parameter>
-    <ssv:Parameter name="x[0]"><ssv:Real value="1.0" /></ssv:Parameter>
-    <ssv:Parameter name="x[1]"><ssv:Real value="2.0" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("generate-sysml/external-mapping.ssv")
     )
     with SSM(tmp_path / "mapping.ssm", mode="w") as ssm:
         ssm.xml.add_mapping("n", "comp.count")
@@ -481,36 +252,7 @@ def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def CompParameters :> ParameterInterface {
-            attribute count : Integer;
-            attribute xs : Real[2];
-          }
-
-          port def ParameterInterface;
-
-          attribute def Nom :> ParameterSet {
-            attribute n : Integer = 5;
-            attribute x : Real[2] = (1.0, 2.0);
-          }
-
-          attribute def ParameterSet;
-
-          part def Comp {
-            in port parameters : CompParameters;
-          }
-
-          part def ParamDemo {
-            attribute Nom : Nom;
-            part comp : Comp;
-            bind comp.parameters.count = Nom.n;
-            bind comp.parameters.xs = Nom.x;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/explicit-parameter-mapping.sysml")
 
 
 def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
@@ -532,13 +274,7 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
 ) -> None:
     """A binding inside a nested SSD system is resolved relative to that system."""
     (tmp_path / "parameters.ssv").write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
-  <ssv:Parameters>
-    <ssv:Parameter name="inner.k"><ssv:Real value="3.0" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("generate-sysml/nested-system-binding.ssv")
     )
     ssd_path = tmp_path / "SystemStructure.ssd"
     with SSD(ssd_path, mode="w") as ssd:
@@ -555,37 +291,7 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def InnerParameters :> ParameterInterface {
-            attribute k : Real;
-          }
-
-          port def ParameterInterface;
-
-          attribute def Nom :> ParameterSet {
-            attribute k : Real = 3.0;
-          }
-
-          attribute def ParameterSet;
-
-          part def Demo {
-            attribute Nom : Nom;
-            part outer : outer;
-            bind outer.inner.parameters = Nom;
-          }
-
-          part def Inner {
-            in port parameters : InnerParameters;
-          }
-
-          part def outer {
-            part inner : Inner;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/nested-system-binding.sysml")
 
 
 def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> None:
@@ -624,41 +330,7 @@ def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> N
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute pyssp_flat_connector : Boolean = true;
-            attribute value : Real;
-          }
-
-          part def BoundaryExample {
-            out port y : Port_1;
-            part inner : inner;
-            connect inner.v to y;
-          }
-
-          part def Sink {
-            out port sig : Port_1;
-            in port sigIn : Port_1;
-          }
-
-          part def Source {
-            out port sig : Port_1;
-          }
-
-          part def inner {
-            in port u : Port_1;
-            out port v : Port_1;
-            part dst : Sink;
-            part src : Source;
-            connect u to src.sig;
-            connect dst.sig to v;
-            connect src.sig to dst.sigIn;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/boundary-connections.sysml")
 
 
 def test_generate_sysml_from_ssd_rejects_unknown_boundary_port(tmp_path: Path) -> None:
@@ -714,37 +386,4 @@ def test_generate_sysml_from_ssd_writes_boundary_connections(tmp_path: Path) -> 
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute value : Real;
-          }
-
-          part def Boundary {
-            out port y : Port_1;
-            part inner : inner;
-            connect inner.v to y;
-          }
-
-          part def Sink {
-            out port sig : Port_1;
-            in port sigIn : Port_1;
-          }
-
-          part def Source {
-            out port sig : Port_1;
-          }
-
-          part def inner {
-            in port u : Port_1;
-            out port v : Port_1;
-            part dst : Sink;
-            part src : Source;
-            connect u to src.sig;
-            connect dst.sig to v;
-            connect src.sig to dst.sigIn;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(text, "generate-sysml/boundary-connections-dotted.sysml")

@@ -7,6 +7,7 @@ from pyssp_standard import SSD, System
 
 from pyssp_sysml2.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -49,51 +50,17 @@ def test_generate_ssd_from_small_snippet(tmp_path) -> None:
 
     write_model(
         architecture_dir / "ports.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute mode: Integer;
-            attribute x: Real;
-          }
-        }
-        """,
+        fixture_text("generate-ssd/ports.sysml"),
     )
 
     write_model(
         architecture_dir / "parts.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def SourceParameters :> ParameterInterface {
-            attribute gains : Real[2];
-          }
-
-          part def Source {
-            in port parameters : SourceParameters;
-            out port sig : Signal;
-          }
-
-          part def Sink {
-            in port sigIn : Signal;
-          }
-        }
-        """,
+        fixture_text("generate-ssd/parts.sysml"),
     )
 
     write_model(
         architecture_dir / "composition.sysml",
-        f"""
-        package Example {{
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-            part dst : Sink;
-
-            connect src.sig to dst.sigIn;
-          }}
-        }}
-        """,
+        render_fixture("generate-ssd/composition.sysml", COMPOSITION_NAME=COMPOSITION_NAME),
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
@@ -124,21 +91,7 @@ def test_generate_ssd_writes_core_ssd_metadata(tmp_path: Path) -> None:
 
     write_model(
         architecture_dir / "model.sysml",
-        f"""
-        package Example {{
-          port def Signal {{
-            attribute x: Real;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-          }}
-        }}
-        """,
+        render_fixture("generate-ssd/core-metadata.sysml", COMPOSITION_NAME=COMPOSITION_NAME),
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
@@ -172,18 +125,9 @@ def test_generate_ssd_rejects_retired_parameter_set_attribute(tmp_path: Path) ->
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        f"""
-        package Example {{
-          part def Gain {{
-            attribute k : Real = 3.0;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part gain : Gain;
-            attribute pyssp_parameter_set : String = "parameters.ssv";
-          }}
-        }}
-        """,
+        render_fixture(
+            "generate-ssd/retired-parameter-set.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+        ),
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
@@ -191,46 +135,12 @@ def test_generate_ssd_rejects_retired_parameter_set_attribute(tmp_path: Path) ->
         generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
 
 
-BOUNDARY_MODEL = """
-        package Example {{
-          port def Signal {{
-            attribute x : Real;
-          }}
-
-          part def Source {{
-            out port sig : Signal;
-          }}
-
-          part def Sink {{
-            in port sigIn : Signal;
-            out port sig : Signal;
-          }}
-
-          part def Inner {{
-            in port u : Signal;
-            out port v : Signal;
-            part src : Source;
-            part dst : Sink;
-            connect u to src.sig;
-            connect src.sig to dst.sigIn;
-            connect dst.sig to v;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            out port y : Signal;
-            part inner : Inner;
-            connect inner.v to y;
-          }}
-        }}
-        """
-
-
 def test_generate_ssd_wires_system_boundary(tmp_path: Path) -> None:
     """A bare connection end emits an SSD connection without an element."""
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        BOUNDARY_MODEL.format(COMPOSITION_NAME=COMPOSITION_NAME),
+        render_fixture("generate-ssd/boundary.sysml", COMPOSITION_NAME=COMPOSITION_NAME),
     )
 
     output_path = tmp_path / "SystemStructure.ssd"
@@ -267,23 +177,10 @@ def test_generate_ssd_rejects_boundary_port_wrong_direction(tmp_path: Path) -> N
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x : Real;
-          }
-
-          part def Source {
-            out port sig : Signal;
-          }
-
-          part def SystemComposition {
-            in port y : Signal;
-            part src : Source;
-            connect src.sig to y;
-          }
-        }
-        """,
+        render_fixture(
+            "generate-ssd/boundary-wrong-direction.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     with pytest.raises(ValueError, match="used as the end of a connection"):
@@ -297,19 +194,10 @@ def test_generate_ssd_rejects_boundary_to_boundary_connection(tmp_path: Path) ->
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "model.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x : Real;
-          }
-
-          part def SystemComposition {
-            in port u : Signal;
-            out port v : Signal;
-            connect u to v;
-          }
-        }
-        """,
+        render_fixture(
+            "generate-ssd/boundary-to-boundary.sysml",
+            COMPOSITION_NAME=COMPOSITION_NAME,
+        ),
     )
 
     with pytest.raises(ValueError, match="links two boundary ports"):

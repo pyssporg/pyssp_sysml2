@@ -13,6 +13,7 @@ from pyssp_sysml2.parameters import (
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml_model import load
+from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -23,30 +24,12 @@ ATTRIBUTE_CARRIER = re.compile(
 
 
 def _model(bind_line: str, *, parts: str = "part comp : Comp;") -> str:
-    return f"""
-    package Orientation {{
-      port def ParameterInterface;
-      attribute def ParameterSet;
-
-      port def Params :> ParameterInterface {{
-        attribute count : Integer;
-      }}
-
-      attribute def Set1 :> ParameterSet {{
-        attribute n = 1;
-      }}
-
-      part def Comp {{
-        in port parameters : Params;
-      }}
-
-      part def {COMPOSITION_NAME} {{
-        {parts}
-        attribute nominal : Set1;
-        {bind_line}
-      }}
-    }}
-    """
+    return render_fixture(
+        "parameter-bind-orientation/template.sysml",
+        parts=parts,
+        bind_line=bind_line,
+        COMPOSITION_NAME=COMPOSITION_NAME,
+    )
 
 
 def _load(tmp_path: Path, bind_line: str, *, parts: str = "part comp : Comp;"):

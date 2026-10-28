@@ -6,8 +6,12 @@ committed golden, and every produced document is re-validated through the
 ``pyssp_standard`` facade (XSD plus semantic checks), so the writer and the
 checker are different implementations.
 
-Regenerate with ``UPDATE_GOLDENS=1`` and review the diff; never in CI.
-See ``README.md`` in this directory.
+The committed golden is validated too, not only the fresh copy, so the bytes in
+the repository are evidence on their own terms rather than trusted because they
+were blessed once.
+
+Regenerate with ``UPDATE_GOLDENS=1`` and review the diff; never in CI, which the
+test refuses. See ``README.md`` in this directory.
 """
 
 from __future__ import annotations
@@ -37,6 +41,12 @@ CASES = {
 
 #: Fixture files that are inputs, not goldens.
 INPUTS = {"architecture.sysml"}
+
+#: The per-case provenance record; it describes the goldens, it is not one.
+RECORD = "case.md"
+
+#: Everything in a case directory that generation does not produce.
+NON_GOLDENS = INPUTS | {RECORD}
 
 #: Frozen ``generationDateAndTime`` shared by every golden model description.
 GENERATION_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -99,6 +109,9 @@ def test_golden_artifacts_are_reproducible_and_valid(
     case: str, tmp_path: Path
 ) -> None:
     """Generation reproduces the committed bytes and the facade accepts them."""
+    if UPDATE_GOLDENS and os.environ.get("CI"):
+        pytest.fail("refusing to update goldens in CI")
+
     case_dir = GOLDEN_ROOT / case
     output_dir = tmp_path / "generated"
 
@@ -106,7 +119,7 @@ def test_golden_artifacts_are_reproducible_and_valid(
 
     generated = _files(output_dir)
     if UPDATE_GOLDENS:
-        committed_before = _files(case_dir, exclude=INPUTS)
+        committed_before = _files(case_dir, exclude=NON_GOLDENS)
         for relative, path in generated.items():
             destination = case_dir / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -117,7 +130,7 @@ def test_golden_artifacts_are_reproducible_and_valid(
             if not any(stale.parent.iterdir()):
                 stale.parent.rmdir()
 
-    committed = _files(case_dir, exclude=INPUTS)
+    committed = _files(case_dir, exclude=NON_GOLDENS)
     assert sorted(generated) == sorted(committed), (
         f"{case}: produced {sorted(generated)} but goldens are {sorted(committed)}; "
         "run with UPDATE_GOLDENS=1 and review the result"
@@ -125,6 +138,11 @@ def test_golden_artifacts_are_reproducible_and_valid(
     for relative in sorted(generated):
         _validate(generated[relative])
         _assert_same_bytes(case_dir / relative, generated[relative])
+
+    # The committed bytes are evidence on their own: validate them directly,
+    # after the comparison, so a corrupted golden still reports the byte diff.
+    for relative in sorted(committed):
+        _validate(case_dir / relative)
 
 
 @pytest.mark.parametrize("name", ["openscaling"])

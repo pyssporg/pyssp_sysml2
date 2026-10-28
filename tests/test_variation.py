@@ -15,208 +15,29 @@ from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
 from pyssp_sysml2.variation import has_variation, resolve
+from tests.fixture_files import fixture_text
 from tests.testhelpers import write_bootstrap_ssd, write_model
-from tests.variation_examples import (
-    CONNECTION_VARIATION,
-    NESTED_VARIATION as NESTED_BODY_VARIATION,
-    PARAMETER_BINDING_VARIATION,
-    USAGE_LEVEL_VARIATION,
-)
+
+# Whole documents from the variation-point examples, one file per behaviour.
+USAGE_LEVEL_VARIATION = fixture_text("variation/usage-level.sysml")
+CONNECTION_VARIATION = fixture_text("variation/connection.sysml")
+PARAMETER_BINDING_VARIATION = fixture_text("variation/parameter-binding.sysml")
+NESTED_BODY_VARIATION = fixture_text("variation/nested-body.sysml")
 
 
-DEFINITION_VARIATION = """\
-package DefinitionVariation {
-  part def SspModel;
-  port def RealSignal {
-    attribute pyssp_flat_connector : Boolean = true;
-    attribute value : Real;
-  }
+DEFINITION_VARIATION = fixture_text("variation/definition.sysml")
 
-  part def Step {
-    out port y : RealSignal;
-  }
+DEFINITION_VARIATION_FMU = fixture_text("variation/definition-fmu.sysml")
 
-  part def Sine {
-    out port y : RealSignal;
-  }
+USAGE_VARIATION = fixture_text("variation/usage.sysml")
 
-  part def Gain {
-    in port u : RealSignal;
-    out port y : RealSignal;
-  }
+BODY_VARIATION = fixture_text("variation/body.sysml")
 
-  variation part def SourceChoice {
-    variant part stepImplementation : Step;
-    variant part sineImplementation : Sine;
-  }
+NESTED_VARIATION = fixture_text("variation/nested.sysml")
 
-  part def System :> SspModel {
-    part source : SourceChoice;
-    part gain : Gain;
-    connect source.y to gain.u;
-  }
-}
-"""
+AMBIGUOUS_NAMES = fixture_text("variation/ambiguous-names.sysml")
 
-DEFINITION_VARIATION_FMU = """\
-package DefinitionVariationFmu {
-  part def SspModel;
-  port def RealSignal {
-    attribute pyssp_flat_connector : Boolean = true;
-    attribute value : Real;
-  }
-
-  attribute def FmuMetadata {
-    attribute source : String;
-    attribute implementation : String;
-  }
-
-  attribute def StepFmu :> FmuMetadata {
-    attribute source = "models/fmu/Step";
-    attribute implementation = "CoSimulation";
-  }
-
-  attribute def SineFmu :> FmuMetadata {
-    attribute source = "models/fmu/Sine";
-    attribute implementation = "CoSimulation";
-  }
-
-  part def Step {
-    attribute fmu_meta : StepFmu;
-    out port y : RealSignal;
-  }
-
-  part def Sine {
-    attribute fmu_meta : SineFmu;
-    out port y : RealSignal;
-  }
-
-  part def Gain {
-    in port u : RealSignal;
-    out port y : RealSignal;
-  }
-
-  variation part def SourceChoice {
-    variant part stepImplementation : Step;
-    variant part sineImplementation : Sine;
-  }
-
-  part def System :> SspModel {
-    part source : SourceChoice;
-    part gain : Gain;
-    connect source.y to gain.u;
-  }
-}
-"""
-
-USAGE_VARIATION = """\
-package UsageVariation {
-  part def SspModel;
-
-  part def SignalSource;
-  part def Step :> SignalSource;
-  part def Sine :> SignalSource;
-
-  part def System :> SspModel {
-    variation part source : SignalSource {
-      variant part stepSource : Step;
-      variant part sineSource : Sine;
-    }
-  }
-}
-"""
-
-BODY_VARIATION = """\
-package BodyVariation {
-  part def SspModel;
-  port def RealSignal {
-    attribute pyssp_flat_connector : Boolean = true;
-    attribute value : Real;
-  }
-
-  part def Gain {
-    in port u : RealSignal;
-    out port y : RealSignal;
-  }
-
-  variation part def PathChoice {
-    in port u : RealSignal;
-    out port y : RealSignal;
-
-    variant part directPath {
-      part gain : Gain;
-      connect u to gain.u;
-      connect gain.y to y;
-    }
-  }
-
-  part def System :> SspModel {
-    part path : PathChoice;
-  }
-}
-"""
-
-NESTED_VARIATION = """\
-package NestedVariation {
-  part def SspModel;
-  part def A;
-  part def B;
-
-  variation part def Choice {
-    variant part a : A;
-    variant part b : B;
-  }
-
-  part def Inner {
-    part source : Choice;
-  }
-
-  part def System :> SspModel {
-    part inner : Inner;
-  }
-}
-"""
-
-AMBIGUOUS_NAMES = """\
-package AmbiguousNames {
-  part def SspModel;
-  part def Leaf;
-
-  part def Nested {
-    part x : Leaf;
-  }
-
-  part def System :> SspModel {
-    part x : Leaf;
-    part inner : Nested;
-  }
-}
-"""
-
-NO_VARIATION = """\
-package NoVariation {
-  part def SspModel;
-  port def RealSignal {
-    attribute pyssp_flat_connector : Boolean = true;
-    attribute value : Real;
-  }
-
-  part def Step {
-    out port y : RealSignal;
-  }
-
-  part def Gain {
-    in port u : RealSignal;
-    out port y : RealSignal;
-  }
-
-  part def System :> SspModel {
-    part step : Step;
-    part gain : Gain;
-    connect step.y to gain.u;
-  }
-}
-"""
+NO_VARIATION = fixture_text("variation/no-variation.sysml")
 
 
 def _load_architecture(tmp_path: Path, content: str):
@@ -597,34 +418,7 @@ def test_example_08_rejects_an_unselected_body_point(tmp_path: Path) -> None:
         resolve(architecture, "System", {})
 
 
-UNDECLARED_BODY_PORT = """\
-package UndeclaredBodyPort {
-  part def SspModel;
-  port def RealSignal {
-    attribute pyssp_flat_connector : Boolean = true;
-    attribute value : Real;
-  }
-
-  part def Gain {
-    in port u : RealSignal;
-    out port y : RealSignal;
-  }
-
-  variation part def PathChoice {
-    in port u : RealSignal;
-
-    variant part directPath {
-      part gain : Gain;
-      connect u to gain.u;
-      connect gain.y to missing;
-    }
-  }
-
-  part def System :> SspModel {
-    part path : PathChoice;
-  }
-}
-"""
+UNDECLARED_BODY_PORT = fixture_text("variation/undeclared-body-port.sysml")
 
 
 def test_resolve_rejects_a_body_port_the_point_does_not_declare(
@@ -813,40 +607,7 @@ def test_example_10_inner_key_needs_the_outer_body_first(
         resolve(architecture, "System", {"path.stage": "attenuateStage"})
 
 
-THREE_LEVELS = """\
-package ThreeLevels {
-  part def SspModel;
-
-  part def Step;
-  part def Gain;
-
-  variation part def DeepChoice {
-    variant part leafGain : Gain;
-  }
-
-  variation part def StageChoice {
-    variant part stepStage : Step;
-    variant part deepStage {
-      variation part deep : DeepChoice;
-    }
-  }
-
-  variation part def PathChoice {
-    variant part nestedPath {
-      variation part stage : StageChoice {
-        variant part stepStage : Step;
-        variant part deepStage {
-          variation part deep : DeepChoice;
-        }
-      }
-    }
-  }
-
-  part def System :> SspModel {
-    part path : PathChoice;
-  }
-}
-"""
+THREE_LEVELS = fixture_text("variation/three-levels.sysml")
 
 
 def test_three_level_variation_is_rejected_not_flattened(tmp_path: Path) -> None:
@@ -863,23 +624,7 @@ def test_three_level_variation_is_rejected_not_flattened(tmp_path: Path) -> None
         )
 
 
-VALUED_BODY_ATTRIBUTE = """\
-package ValuedBodyAttribute {
-  part def SspModel;
-  attribute def Values {
-    attribute x = 1.0;
-  }
-  part def Marker;
-
-  part def System :> SspModel {
-    variation part parameters : Marker {
-      variant part chosen {
-        attribute values : Real = 1.0;
-      }
-    }
-  }
-}
-"""
+VALUED_BODY_ATTRIBUTE = fixture_text("variation/valued-body-attribute.sysml")
 
 
 def test_variant_body_rejects_an_attribute_value_it_cannot_carry(
@@ -942,16 +687,7 @@ def test_cli_generate_ssd_reports_a_malformed_selection(
     assert "[error] Invalid --select value 'source'" in capsys.readouterr().out
 
 
-ATTRIBUTE_VARIATION = """\
-package AttributeVariation {
-  part def SspModel;
-  variation attribute def Scale;
-
-  part def System :> SspModel {
-    attribute gain : Scale;
-  }
-}
-"""
+ATTRIBUTE_VARIATION = fixture_text("variation/attribute-variation.sysml")
 
 
 def test_has_variation_covers_definitions_usages_and_attributes(
@@ -1033,90 +769,7 @@ def test_sync_refuses_to_rewrite_variation(tmp_path: Path) -> None:
         sync_sysml_from_ssd(path, ssd_path, "System")
 
 
-ATTRIBUTE_SET_VARIATION = """\
-package AttributeSetVariation {
-  part def SspModel;
-  part def Study;
-
-  port def ParameterInterface;
-  attribute def ParameterSet;
-
-  port def StepParameters :> ParameterInterface {
-    attribute height : Real;
-    attribute offset : Real;
-    attribute startTime : Real;
-  }
-
-  port def GainParameters :> ParameterInterface {
-    attribute k : Real;
-  }
-
-  attribute def BaselineScenario :> ParameterSet {
-    attribute height = 2.0;
-    attribute offset = 1.0;
-    attribute startTime = 0.25;
-    attribute k = 3.0;
-  }
-
-  attribute def LateStepScenario :> ParameterSet {
-    attribute height = 2.0;
-    attribute offset = 1.0;
-    attribute startTime = 0.75;
-    attribute k = 3.0;
-  }
-
-  attribute def HighGainScenario :> ParameterSet {
-    attribute height = 2.0;
-    attribute offset = 1.0;
-    attribute startTime = 0.25;
-    attribute k = 9.0;
-  }
-
-  variation attribute def ScenarioChoice {
-    variant attribute baseline : BaselineScenario;
-    variant attribute lateStep : LateStepScenario;
-    variant attribute highGain : HighGainScenario;
-  }
-
-  attribute def Experiment {
-    attribute startTime : Real;
-    attribute stopTime : Real;
-    attribute stepSize : Real;
-    attribute tolerance : Real;
-  }
-
-  attribute def BaselineExperiment :> Experiment {
-    attribute startTime = 0.0;
-    attribute stopTime = 1.0;
-    attribute stepSize = 0.001;
-    attribute tolerance = 0.0001;
-  }
-
-  part def Step {
-    in port parameters : StepParameters;
-  }
-
-  part def Gain {
-    in port parameters : GainParameters;
-  }
-
-  part def System :> SspModel {
-    part step : Step;
-    part gain : Gain;
-  }
-
-  part def test_selected_scenario :> Study {
-    attribute experiment_baseline : BaselineExperiment;
-    attribute scenario : ScenarioChoice;
-    part sut : System;
-
-    bind sut.step.parameters.height = scenario.height;
-    bind sut.step.parameters.offset = scenario.offset;
-    bind sut.step.parameters.startTime = scenario.startTime;
-    bind sut.gain.parameters.k = scenario.k;
-  }
-}
-"""
+ATTRIBUTE_SET_VARIATION = fixture_text("variation/attribute-set-variation.sysml")
 
 
 def _ssv_values(path: Path) -> dict[str, float]:
@@ -1323,19 +976,7 @@ def test_resolve_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
         resolve(architecture, "test_selected_scenario", {})
 
 
-UNTYPED_ATTRIBUTE_VARIANT = """\
-package UntypedAttributeVariant {
-  part def SspModel;
-
-  variation attribute def Choice {
-    variant attribute empty;
-  }
-
-  part def System :> SspModel {
-    attribute value : Choice;
-  }
-}
-"""
+UNTYPED_ATTRIBUTE_VARIANT = fixture_text("variation/untyped-attribute-variant.sysml")
 
 
 def test_resolve_rejects_an_attribute_variant_without_a_type(tmp_path: Path) -> None:

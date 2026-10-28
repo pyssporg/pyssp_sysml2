@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from textwrap import dedent
 
 from pyssp_standard import SSD
 
@@ -12,6 +11,7 @@ from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import endpoint_text, load
+from tests.fixture_files import assert_matches_fixture, fixture_text
 from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
@@ -20,32 +20,7 @@ def _write_sync_architecture(root: Path) -> Path:
 
     write_model(
         root / "model.sysml",
-        f"""
-        package Example {{
-          port def Signal {{
-            attribute x: Real;
-            attribute y: Real;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def Sink {{
-            in port inSig : Signal;
-          }}
-
-          part def AltSink {{
-            in port inSig : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-          }}
-        }}
-        """,
+        fixture_text("sync/example-architecture.sysml")
     )
     return root
 
@@ -124,34 +99,7 @@ def test_sync_sysml_from_ssd_updates_part_type_from_component_source(tmp_path: P
         output_architecture_dir=output_dir,
     )
 
-    assert _architecture_text(output_dir) == dedent(
-        f"""
-        package Example {{
-          port def Signal {{
-            attribute x : Real;
-            attribute y : Real;
-          }}
-
-          part def AltSink {{
-            in port inSig : Signal;
-          }}
-
-          part def Sink {{
-            in port inSig : Signal;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part dst : AltSink;
-            part src : Source;
-            connect src.outSig to dst.inSig;
-          }}
-        }}
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output_dir), "sync/part-type-update.sysml")
 
 
 def test_sync_sysml_from_ssd_rejects_partial_attribute_mapping(tmp_path: Path) -> None:
@@ -206,36 +154,7 @@ def test_sync_sysml_from_ssd_adds_part_from_ssd_component(tmp_path: Path) -> Non
         output_architecture_dir=output_dir,
     )
 
-    assert _architecture_text(output_dir) == dedent(
-        f"""
-        package Example {{
-          port def Signal {{
-            attribute x : Real;
-            attribute y : Real;
-          }}
-
-          part def AltSink {{
-            in port inSig : Signal;
-          }}
-
-          part def Sink {{
-            in port inSig : Signal;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part alt : AltSink;
-            part dst : Sink;
-            part src : Source;
-            connect src.outSig to alt.inSig;
-            connect src.outSig to dst.inSig;
-          }}
-        }}
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output_dir), "sync/add-part.sysml")
 
 
 def test_sync_sysml_from_ssd_removes_part_missing_from_ssd_components(tmp_path: Path) -> None:
@@ -275,30 +194,7 @@ def test_sync_sysml_from_ssd_bootstraps_architecture_when_sysml_is_missing(tmp_p
     )
 
     assert written == [architecture_dir / "architecture.sysml"]
-    assert _architecture_text(architecture_dir) == dedent(
-        """
-        package RecoveredFromSSD {
-          port def Port_1 {
-            attribute x : Real;
-            attribute y : Real;
-          }
-
-          part def Sink {
-            in port inSig : Port_1;
-          }
-
-          part def Source {
-            out port outSig : Port_1;
-          }
-
-          part def SystemComposition {
-            part dst : Sink;
-            part src : Source;
-            connect src.outSig to dst.inSig;
-          }
-        }
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(architecture_dir), "generate-sysml/ssd-system-name.sysml")
 
 
 def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp_path: Path) -> None:
@@ -308,48 +204,15 @@ def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp
 
     write_model(
         architecture_dir / "ports.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x: Real;
-            attribute y: Real;
-          }
-
-          port def DebugSignal {
-            attribute level: Integer;
-          }
-        }
-        """,
+        fixture_text("sync/ports.sysml")
     )
     write_model(
         architecture_dir / "parts.sysml",
-        """
-        package Example {
-          part def Source {
-            out port outSig : Signal;
-          }
-
-          part def Sink {
-            in port inSig : Signal;
-          }
-
-          part def Utility {
-            out port debug : DebugSignal;
-          }
-        }
-        """,
+        fixture_text("sync/parts.sysml")
     )
     write_model(
         architecture_dir / "composition.sysml",
-        f"""
-        package Example {{
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-          }}
-        }}
-        """,
+        fixture_text("sync/composition.sysml")
     )
 
     ssd_path = tmp_path / "SystemStructure.ssd"
@@ -368,41 +231,7 @@ def test_sync_sysml_from_ssd_preserves_unrelated_definitions_and_file_layout(tmp
     )
 
     assert sorted(path.name for path in written) == ["composition.sysml", "parts.sysml", "ports.sysml"]
-    assert _architecture_text(output_dir) == dedent(
-        f"""
-        package Example {{
-          part def {COMPOSITION_NAME} {{
-            part dst : Sink;
-            part src : Source;
-          }}
-        }}
-
-        package Example {{
-          part def Sink {{
-            in port inSig : Signal;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def Utility {{
-            out port debug : DebugSignal;
-          }}
-        }}
-
-        package Example {{
-          port def DebugSignal {{
-            attribute level : Integer;
-          }}
-
-          port def Signal {{
-            attribute x : Real;
-            attribute y : Real;
-          }}
-        }}
-        """
-    ).strip() + "\n"
+    assert_matches_fixture(_architecture_text(output_dir), "sync/preserved-layout.sysml")
 
 
 def test_sync_sysml_from_ssd_synthesizes_part_def_for_unknown_component_source(
@@ -525,13 +354,7 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
     """Sync reconciles interfaces, set values, and binds from SSD/SSV."""
     parameter_path = tmp_path / "parameters.ssv"
     parameter_path.write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
-  <ssv:Parameters>
-    <ssv:Parameter name="k"><ssv:Real value="3.0" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("generate-sysml/identity-binding.ssv")
     )
 
     ssd_path = tmp_path / "SystemStructure.ssd"
@@ -548,14 +371,7 @@ def test_sync_sysml_from_ssd_updates_parameter_dialect(tmp_path: Path) -> None:
     sync_sysml_from_ssd(architecture_dir, ssd_path, "ParamDemo")
 
     parameter_path.write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="parameters">
-  <ssv:Parameters>
-    <ssv:Parameter name="k"><ssv:Real value="5.0" /></ssv:Parameter>
-    <ssv:Parameter name="bias"><ssv:Real value="1.5" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("sync/updated-parameters.ssv")
     )
     with SSD(ssd_path, mode="a") as ssd:
         gain = ssd.system.elements[0]
@@ -581,34 +397,7 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
     source_arch = tmp_path / "source_arch"
     write_model(
         source_arch / "model.sysml",
-        """
-        package Example {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def InnerParams :> ParameterInterface {
-            attribute k : Real = 1.0;
-          }
-
-          attribute def Nom :> ParameterSet {
-            attribute k = 3.0;
-          }
-
-          part def Inner {
-            in port parameters : InnerParams;
-          }
-
-          part def Outer {
-            part inner : Inner;
-          }
-
-          part def SystemComposition {
-            part outer : Outer;
-            attribute nominal : Nom;
-            bind outer.inner.parameters.k = nominal.k;
-          }
-        }
-        """,
+        fixture_text("roundtrip/nested-parameter-model.sysml")
     )
 
     ssd_path = tmp_path / "source" / "SystemStructure.ssd"
@@ -624,13 +413,7 @@ def test_sync_nested_parameter_dialect_and_structure(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, architecture_dir / "architecture.sysml")
 
     (ssd_path.parent / "parameter_sets" / "Nom.ssv").write_text(
-        """<?xml version="1.0" encoding="UTF-8"?>
-<ssv:ParameterSet xmlns:ssv="http://ssp-standard.org/SSP1/SystemStructureParameterValues" version="1.0" name="Nom">
-  <ssv:Parameters>
-    <ssv:Parameter name="k"><ssv:Real value="5.0" /></ssv:Parameter>
-  </ssv:Parameters>
-</ssv:ParameterSet>
-"""
+        fixture_text("sync/nominal-parameters.ssv")
     )
     with SSD(ssd_path, mode="a") as ssd:
         outer = ssd.system.elements[0]
@@ -656,31 +439,7 @@ def test_sync_nested_system_connections(tmp_path: Path) -> None:
     source_arch = tmp_path / "source_arch"
     write_model(
         source_arch / "model.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x : Real;
-          }
-
-          part def Source {
-            out port outSig : Signal;
-          }
-
-          part def Sink {
-            in port inSig : Signal;
-          }
-
-          part def Controller {
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-          }
-
-          part def SystemComposition {
-            part controller : Controller;
-          }
-        }
-        """,
+        fixture_text("sync/nested-system-connections.sysml")
     )
 
     ssd_path = tmp_path / "source" / "SystemStructure.ssd"
@@ -719,38 +478,7 @@ def test_sync_nested_system_connections(tmp_path: Path) -> None:
 def _write_boundary_architecture(root: Path) -> Path:
     write_model(
         root / "model.sysml",
-        """
-        package Example {
-          port def Signal {
-            attribute x : Real;
-          }
-
-          part def Source {
-            out port sig : Signal;
-          }
-
-          part def Sink {
-            in port sigIn : Signal;
-            out port sig : Signal;
-          }
-
-          part def Inner {
-            in port u : Signal;
-            out port v : Signal;
-            part src : Source;
-            part dst : Sink;
-            connect u to src.sig;
-            connect src.sig to dst.sigIn;
-            connect dst.sig to v;
-          }
-
-          part def SystemComposition {
-            out port y : Signal;
-            part inner : Inner;
-            connect inner.v to y;
-          }
-        }
-        """,
+        fixture_text("sync/boundary-architecture.sysml")
     )
     return root
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 import pytest
 
 from pyssp_sysml2.sysml_model import Architecture, load
+from tests.fixture_files import fixture_text
 from tests.testhelpers import write_model
 
 
@@ -21,13 +22,7 @@ def test_load_single_file(tmp_path) -> None:
     model_file = tmp_path / "model.sysml"
     write_model(
         model_file,
-        """
-        package Single {
-          port def Signal { attribute level : Real; }
-
-          part def Source { out port sig : Signal; }
-        }
-        """,
+        fixture_text("sysml-model/single.sysml"),
     )
 
     architecture = load(model_file)
@@ -44,28 +39,16 @@ def test_load_directory_merges_sorted_files(tmp_path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "a.sysml",
-        """
-        package Merged {
-          part def Zed { attribute z : Real; }
-        }
-        """,
+        fixture_text("sysml-model/merge-a.sysml"),
     )
     write_model(
         architecture_dir / "b.sysml",
-        """
-        package Merged {
-          part def Alpha { attribute a : Real; }
-        }
-        """,
+        fixture_text("sysml-model/merge-b.sysml"),
     )
     # Nested files must be ignored (the glob is non-recursive) ...
     write_model(
         architecture_dir / "nested" / "c.sysml",
-        """
-        package Merged {
-          part def Nested { attribute n : Real; }
-        }
-        """,
+        fixture_text("sysml-model/merge-nested/c.sysml"),
     )
     # ... and non-.sysml files too.
     (architecture_dir / "notes.txt").write_text("not a model\n", encoding="utf-8")
@@ -111,19 +94,11 @@ def test_package_mismatch_across_files_raises(tmp_path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "a.sysml",
-        """
-        package One {
-          part def A { attribute a : Real; }
-        }
-        """,
+        fixture_text("sysml-model/package-mismatch-a.sysml"),
     )
     write_model(
         architecture_dir / "b.sysml",
-        """
-        package Two {
-          part def B { attribute b : Real; }
-        }
-        """,
+        fixture_text("sysml-model/package-mismatch-b.sysml"),
     )
 
     with pytest.raises(ValueError) as excinfo:
@@ -139,19 +114,11 @@ def test_duplicate_part_definition_across_files_raises(tmp_path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "a.sysml",
-        """
-        package Same {
-          part def Dup { attribute a : Real; }
-        }
-        """,
+        fixture_text("sysml-model/duplicate-a.sysml"),
     )
     write_model(
         architecture_dir / "b.sysml",
-        """
-        package Same {
-          part def Dup { attribute b : Real; }
-        }
-        """,
+        fixture_text("sysml-model/duplicate-b.sysml"),
     )
 
     with pytest.raises(ValueError) as excinfo:
@@ -170,19 +137,7 @@ def test_value_normalization(tmp_path) -> None:
     model_file = tmp_path / "values.sysml"
     write_model(
         model_file,
-        """
-        package Values {
-          part def Values {
-            attribute f : Real = 1.0;
-            attribute i = 42;
-            attribute s = "hi";
-            attribute t = true;
-            attribute f2 = false;
-            attribute taps = (1.0, 2.0);
-            attribute declared : Real;
-          }
-        }
-        """,
+        fixture_text("sysml-model/values.sysml"),
     )
 
     attributes = load(model_file).part_definitions["Values"].attributes
@@ -214,15 +169,7 @@ def test_string_escapes_are_decoded(tmp_path) -> None:
     model_file = tmp_path / "escapes.sysml"
     write_model(
         model_file,
-        r"""
-        package Escapes {
-          part def Text {
-            attribute lines = "one\ntwo";
-            attribute path = "C:\\temp\\new";
-            attribute quote = "say \"hi\" now";
-          }
-        }
-        """,
+        fixture_text("sysml-model/escapes.sysml"),
     )
 
     attributes = load(model_file).part_definitions["Text"].attributes
@@ -241,14 +188,7 @@ def test_negative_scalar_value_keeps_sign(tmp_path) -> None:
     model_file = tmp_path / "negative.sysml"
     write_model(
         model_file,
-        """
-        package Negative {
-          part def Offsets {
-            attribute real = -1.5;
-            attribute integer = -7;
-          }
-        }
-        """,
+        fixture_text("sysml-model/negative.sysml"),
     )
 
     attributes = load(model_file).part_definitions["Offsets"].attributes
@@ -262,13 +202,7 @@ def test_pint_quantity_value_uses_magnitude(tmp_path) -> None:
     model_file = tmp_path / "units.sysml"
     write_model(
         model_file,
-        """
-        package Units {
-          part def Physical {
-            attribute mass : Real = 1000 [kilogram];
-          }
-        }
-        """,
+        fixture_text("sysml-model/units.sysml"),
     )
 
     attribute = load(model_file).part_definitions["Physical"].attributes["mass"]
@@ -285,18 +219,7 @@ def test_port_directions(tmp_path) -> None:
     model_file = tmp_path / "directions.sysml"
     write_model(
         model_file,
-        """
-        package Directions {
-          port def Signal { attribute level : Real; }
-
-          part def Directions {
-            in port a : Signal;
-            out port b : Signal;
-            inout port c : Signal;
-            port plain : Signal;
-          }
-        }
-        """,
+        fixture_text("sysml-model/directions.sysml"),
     )
 
     ports = load(model_file).part_definitions["Directions"].ports
@@ -313,14 +236,7 @@ def test_part_definition_doc(tmp_path) -> None:
     model_file = tmp_path / "doc.sysml"
     write_model(
         model_file,
-        """
-        package Docs {
-          part def Documented {
-            doc /* Part doc. */
-            attribute x : Real;
-          }
-        }
-        """,
+        fixture_text("sysml-model/doc.sysml"),
     )
 
     part_def = load(model_file).part_definitions["Documented"]
@@ -334,15 +250,7 @@ def test_port_definition_attributes(tmp_path) -> None:
     model_file = tmp_path / "portdef.sysml"
     write_model(
         model_file,
-        """
-        package PortDefs {
-          port def Signal {
-            doc /* Signal doc. */
-            attribute level : Real;
-            attribute count : Integer;
-          }
-        }
-        """,
+        fixture_text("sysml-model/portdef.sysml"),
     )
 
     port_def = load(model_file).port_definitions["Signal"]
@@ -358,13 +266,7 @@ def test_requirement_definition_text(tmp_path) -> None:
     model_file = tmp_path / "requirement.sysml"
     write_model(
         model_file,
-        """
-        package Requirements {
-          requirement def Connected {
-            doc /* src must connect to dst */
-          }
-        }
-        """,
+        fixture_text("sysml-model/requirement.sysml"),
     )
 
     requirement = load(model_file).requirement_definitions["Connected"]
@@ -380,21 +282,7 @@ def test_definition_specialization(tmp_path) -> None:
     model_file = tmp_path / "values.sysml"
     write_model(
         model_file,
-        """
-        package Values {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def Interface :> ParameterInterface {
-            attribute gain : Real;
-            attribute count : Integer;
-          }
-
-          attribute def NominalSet :> ParameterSet {
-            attribute gain_value = 2.0;
-          }
-        }
-        """,
+        fixture_text("sysml-model/definition-specialization.sysml"),
     )
 
     architecture = load(model_file)
@@ -423,16 +311,7 @@ def test_attribute_multiplicity(tmp_path) -> None:
     model_file = tmp_path / "values.sysml"
     write_model(
         model_file,
-        """
-        package Values {
-          part def Multi {
-            attribute fixed : Real[3];
-            attribute bounded : Integer[2..4];
-            attribute unbounded : Real[0..*];
-            attribute scalar : Real;
-          }
-        }
-        """,
+        fixture_text("sysml-model/attribute-multiplicity.sysml"),
     )
 
     attributes = load(model_file).part_definitions["Multi"].attributes
@@ -448,30 +327,7 @@ def test_bindings_loaded_with_feature_chains(tmp_path) -> None:
     model_file = tmp_path / "bindings.sysml"
     write_model(
         model_file,
-        """
-        package Bindings {
-          attribute def Interface {
-            attribute gain : Real;
-          }
-
-          attribute def Set {
-            attribute gain_value = 2.0;
-          }
-
-          part def Component {
-            in port parameters : Interface;
-          }
-
-          part def SystemComposition {
-            part componentA : Component;
-            part componentB : Component;
-            attribute nominal : Set;
-
-            bind componentA.parameters.gain = nominal.gain_value;
-            bind componentB.parameters = nominal;
-          }
-        }
-        """,
+        fixture_text("sysml-model/bindings.sysml"),
     )
 
     bindings = load(model_file).part_definitions["SystemComposition"].bindings
@@ -490,23 +346,7 @@ def test_connections_stored_by_key_with_legacy_names(tmp_path) -> None:
     model_file = tmp_path / "connections.sysml"
     write_model(
         model_file,
-        """
-        package Connections {
-          part def Source {
-            out port outSig : Signal;
-            out port aux : Signal;
-          }
-
-          part def Sink { in port inSig : Signal; }
-
-          part def SystemComposition {
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-            connection explicit : Link connect src.aux to dst.inSig;
-          }
-        }
-        """,
+        fixture_text("sysml-model/connections.sysml"),
     )
 
     connections = load(model_file).part_definitions["SystemComposition"].connections
@@ -531,16 +371,7 @@ def test_identical_connect_overwrites_earlier(tmp_path) -> None:
     model_file = tmp_path / "overwrite.sysml"
     write_model(
         model_file,
-        """
-        package Overwrite {
-          part def SystemComposition {
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-            connect src.outSig to dst.inSig;
-          }
-        }
-        """,
+        fixture_text("sysml-model/overwrite.sysml"),
     )
 
     connections = load(model_file).part_definitions["SystemComposition"].connections
@@ -553,27 +384,11 @@ def test_connections_from_all_files(tmp_path) -> None:
     architecture_dir = tmp_path / "arch"
     write_model(
         architecture_dir / "a.sysml",
-        """
-        package Multi {
-          part def CompA {
-            part a : A;
-            part b : B;
-            connect a.p to b.q;
-          }
-        }
-        """,
+        fixture_text("sysml-model/multi-a.sysml"),
     )
     write_model(
         architecture_dir / "b.sysml",
-        """
-        package Multi {
-          part def CompB {
-            part c : C;
-            part d : D;
-            connect c.r to d.s;
-          }
-        }
-        """,
+        fixture_text("sysml-model/multi-b.sysml"),
     )
 
     architecture = load(architecture_dir)
@@ -588,25 +403,7 @@ def test_boundary_connection_endpoints_load(tmp_path) -> None:
     model_file = tmp_path / "boundary.sysml"
     write_model(
         model_file,
-        """
-        package Boundary {
-          part def Source {
-            out port outSig : Signal;
-          }
-
-          part def Sink { in port inSig : Signal; }
-
-          part def Inner {
-            in port u : Signal;
-            out port v : Signal;
-            part src : Source;
-            part dst : Sink;
-            connect u to src.inSig;
-            connect src.outSig to dst.inSig;
-            connect dst.inSig to v;
-          }
-        }
-        """,
+        fixture_text("sysml-model/boundary.sysml"),
     )
 
     connections = load(model_file).part_definitions["Inner"].connections
@@ -634,13 +431,7 @@ def test_syntax_error_propagates(tmp_path) -> None:
     model_file = tmp_path / "broken.sysml"
     write_model(
         model_file,
-        """
-        package Broken {
-          part def A {
-            attribute comment = "x";
-          }
-        }
-        """,
+        fixture_text("sysml-model/broken.sysml"),
     )
 
     # sysmlpy raises SysMLSyntaxError, a plain Exception subclass; only the
@@ -742,60 +533,7 @@ def test_export_round_trip(tmp_path) -> None:
     source_dir = tmp_path / "source"
     write_model(
         source_dir / "model.sysml",
-        """
-        package RoundTrip {
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def Measurements :> ParameterInterface {
-            attribute temperature : Real[2];
-          }
-
-          attribute def NominalMeasurements :> ParameterSet {
-            attribute temps = (1.0, 2.0);
-          }
-
-          port def Signal {
-            doc /* A signal. */
-            attribute level : Real;
-            attribute count : Integer;
-          }
-
-          part def Source {
-            doc /* Source doc. */
-            attribute gain : Real = 2.0;
-            attribute offset = -1.5;
-            attribute label = "hi";
-            attribute enabled = true;
-            attribute taps = (1.0, 2.0);
-            out port sig : Signal;
-          }
-
-          part def Sink {
-            in port sigIn : Signal;
-          }
-
-          part def Measured {
-            in port parameters : Measurements;
-          }
-
-          part def SystemComposition {
-            out port outSig : Signal;
-            part src : Source;
-            part dst : Sink;
-            part measured : Measured;
-            attribute nominal : NominalMeasurements;
-
-            connect src.sig to dst.sigIn;
-            connect src.sig to outSig;
-            bind measured.parameters.temperature = nominal.temps;
-          }
-
-          requirement def Connected {
-            doc /* src must connect to dst */
-          }
-        }
-        """,
+        fixture_text("sysml-model/round-trip.sysml"),
     )
 
     original = load(source_dir)

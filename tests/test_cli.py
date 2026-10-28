@@ -8,38 +8,17 @@ from pyssp_standard import SSD
 
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
+from tests.fixture_files import render_fixture
 from tests.test_generate_ssd import _ssd_summary
 from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
 def write_cli_architecture(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
-
     write_model(
         root / "model.sysml",
-        f"""
-        package Example {{
-          port def Signal {{
-            attribute x: Real;
-          }}
-
-          part def Source {{
-            out port outSig : Signal;
-          }}
-
-          part def Sink {{
-            in port inSig : Signal;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-            part dst : Sink;
-            connect src.outSig to dst.inSig;
-          }}
-        }}
-        """,
+        render_fixture("cli/architecture.sysml", COMPOSITION_NAME=COMPOSITION_NAME),
     )
-
     return root
 
 
@@ -47,35 +26,9 @@ def write_parameter_cli_architecture(root: Path) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     write_model(
         root / "model.sysml",
-        f"""
-        package Example {{
-          port def ParameterInterface;
-          attribute def ParameterSet;
-
-          port def Parameters :> ParameterInterface {{
-            attribute gain : Real;
-          }}
-
-          attribute def NominalSet :> ParameterSet {{
-            attribute gain_value = 2.0;
-          }}
-
-          part def Source {{
-            in port parameters : Parameters;
-            out port outSig : Signal;
-          }}
-
-          port def Signal {{
-            attribute x : Real;
-          }}
-
-          part def {COMPOSITION_NAME} {{
-            part src : Source;
-            attribute nominal : NominalSet;
-            bind src.parameters.gain = nominal.gain_value;
-          }}
-        }}
-        """,
+        render_fixture(
+            "cli/parameter-architecture.sysml", COMPOSITION_NAME=COMPOSITION_NAME
+        ),
     )
     return root
 
