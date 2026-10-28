@@ -10,7 +10,7 @@ from pyssp_standard import FMU, SSP, SSV
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.fmi import generate_model_descriptions
 from pyssp_sysml2.ssp import generate_ssp
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
 def _write_architecture(

@@ -15,7 +15,7 @@ from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
 from pyssp_sysml2.variation import has_variation, resolve
-from tests.test_utils import write_bootstrap_ssd, write_model
+from tests.testhelpers import write_bootstrap_ssd, write_model
 from tests.variation_examples import (
     CONNECTION_VARIATION,
     PARAMETER_BINDING_VARIATION,

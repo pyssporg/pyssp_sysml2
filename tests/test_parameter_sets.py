@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
 def _model(
@@ -491,8 +492,8 @@ def test_flat_parameter_attributes_are_rejected(tmp_path) -> None:
     )
     # Add a second component that still uses the legacy flat dialect.
     model = model.replace(
-        f"part autopilot : AutopilotModule;",
-        f"""
+        "part autopilot : AutopilotModule;",
+        """
         part autopilot : AutopilotModule;
         part legacy : LegacyModule;
         """,
@@ -574,6 +575,51 @@ def test_unbound_set_member_warns(tmp_path) -> None:
         generate_parameter_sets(
             architecture_dir, tmp_path / "sets", COMPOSITION_NAME
         )
+
+
+def test_declared_but_unapplied_set_warns_and_binds_nothing(tmp_path) -> None:
+    """A set usage without a bind is reported; it contributes no SSD binding."""
+    model = _model(composition="attribute aggressive : AggressiveSet;")
+    architecture_dir = _write(tmp_path, model)
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    with pytest.warns(UserWarning) as record:
+        generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+    messages = [str(warning.message) for warning in record]
+    unapplied = [text for text in messages if "declared but not applied" in text]
+    assert len(unapplied) == 1, messages
+    assert "'aggressive'" in unapplied[0]
+    assert "AggressiveSet" in unapplied[0]
+
+    with SSD(output_path, mode="r") as ssd:
+        assert ssd.system.parameter_bindings == []
+
+
+def test_unapplied_set_contributes_no_parameter_sets(tmp_path) -> None:
+    """Only applied sets are exported as SSVs; the unapplied one warns instead."""
+    model = _model(composition="attribute aggressive : AggressiveSet;")
+    architecture_dir = _write(tmp_path, model)
+
+    with pytest.warns(UserWarning, match="declared but not applied"):
+        written = generate_parameter_sets(
+            architecture_dir, tmp_path / "sets", COMPOSITION_NAME
+        )
+
+    assert written == []
+
+
+def test_applied_set_is_not_reported_as_unapplied(tmp_path) -> None:
+    """A fully bound set raises no warning at all, even with warnings as errors."""
+    architecture_dir = _write(tmp_path, _model())
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        generate_ssd(architecture_dir, output_path, COMPOSITION_NAME)
+
+    with SSD(output_path, mode="r") as ssd:
+        assert len(ssd.system.parameter_bindings) == 1
 
 
 def test_interface_only_model_generates_ssd_without_binding(tmp_path) -> None:

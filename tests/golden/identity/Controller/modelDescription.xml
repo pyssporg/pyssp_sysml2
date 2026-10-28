@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fmiModelDescription fmiVersion="2.0" modelName="IdentityComposition.Controller" guid="{60fa52f1-cc9c-53ca-8c48-373de9242bf5}" description="" version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-01-01T00:00:00Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="Controller" />
+  <ModelVariables>
+    <ScalarVariable name="count" valueReference="0" causality="parameter" variability="fixed">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="u.value" valueReference="1" causality="input">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="y.value" valueReference="2" causality="output">
+      <Real />
+    </ScalarVariable>
+  </ModelVariables>
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="3" />
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="3" />
+    </InitialUnknowns>
+  </ModelStructure>
+</fmiModelDescription>

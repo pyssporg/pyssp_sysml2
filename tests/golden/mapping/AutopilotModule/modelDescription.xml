@@ -1,0 +1,29 @@
+<?xml version='1.0' encoding='utf-8'?>
+<fmiModelDescription fmiVersion="2.0" modelName="MappingComposition.AutopilotModule" guid="{fe5e6b80-4864-540a-ae7d-e7880bc90df8}" description="" version="1.0" generationTool="pyssp_sysml2 tooling" generationDateAndTime="2026-01-01T00:00:00Z" variableNamingConvention="structured" numberOfEventIndicators="0">
+  <CoSimulation modelIdentifier="AutopilotModule" />
+  <ModelVariables>
+    <ScalarVariable name="waypointCount" valueReference="0" causality="parameter" variability="fixed">
+      <Integer />
+    </ScalarVariable>
+    <ScalarVariable name="waypointX_km[0]" valueReference="1" causality="parameter" variability="fixed">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="waypointX_km[1]" valueReference="2" causality="parameter" variability="fixed">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="u.value" valueReference="3" causality="input">
+      <Real />
+    </ScalarVariable>
+    <ScalarVariable name="y.value" valueReference="4" causality="output">
+      <Real />
+    </ScalarVariable>
+  </ModelVariables>
+  <ModelStructure>
+    <Outputs>
+      <Unknown index="5" />
+    </Outputs>
+    <InitialUnknowns>
+      <Unknown index="5" />
+    </InitialUnknowns>
+  </ModelStructure>
+</fmiModelDescription>

@@ -8,7 +8,7 @@ from pyssp_standard import SSD, SSM, SSV
 
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import write_bootstrap_ssd
+from tests.testhelpers import write_bootstrap_ssd
 
 
 def _architecture_text(path: Path) -> str:
@@ -57,7 +57,30 @@ def test_generate_sysml_from_ssd_allows_overriding_composition_name(tmp_path: Pa
 
     generate_sysml_from_ssd(ssd_path, output, composition="RecoveredComposition")
 
-    assert "part def RecoveredComposition" in _architecture_text(output)
+    assert _architecture_text(output) == dedent(
+        """
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute x : Real;
+            attribute y : Real;
+          }
+
+          part def RecoveredComposition {
+            part dst : Sink;
+            part src : Source;
+            connect src.outSig to dst.inSig;
+          }
+
+          part def Sink {
+            in port inSig : Port_1;
+          }
+
+          part def Source {
+            out port outSig : Port_1;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_supports_scalar_connectors(tmp_path: Path) -> None:
@@ -149,11 +172,30 @@ def test_generate_sysml_from_ssd_reuses_connected_port_type_for_enum_and_integer
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text.count("Port_1") == 3
-    assert "Port_2" not in text
-    assert "attribute Aircraft_State : Integer;" in text
-    assert "in port signal : Port_1;" in text
-    assert "out port signal : Port_1;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute Aircraft_State : Integer;
+            attribute TLiquid : Real;
+          }
+
+          part def EnumMix {
+            part dst : Sink;
+            part src : Source;
+            connect src.signal to dst.signal;
+          }
+
+          part def Sink {
+            in port signal : Port_1;
+          }
+
+          part def Source {
+            out port signal : Port_1;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_path: Path) -> None:
@@ -179,9 +221,29 @@ def test_generate_sysml_from_ssd_normalizes_scalar_group_attribute_names(tmp_pat
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert text.count("Port_1") == 3
-    assert "Port_2" not in text
-    assert "attribute value : Real;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute value : Real;
+          }
+
+          part def ScalarGroup {
+            part dst : Sink;
+            part src : Source;
+            connect src.signal to dst.signal;
+          }
+
+          part def Sink {
+            in port signal : Port_1;
+          }
+
+          part def Source {
+            out port signal : Port_1;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
@@ -210,13 +272,33 @@ def test_generate_sysml_from_ssd_synthesizes_identity_parameter_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "port def GainParameters :> ParameterInterface {" in text
-    assert "attribute k : Real;" in text
-    assert "in port parameters : GainParameters;" in text
-    assert "attribute def parameters :> ParameterSet {" in text
-    assert "attribute k : Real = 3.0;" in text
-    assert "attribute parameters_set : parameters;" in text
-    assert "bind gain.parameters = parameters_set;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def GainParameters :> ParameterInterface {
+            attribute k : Real;
+          }
+
+          port def ParameterInterface;
+
+          attribute def ParameterSet;
+
+          attribute def parameters :> ParameterSet {
+            attribute k : Real = 3.0;
+          }
+
+          part def Gain {
+            in port parameters : GainParameters;
+          }
+
+          part def ParamDemo {
+            attribute parameters_set : parameters;
+            part gain : Gain;
+            bind gain.parameters = parameters_set;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
@@ -246,15 +328,36 @@ def test_generate_sysml_from_ssd_synthesizes_explicit_parameter_mapping(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "port def CompParameters :> ParameterInterface {" in text
-    assert "attribute count : Integer;" in text
-    assert "attribute xs : Real[2];" in text
-    assert "attribute def Nom :> ParameterSet {" in text
-    assert "attribute n : Integer = 5;" in text
-    assert "attribute x : Real[2] = (1.0, 2.0);" in text
-    assert "attribute Nom : Nom;" in text
-    assert "bind comp.parameters.count = Nom.n;" in text
-    assert "bind comp.parameters.xs = Nom.x;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def CompParameters :> ParameterInterface {
+            attribute count : Integer;
+            attribute xs : Real[2];
+          }
+
+          port def ParameterInterface;
+
+          attribute def Nom :> ParameterSet {
+            attribute n : Integer = 5;
+            attribute x : Real[2] = (1.0, 2.0);
+          }
+
+          attribute def ParameterSet;
+
+          part def Comp {
+            in port parameters : CompParameters;
+          }
+
+          part def ParamDemo {
+            attribute Nom : Nom;
+            part comp : Comp;
+            bind comp.parameters.count = Nom.n;
+            bind comp.parameters.xs = Nom.x;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
@@ -277,9 +380,33 @@ def test_generate_sysml_from_ssd_uses_component_inline_parameter_set(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "attribute def parameters :> ParameterSet {" in text
-    assert "attribute k : Real = 4.0;" in text
-    assert "bind gain.parameters = parameters_set;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def GainParameters :> ParameterInterface {
+            attribute k : Real;
+          }
+
+          port def ParameterInterface;
+
+          attribute def ParameterSet;
+
+          attribute def parameters :> ParameterSet {
+            attribute k : Real = 4.0;
+          }
+
+          part def Gain {
+            in port parameters : GainParameters;
+          }
+
+          part def ParamDemo {
+            attribute parameters_set : parameters;
+            part gain : Gain;
+            bind gain.parameters = parameters_set;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_keeps_interface_without_binding(
@@ -298,10 +425,27 @@ def test_generate_sysml_from_ssd_keeps_interface_without_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "port def GainParameters :> ParameterInterface {" in text
-    assert "in port parameters : GainParameters;" in text
-    assert "ParameterSet {" not in text
-    assert "bind " not in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def GainParameters :> ParameterInterface {
+            attribute k : Real;
+          }
+
+          port def ParameterInterface;
+
+          attribute def ParameterSet;
+
+          part def Gain {
+            in port parameters : GainParameters;
+          }
+
+          part def ParamDemo {
+            part gain : Gain;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
@@ -337,8 +481,36 @@ def test_generate_sysml_from_ssd_reads_external_ssm(tmp_path: Path) -> None:
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "bind comp.parameters.count = Nom.n;" in text
-    assert "bind comp.parameters.xs = Nom.x;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def CompParameters :> ParameterInterface {
+            attribute count : Integer;
+            attribute xs : Real[2];
+          }
+
+          port def ParameterInterface;
+
+          attribute def Nom :> ParameterSet {
+            attribute n : Integer = 5;
+            attribute x : Real[2] = (1.0, 2.0);
+          }
+
+          attribute def ParameterSet;
+
+          part def Comp {
+            in port parameters : CompParameters;
+          }
+
+          part def ParamDemo {
+            attribute Nom : Nom;
+            part comp : Comp;
+            bind comp.parameters.count = Nom.n;
+            bind comp.parameters.xs = Nom.x;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_rejects_reserved_parameter_name(tmp_path: Path) -> None:
@@ -383,8 +555,37 @@ def test_generate_sysml_from_ssd_resolves_nested_system_binding(
     generate_sysml_from_ssd(ssd_path, output)
     text = output.read_text()
 
-    assert "part inner : Inner;" in text
-    assert "bind outer.inner.parameters = Nom;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def InnerParameters :> ParameterInterface {
+            attribute k : Real;
+          }
+
+          port def ParameterInterface;
+
+          attribute def Nom :> ParameterSet {
+            attribute k : Real = 3.0;
+          }
+
+          attribute def ParameterSet;
+
+          part def Demo {
+            attribute Nom : Nom;
+            part outer : outer;
+            bind outer.inner.parameters = Nom;
+          }
+
+          part def Inner {
+            in port parameters : InnerParameters;
+          }
+
+          part def outer {
+            part inner : Inner;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> None:
@@ -423,9 +624,41 @@ def test_generate_sysml_from_ssd_keeps_boundary_connections(tmp_path: Path) -> N
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert "connect u to src.sig;" in text
-    assert "connect dst.sig to v;" in text
-    assert "connect inner.v to y;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute pyssp_flat_connector : Boolean = true;
+            attribute value : Real;
+          }
+
+          part def BoundaryExample {
+            out port y : Port_1;
+            part inner : inner;
+            connect inner.v to y;
+          }
+
+          part def Sink {
+            out port sig : Port_1;
+            in port sigIn : Port_1;
+          }
+
+          part def Source {
+            out port sig : Port_1;
+          }
+
+          part def inner {
+            in port u : Port_1;
+            out port v : Port_1;
+            part dst : Sink;
+            part src : Source;
+            connect u to src.sig;
+            connect dst.sig to v;
+            connect src.sig to dst.sigIn;
+          }
+        }
+        """
+    ).strip() + "\n"
 
 
 def test_generate_sysml_from_ssd_rejects_unknown_boundary_port(tmp_path: Path) -> None:
@@ -481,6 +714,37 @@ def test_generate_sysml_from_ssd_writes_boundary_connections(tmp_path: Path) -> 
     generate_sysml_from_ssd(ssd_path, output)
     text = _architecture_text(output)
 
-    assert "connect u to src.sig;" in text
-    assert "connect dst.sig to v;" in text
-    assert "connect inner.v to y;" in text
+    assert text == dedent(
+        """
+        package RecoveredFromSSD {
+          port def Port_1 {
+            attribute value : Real;
+          }
+
+          part def Boundary {
+            out port y : Port_1;
+            part inner : inner;
+            connect inner.v to y;
+          }
+
+          part def Sink {
+            out port sig : Port_1;
+            in port sigIn : Port_1;
+          }
+
+          part def Source {
+            out port sig : Port_1;
+          }
+
+          part def inner {
+            in port u : Port_1;
+            out port v : Port_1;
+            part dst : Sink;
+            part src : Source;
+            connect u to src.sig;
+            connect dst.sig to v;
+            connect src.sig to dst.sigIn;
+          }
+        }
+        """
+    ).strip() + "\n"

@@ -1,0 +1,6 @@
+<?xml version='1.0' encoding='utf-8'?>
+<ssm:ParameterMapping xmlns:ssm="http://ssp-standard.org/SSP1/SystemStructureParameterMapping" version="1.0">
+  <ssm:MappingEntry source="n_waypoints" target="autopilot.waypointCount" />
+  <ssm:MappingEntry source="waypoints_x_km[0]" target="autopilot.waypointX_km[0]" />
+  <ssm:MappingEntry source="waypoints_x_km[1]" target="autopilot.waypointX_km[1]" />
+</ssm:ParameterMapping>

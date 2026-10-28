@@ -12,7 +12,7 @@ from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import endpoint_text, load
-from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
 def _write_sync_architecture(root: Path) -> Path:

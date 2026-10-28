@@ -994,10 +994,35 @@ def validate_applied_sets(
     mapping_specs(architecture, system)
 
 
+def _warn_unapplied_set_usages(
+    architecture: Architecture,
+    system: PartDefinition,
+    applications: list[tuple[AppliedSet, tuple[tuple[str, str], ...]]],
+) -> None:
+    """Report set usages declared in the composition but bound to nothing."""
+    applied_usages = {application.usage_name for application, _ in applications}
+    for usage_name, usage in sorted(set_usages(architecture, system).items()):
+        if usage_name in applied_usages:
+            continue
+        definition = architecture.resolve_attribute_def(usage)
+        type_name = definition.name if definition is not None else usage.type_name
+        warnings.warn(
+            f"Parameter set '{usage_name}' ({type_name}) is declared but not "
+            f"applied to any component of '{system.name}'; no parameter "
+            "bindings or mappings are generated for it",
+            UserWarning,
+            stacklevel=3,
+        )
+
+
 def mapping_specs(
     architecture: Architecture, system: PartDefinition
 ) -> list[MappingSpec]:
-    """Mapping entries for every applied set in a composition."""
+    """Mapping entries for every applied set in a composition.
+
+    A set usage declared in the composition but not bound to any component
+    contributes no entries and is reported with a ``UserWarning``, naming it.
+    """
     validate_marker_definitions(architecture)
     applications = [
         (
@@ -1006,6 +1031,7 @@ def mapping_specs(
         )
         for application in applied_sets(architecture, system)
     ]
+    _warn_unapplied_set_usages(architecture, system, applications)
     _validate_disjoint_targets(applications)
     specs = [
         MappingSpec(

@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from pyssp_sysml2.sysml_model import Architecture, load
-from tests.test_utils import write_model
+from tests.testhelpers import write_model
 
 
 # -- single-file and directory loading --------------------------------------

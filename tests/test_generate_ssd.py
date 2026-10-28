@@ -7,7 +7,7 @@ from pyssp_standard import SSD, System
 
 from pyssp_sysml2.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
 

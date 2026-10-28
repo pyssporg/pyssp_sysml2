@@ -17,12 +17,39 @@ from pyssp_sysml2.parameters import (
     parameter_items,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import BUILD_DIR, ensure_directory
+from pyssp_sysml2.paths import ensure_directory
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
 
 CO_SIMULATION_ATTRS = {
     "modelIdentifier": "",
 }
+
+#: FMI version emitted for every generated model description.
+FMI_VERSION = "2.0"
+
+#: Namespace the FMI ``guid`` is derived from; changing it changes every guid.
+GUID_NAMESPACE = NAMESPACE_URL
+
+
+def utc_now() -> datetime:
+    """Current time in UTC; the clock hook for ``generationDateAndTime``.
+
+    The default source of generation time. Tests replace it (or pass
+    ``generation_time``) to make generation reproducible.
+    """
+    return datetime.now(timezone.utc)
+
+
+def format_generation_timestamp(moment: datetime) -> str:
+    """Render a timezone-aware time as an FMI ``dateTime`` with second precision."""
+    if moment.tzinfo is None:
+        raise ValueError("generation time must be timezone-aware, e.g. from utc_now()")
+    return (
+        moment.astimezone(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 @dataclass
@@ -142,20 +169,23 @@ def _write_scalar_variable(parent: ET.Element, spec: VariableSpec) -> None:
 
 
 def _build_model_description_tree(
-    part: PartDefinition, package_name: str, architecture: Architecture
+    part: PartDefinition,
+    package_name: str,
+    architecture: Architecture,
+    *,
+    generation_time: Optional[datetime] = None,
 ) -> ET.ElementTree:
-    timestamp = (
-        datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
+    timestamp = format_generation_timestamp(
+        generation_time if generation_time is not None else utc_now()
     )
-    guid = str(uuid5(NAMESPACE_URL, f"pyssp_sysml2/{package_name}/{part.name}"))
+    guid = str(
+        uuid5(GUID_NAMESPACE, f"pyssp_sysml2/{package_name}/{part.name}")
+    )
 
     root = ET.Element(
         "fmiModelDescription",
         attrib={
-            "fmiVersion": "2.0",
+            "fmiVersion": FMI_VERSION,
             "modelName": f"{package_name}.{part.name}",
             "guid": f"{{{guid}}}",
             "description": part.doc or "",
@@ -193,9 +223,16 @@ def generate_model_descriptions(
     architecture_path: Path,
     output_dir: Path,
     composition: str,
+    *,
+    generation_time: Optional[datetime] = None,
 ) -> list[Path]:
+    """Write one ``modelDescription.xml`` per leaf component under ``output_dir``.
+
+    Generated files go only below ``output_dir``. ``generation_time`` fixes the
+    FMI ``generationDateAndTime``; when omitted, :func:`utc_now` supplies the
+    current UTC time.
+    """
     ensure_directory(output_dir)
-    ensure_directory(BUILD_DIR / "fmu_pre")
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
@@ -212,7 +249,12 @@ def generate_model_descriptions(
         output_path = component_dir / "modelDescription.xml"
         ensure_directory(component_dir)
 
-        tree = _build_model_description_tree(part_def, system.name, architecture)
+        tree = _build_model_description_tree(
+            part_def,
+            system.name,
+            architecture,
+            generation_time=generation_time,
+        )
         tree.write(output_path, encoding="utf-8", xml_declaration=True)
         written.append(output_path)
 

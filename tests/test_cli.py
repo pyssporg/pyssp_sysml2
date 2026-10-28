@@ -9,7 +9,7 @@ from pyssp_standard import SSD
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.ssd import generate_ssd
 from tests.test_generate_ssd import _ssd_summary
-from tests.test_utils import COMPOSITION_NAME, write_bootstrap_ssd, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
 
 def write_cli_architecture(root: Path) -> Path:

@@ -12,7 +12,7 @@ from pyssp_sysml2.ssm import generate_parameter_mappings
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import write_model
+from tests.testhelpers import write_model
 
 
 def _write_reference_ssp(root: Path) -> Path:

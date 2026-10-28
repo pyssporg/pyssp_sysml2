@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyssp_sysml2"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Generate SSP artifacts from a SysML v2 architecture model."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -29,10 +29,25 @@ pyssp = "pyssp_sysml2.cli:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 
+[tool.setuptools.dynamic]
+version = { attr = "pyssp_sysml2.__version__" }
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["pyssp_sysml2*"]
 
+[tool.ruff]
+# Lint selection is explicit so a ruff upgrade cannot change the gate.
+lint.select = ["E4", "E7", "E9", "F"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "static: inspects source or files without executing the package",
+    "unit: one object's behaviour, no generated artifact",
+    "component: a generated artifact is the unit under test",
+    "contract: two directions must agree (round-trip, sync)",
+    "system: the CLI is driven end to end",
+    "slow: not part of the default CI subset",
+]

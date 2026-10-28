@@ -481,6 +481,7 @@ generate_parameter_sets(
     architecture, Path("build/generated/parameter_sets"), composition
 )
 generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
+# Pass generation_time=<timezone-aware datetime> for byte-identical reruns.
 # Leaves without a built source are exported as design placeholders.
 generate_ssp(
     architecture,

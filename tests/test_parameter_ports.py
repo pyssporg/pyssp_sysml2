@@ -14,7 +14,7 @@ from pyssp_sysml2.parameters import (
 )
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
 def _model(

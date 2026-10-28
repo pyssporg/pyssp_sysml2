@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
+
+import pytest
+
+from tests.conftest import COLLECTED_LEVELS, MIXED_FILES, MIXED_LEVELS
 
 PROJECT = Path(__file__).resolve().parents[1]
 SRC = PROJECT / "src"
@@ -79,3 +84,52 @@ def test_the_ssd_tree_is_read_through_the_facade():
         "a module reached past the SSD facade into the raw document:\n"
         + "\n".join(violations)
     )
+
+
+def test_every_collected_test_declares_exactly_one_level(
+    request: pytest.FixtureRequest,
+) -> None:
+    """The level marker is how a reader knows what a green test is evidence for."""
+    collected = request.config.stash[COLLECTED_LEVELS]
+    assert collected, "collection recorded no tests"
+
+    missing = [node for node, levels in collected.items() if not levels]
+    assert not missing, (
+        "test files without a level marker; add them to FILE_LEVELS in "
+        "tests/conftest.py:\n" + "\n".join(sorted(missing))
+    )
+
+    wrong: list[str] = []
+    for node, levels in sorted(collected.items()):
+        if len(levels) == 1:
+            continue
+        file_name = node.split("::", 1)[0].rsplit("/", 1)[-1]
+        if set(levels) == set(MIXED_LEVELS) and file_name in MIXED_FILES:
+            continue
+        wrong.append(f"{node}: {levels}")
+    assert not wrong, (
+        "a test must carry exactly one level marker, or both levels of a "
+        "declared mixed file:\n" + "\n".join(wrong)
+    )
+
+    unused = [
+        name
+        for name in sorted(MIXED_FILES)
+        if not any(node.split("::", 1)[0].endswith(name) for node in collected)
+    ]
+    assert not unused, f"mixed file entries with no collected tests: {unused}"
+
+
+def test_the_version_has_one_source_of_truth() -> None:
+    """``pyproject.toml`` reads the version from the package, not a copy."""
+    import pyssp_sysml2
+
+    tomllib = pytest.importorskip("tomllib", reason="tomllib is Python 3.11+")
+    project = tomllib.loads((PROJECT / "pyproject.toml").read_text(encoding="utf-8"))
+
+    assert "version" not in project["project"]
+    assert project["project"]["dynamic"] == ["version"]
+    assert project["tool"]["setuptools"]["dynamic"]["version"] == {
+        "attr": "pyssp_sysml2.__version__"
+    }
+    assert re.fullmatch(r"\d+\.\d+\.\d+", pyssp_sysml2.__version__)

@@ -43,6 +43,11 @@ List entries are separate parameters such as `waypoints_x_km[0]`.
 If the applied set has no values, `write_parameter_set` raises instead of
 writing an empty file. An interface-only model produces no SSV.
 
+A parameter set declared in the composition (`attribute nominal : NominalSet;`)
+but never bound to a component is not exported and produces no SSD
+`ParameterBinding`. Mapping generation reports it with a `UserWarning` naming
+the set, so a forgotten `bind` is visible instead of silently empty.
+
 ## SSM generation
 
 ```bash

@@ -28,8 +28,13 @@ Behavior:
 - parameter `start` values come from the interface, not from an applied set;
 - `variableNamingConvention` is `structured`;
 - GUIDs are deterministic for a given composition and part name;
-- a generation timestamp is included, so byte-for-byte comparisons must ignore
-  it.
+- `fmiVersion` is `"2.0"` and every GUID derives from one fixed namespace, so
+  changing either is an artifact-contract change;
+- `generationDateAndTime` is the current UTC time by default, injectable with
+  `generation_time=` (or by replacing `pyssp_sysml2.fmi.utc_now`), so a fixed
+  clock makes two runs byte-identical;
+- nothing is written outside `output_dir`: generation never creates files next
+  to the package.
 
 A parameter is emitted as a `ScalarVariable` with `causality="parameter"` and
 `variability="fixed"`, with the primitive type element carrying the optional

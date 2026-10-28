@@ -13,7 +13,7 @@ from pyssp_sysml2.parameters import (
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssv import generate_parameter_sets
 from pyssp_sysml2.sysml_model import load
-from tests.test_utils import COMPOSITION_NAME, write_model
+from tests.testhelpers import COMPOSITION_NAME, write_model
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BIND_LINE = re.compile(r"^\s*bind\s+(\S+)\s*=\s*(\S+?)\s*;")
