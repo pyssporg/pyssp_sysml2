@@ -44,6 +44,8 @@ Selection has no home in SysML, so it enters from outside and produces one artif
 - No fork of the parser and no vendored patch; the pin stays.
 - Selection enters on the command line, not inside the architecture.
 - Generation baseline: one SSP per selection.
+- Provenance: the selection is written to an `extra/` entry in the package.
+- Export: SysML generation and SSD sync refuse an architecture that carries variation.
 
 ## Implementation Phases
 
@@ -75,11 +77,8 @@ Selection has no home in SysML, so it enters from outside and produces one artif
 ## Open Questions
 
 - Does a selection name the variant, or the artifact case, or both?
-- Where does provenance live: an `extra/` entry in the package, or a sidecar file?
 - Is a missing selection an error, or does an explicit default variant apply?
-- Are `variant connect` and `variant bind` supported or rejected with a message?
-- Do nested variation points need a qualified selection key?
-- Does the raw-tree walk stay in the loader, or move to a small parser-adjacent module?
+- Which variation kind comes next: usage-level parts, variant bodies, or attribute sets?
 
 ## Owns
 
