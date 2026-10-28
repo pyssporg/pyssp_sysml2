@@ -8,7 +8,7 @@ import pytest
 from pyssp_standard import SSD, SSP, SSV
 
 from pyssp_sysml2.cli import _parse_selections, main
-from pyssp_sysml2.ssd import generate_ssd
+from pyssp_sysml2.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.ssp import generate_ssp
 from pyssp_sysml2.study import generate_study
 from pyssp_sysml2.sync import sync_sysml_from_ssd
@@ -18,6 +18,7 @@ from pyssp_sysml2.variation import has_variation, resolve
 from tests.testhelpers import write_bootstrap_ssd, write_model
 from tests.variation_examples import (
     CONNECTION_VARIATION,
+    NESTED_VARIATION as NESTED_BODY_VARIATION,
     PARAMETER_BINDING_VARIATION,
     USAGE_LEVEL_VARIATION,
 )
@@ -639,16 +640,255 @@ def test_resolve_rejects_a_body_port_the_point_does_not_declare(
         resolve(architecture, "System", {"path": "directPath"})
 
 
-def test_example_09_rejects_bindings_inside_a_variant(tmp_path: Path) -> None:
-    """Example 09: binding statements inside variants stay out of scope."""
+def test_example_09_captures_body_attributes_and_bindings(tmp_path: Path) -> None:
+    """Example 09: a statement body carries a set usage and its binds."""
     _, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
+
+    usage = architecture.part_definitions["test_selected"].parts["parameters"]
+    body = usage.variants[1].body
+    assert body is not None
+    assert list(body.attributes) == ["values"]
+    assert body.attributes["values"].type_name == "LateStepValues"
+    assert [binding.key for binding in body.bindings] == [
+        "sut.step.parameters.height=values.height",
+        "sut.step.parameters.offset=values.offset",
+        "sut.step.parameters.startTime=values.startTime",
+        "sut.gain.parameters.k=values.k",
+    ]
+
+
+def test_example_09_selected_body_merges_into_the_study(
+    tmp_path: Path,
+) -> None:
+    """Selection adds the set usage and binds to the study, not a component."""
+    _, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
+
+    resolved = resolve(
+        architecture, "test_selected", {"parameters": "lateStepBinding"}
+    )
+    study = resolved.part_definitions["test_selected"]
+    assert "parameters" not in study.parts
+    assert study.attributes["values"].type_name == "LateStepValues"
+    assert [binding.key for binding in study.bindings] == [
+        "sut.step.parameters.height=values.height",
+        "sut.step.parameters.offset=values.offset",
+        "sut.step.parameters.startTime=values.startTime",
+        "sut.gain.parameters.k=values.k",
+    ]
+    assert architecture.part_definitions["test_selected"].bindings == []
+    assert architecture.part_definitions["test_selected"].parts[
+        "parameters"
+    ].is_variation
+
+
+@pytest.mark.parametrize(
+    ("variant", "expected"),
+    [
+        (
+            "baselineBinding",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.25, "k": 3.0},
+        ),
+        (
+            "lateStepBinding",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.75, "k": 3.0},
+        ),
+        (
+            "highGainBinding",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.25, "k": 9.0},
+        ),
+    ],
+)
+def test_example_09_study_selection_writes_the_body_set(
+    tmp_path: Path, variant: str, expected: dict[str, float]
+) -> None:
+    """The merged set usage becomes the SSV behind the study."""
+    path, _ = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
+
+    artifacts = generate_study(
+        path,
+        tmp_path / "study",
+        "test_selected",
+        model_name="System",
+        selections={"parameters": variant},
+    )
+
+    assert artifacts.ssv is not None
+    assert _ssv_values(artifacts.ssv) == expected
+    ssm = artifacts.ssm.read_text(encoding="utf-8")
+    assert 'target="step.height"' in ssm
+    assert 'target="gain.k"' in ssm
+
+
+def test_example_09_study_ssd_equals_the_fixed_topology_ssd(
+    tmp_path: Path,
+) -> None:
+    """The statement container never reaches the SSD; bytes stay fixed."""
+    path, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
+
+    fixed = generate_ssd(path, tmp_path / "fixed.ssd", "System")
+    resolved = resolve(
+        architecture, "test_selected", {"parameters": "lateStepBinding"}
+    )
+    selected = tmp_path / "selected.ssd"
+    with SSD(selected, mode="w") as ssd:
+        build_ssd(ssd, resolved.get_part_def("System"), resolved)
+
+    assert selected.read_bytes() == fixed.read_bytes()
+
+
+def test_example_10_captures_the_inner_variation_usage(tmp_path: Path) -> None:
+    """Example 10: a body's variation usage keeps its flag and its variants."""
+    _, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
+
+    body = architecture.part_definitions["PathChoice"].variants[1].body
+    assert body is not None
+    stage = body.parts["stage"]
+    assert stage.is_variation is True
+    assert stage.type_name == "StageChoice"
+    assert [(variant.name, variant.type_name) for variant in stage.variants] == [
+        ("gainStage", "Gain"),
+        ("attenuateStage", "Attenuate"),
+    ]
+
+
+def test_example_10_dotted_selection_resolves_both_points(
+    tmp_path: Path,
+) -> None:
+    """The inner key extends the outer usage path with a dot."""
+    path, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
+
+    resolved = resolve(
+        architecture,
+        "System",
+        {"path": "nestedPath", "path.stage": "attenuateStage"},
+    )
+    part = resolved.part_definitions["System"].parts["path"]
+    assert part.type_name == "PathChoice__nestedPath"
+    definition = resolved.part_definitions[part.type_name]
+    assert list(definition.parts) == ["stage", "gain"]
+    assert definition.parts["stage"].type_name == "Attenuate"
+
+    tree = _generated_ssd_tree(
+        generate_ssd(
+            path,
+            tmp_path / "nested.ssd",
+            "System",
+            selections={"path": "nestedPath", "path.stage": "attenuateStage"},
+        )
+    )
+    assert tree["elements"][1] == {
+        "name": "path",
+        "elements": [
+            {"name": "stage", "source": "resources/Attenuate.fmu"},
+            {"name": "gain", "source": "resources/Gain.fmu"},
+        ],
+        "connections": [
+            (None, "u", "stage", "u"),
+            ("stage", "y", "gain", "u"),
+            ("gain", "y", None, "y"),
+        ],
+    }
+
+
+def test_example_10_unselected_inner_point_names_the_full_path(
+    tmp_path: Path,
+) -> None:
+    """An inner point left unselected fails with its dotted path."""
+    _, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
 
     with pytest.raises(
         ValueError,
-        match="'baselineBinding' of variation point 'parameters' declares "
-        "bindings; binding statements inside variant bodies are out of scope",
+        match="Variation point 'StageChoice' at 'path.stage'.*is not selected",
     ):
-        resolve(architecture, "test_selected", {"parameters": "baselineBinding"})
+        resolve(architecture, "System", {"path": "nestedPath"})
+
+
+def test_example_10_inner_key_needs_the_outer_body_first(
+    tmp_path: Path,
+) -> None:
+    """Without the outer selection the inner usage does not exist yet."""
+    _, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
+
+    with pytest.raises(ValueError, match="Unknown selection key 'path.stage'"):
+        resolve(architecture, "System", {"path.stage": "attenuateStage"})
+
+
+THREE_LEVELS = """\
+package ThreeLevels {
+  part def SspModel;
+
+  part def Step;
+  part def Gain;
+
+  variation part def DeepChoice {
+    variant part leafGain : Gain;
+  }
+
+  variation part def StageChoice {
+    variant part stepStage : Step;
+    variant part deepStage {
+      variation part deep : DeepChoice;
+    }
+  }
+
+  variation part def PathChoice {
+    variant part nestedPath {
+      variation part stage : StageChoice {
+        variant part stepStage : Step;
+        variant part deepStage {
+          variation part deep : DeepChoice;
+        }
+      }
+    }
+  }
+
+  part def System :> SspModel {
+    part path : PathChoice;
+  }
+}
+"""
+
+
+def test_three_level_variation_is_rejected_not_flattened(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, THREE_LEVELS)
+
+    with pytest.raises(
+        ValueError,
+        match="variation nested deeper than two levels is not supported",
+    ):
+        resolve(
+            architecture,
+            "System",
+            {"path": "nestedPath", "path.stage": "deepStage"},
+        )
+
+
+VALUED_BODY_ATTRIBUTE = """\
+package ValuedBodyAttribute {
+  part def SspModel;
+  attribute def Values {
+    attribute x = 1.0;
+  }
+  part def Marker;
+
+  part def System :> SspModel {
+    variation part parameters : Marker {
+      variant part chosen {
+        attribute values : Real = 1.0;
+      }
+    }
+  }
+}
+"""
+
+
+def test_variant_body_rejects_an_attribute_value_it_cannot_carry(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        ValueError, match="body attributes carry a type only"
+    ):
+        _load_architecture(tmp_path, VALUED_BODY_ATTRIBUTE)
 
 
 def test_parse_selections_rejects_a_malformed_value() -> None:

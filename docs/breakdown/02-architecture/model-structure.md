@@ -69,11 +69,20 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
 - A `VariantMember` has a name, a usage kind (`part` or `attribute`), an
   optional declared type, and an optional body.
 - A variant body (`variant part name { ... }`) is a `VariantBody` with the
-  variant's own subparts, connections, and bindings. It is the implicit
-  anonymous definition of that variant usage; the members never enter the
-  enclosing definition.
-- Bodies and usage-level members are recovered from the raw parse tree, because
-  sysmlpy drops them; the model exposes them as repo-owned dataclasses.
+  variant's own subparts, connections, bindings, and attribute usages. It is the
+  implicit anonymous definition of that variant usage; its part and connection
+  members never enter the enclosing definition, while its attributes and
+  bindings are merged there on selection.
+- A body with no parts and no connections is a statement container: its
+  attributes and bindings are merged into the definition that owns the
+  variation usage, and the usage is removed on selection, so no empty component
+  reaches the SSD.
+- A variation usage inside a selected body is a point of its own, selected by
+  the dotted path (`path.inner=variant`). Only two levels are supported; a
+  third level is rejected, never flattened.
+- Bodies, usage-level members, and nested points inside a body are recovered
+  from the raw parse tree, because sysmlpy drops them; the model exposes them as
+  repo-owned dataclasses.
 
 ## Top-level composition
 

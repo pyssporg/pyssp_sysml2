@@ -54,9 +54,12 @@ again, only `loader.py` needs rewriting.
   them; only `loader.py` reads that tree.
 - A variant body (`variant part name { ... }`) is read from the same tree and
   becomes a repo-owned `VariantBody`: its direct part usages, its connections
-  (with `part.port` or boundary-port ends), and its bindings. Nested variant
-  members inside a body are not captured; variation inside a variant is out of
-  scope.
+  (with `part.port` or boundary-port ends), its bindings, and its attribute
+  usages. A body part that is itself a `variation part` keeps its flag and its
+  raw-tree variant members, so a dotted selection can resolve it after the
+  enclosing body is selected. A member the walk cannot carry (an attribute
+  value, nested decomposition, an unknown body item) raises instead of being
+  dropped.
 - The model exposes variation as `is_variation` and `variants` on part and
   attribute definitions and on part usages; a usage-level point's members live
   in the usage's own `variants`, keyed by its enclosing definition and usage

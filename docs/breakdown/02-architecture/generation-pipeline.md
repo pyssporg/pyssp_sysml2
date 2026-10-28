@@ -52,6 +52,15 @@ parameter values; it references an SSV and optionally inlines a mapping.
   Generation then emits a subsystem for that usage, with the body's subparts
   and connections; because the definition has subparts, the usage is no longer
   a leaf.
+- Whether a body is a component or a statement container depends on what it
+  contains, not where the point sits: parts or connections make it a component
+  and keep the usage; a body with neither is merged into the definition that
+  owns the usage and the usage is removed.
+- A body's attribute usages are merged into the owning definition when its
+  variant is selected, so references such as `values.height` resolve there.
+- A body's bindings are merged into the owning definition's `bindings` in
+  declaration order; `parameters.py` then consumes them through the ordinary
+  applied-set path.
 - Body connections that touch a parameter-interface port are kept on the
   captured body but are not emitted as SSD connections; parameters are applied
   with binds and mappings, not with `connect`.
@@ -59,9 +68,14 @@ parameter values; it references an SSV and optionally inlines a mapping.
   definition, so parameter binds and the emitted SSV use its values.
 - Attribute usages on a study that composes the generated model are selectable
   from the model's selection.
-- An unselected variation point fails generation.
-- A body that declares bindings is rejected: binding statements inside variants
-  are out of scope.
+- A variation usage inside a selected body is itself a point. Resolution runs
+  outermost first and looks inner points up by their full dotted path
+  (`path.inner=variant`) after the outer body has been synthesized. Only two
+  levels are supported; a third level raises a clear error.
+- An unselected variation point fails generation; an unselected inner point
+  fails with its full dotted path.
+- A body that declares a member the adapter cannot carry fails the load rather
+  than dropping it.
 
 ## Practical ordering
 

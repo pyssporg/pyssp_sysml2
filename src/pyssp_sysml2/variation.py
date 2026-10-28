@@ -23,15 +23,22 @@ emits a subsystem whose subparts and connections come from the body. The
 body's parameter-port connections are not emitted as SSD connections; see
 ``docs/breakdown/02-architecture/generation-pipeline.md``.
 
+A body whose only members are attribute usages and bindings is a statement
+container, not a component: its attributes and bindings are merged into the
+definition that owns the variation usage, and the usage is removed so no empty
+component reaches the SSD.
+
 A selection key is the usage name, dotted for nesting (``source=stepImplementation``,
 ``scenario=baseline``, ``path.inner=variantName``). A bare name is accepted
 only when exactly one reachable usage carries it. Attribute usages are
 collected on the composition and on any study that composes it, so a study
 scenario stays selectable when its model is generated.
 
-Connect variants, nested variants inside a variant body, and binding statements
-inside variants are out of scope and raise ``ValueError`` rather than producing
-a partial artifact.
+A variation usage inside a selected body is itself a point. After an outer
+selection is applied, inner points are resolved by their full dotted path. An
+unselected inner point fails with that path. A third level of nesting raises a
+clear ``ValueError`` rather than being flattened. Connect variants and
+attribute variants with bodies remain out of scope.
 """
 
 from __future__ import annotations
@@ -463,25 +470,21 @@ def _body_definition(
     """Synthesize the anonymous part definition a variant body declares.
 
     The definition carries the variation point's ports and the body's own
-    subparts and connections. Parameter-port connections are kept on the
-    captured body but not copied: the SSD represents parameter application
-    with binds and mappings, not with connections.
+    subparts and connections. The body's attributes and bindings belong to the
+    definition that owns the variation usage and are merged there by
+    :func:`_merge_body`. Parameter-port connections are kept on the captured
+    body but not copied: the SSD represents parameter application with binds
+    and mappings, not with connections.
     """
     body = variant.body
     assert body is not None
-    if body.bindings:
-        raise ValueError(
-            f"Selected variant '{variant.name}' of variation point "
-            f"'{record.point_name}' declares bindings; binding statements "
-            "inside variant bodies are out of scope. Select a parameter set "
-            "through an attribute variation point, or write one composition "
-            "per alternative."
-        )
 
     point = record.variation if record.variation is not None else record.definition
     ports = copy.deepcopy(point.ports) if point is not None else {}
     for connection in body.connections.values():
         _check_body_connection(record, variant, body, connection, ports)
+
+    _reject_third_level(record, variant, body, architecture)
 
     if record.variation is not None:
         name = f"{record.variation.name}__{variant.name}"
@@ -504,6 +507,53 @@ def _body_definition(
             if not _touches_parameter_port(body, connection, ports, architecture)
         },
     )
+
+
+def _reject_third_level(
+    record: _Usage,
+    variant: VariantMember,
+    body: VariantBody,
+    architecture: Architecture,
+) -> None:
+    """Refuse a variation point nested three levels deep instead of flattening.
+
+    The selected body of an outer point may carry one inner point, keyed
+    ``outer.inner``. A point inside that inner point's selected body would need
+    ``outer.inner.innermost`` and is out of scope.
+    """
+    if len(record.path) < 2:
+        return
+    for usage in body.parts.values():
+        definition = architecture.resolve_part(usage)
+        if usage.is_variation or (
+            definition is not None and definition.is_variation
+        ):
+            raise ValueError(
+                f"Variant '{variant.name}' of variation point "
+                f"'{record.point_name}' at '{record.key}' declares variation "
+                "point "
+                f"'{usage.name}'; variation nested deeper than two levels is "
+                "not supported."
+            )
+
+
+def _merge_body(
+    record: _Usage,
+    variant: VariantMember,
+    body: VariantBody,
+) -> None:
+    """Merge a selected body's attributes and bindings into its owning definition."""
+    owner = record.owner
+    for name, attribute in body.attributes.items():
+        if name in owner.attributes:
+            raise ValueError(
+                f"Variant '{variant.name}' of variation point "
+                f"'{record.point_name}' declares attribute '{name}', which "
+                f"definition '{owner.name}' already declares; rename it."
+            )
+        owner.attributes[name] = copy.deepcopy(attribute)
+    for binding in body.bindings:
+        owner.bindings.append(copy.deepcopy(binding))
 
 
 def _check_body_connection(
@@ -596,6 +646,10 @@ def resolve(
     composition; each value names one variant of the variation point at that
     usage. An unknown, ambiguous, non-point, or unselected key raises
     ``ValueError``.
+
+    Keys are applied outermost first. Selecting an outer body can introduce an
+    inner variation point, which the next pass finds at its full dotted path
+    (``path.inner=variant``).
     """
     name = (
         composition.name
@@ -604,56 +658,46 @@ def resolve(
     )
     source = architecture.get_part_def(name)
 
-    part_records = _usage_records(architecture, source)
-    attribute_records = _attribute_records(architecture, source)
-    choices: list[tuple[_Usage | _AttributeUsage, VariantMember]] = []
-    for key, variant_name in dict(selections or {}).items():
-        record = _lookup(part_records, attribute_records, key, source)
-        choices.append(
-            (
-                record,
-                _choice(record, key, variant_name, architecture, source),
-            )
-        )
-
     resolved = copy.deepcopy(architecture)
     resolved_source = resolved.get_part_def(source.name)
-    resolved_parts = {
-        record.key: record for record in _usage_records(resolved, resolved_source)
-    }
-    resolved_attributes = {
-        (record.owner_name, record.name): record
-        for record in _attribute_records(resolved, resolved_source)
-    }
-    for record, variant in sorted(choices, key=lambda choice: choice[0].key):
-        if isinstance(record, _AttributeUsage):
-            target = resolved_attributes.get((record.owner_name, record.name))
-            if target is None:
-                raise ValueError(
-                    f"Selection key '{record.key}' no longer resolves after "
-                    "resolution; select one variation point per path."
+    pending = dict(selections or {})
+    applied: list[tuple[_Usage | _AttributeUsage, VariantMember, bool]] = []
+
+    while pending:
+        part_records = _usage_records(resolved, resolved_source)
+        attribute_records = _attribute_records(resolved, resolved_source)
+        progressed = False
+        for key in sorted(pending, key=lambda item: (item.count("."), item)):
+            try:
+                record = _lookup(
+                    part_records, attribute_records, key, resolved_source
                 )
-            target.usage.type_name = variant.type_name
-            continue
-        target = resolved_parts.get(record.key)
-        if target is None:
-            raise ValueError(
-                f"Selection key '{record.key}' no longer resolves after "
-                "resolution; select one variation point per path."
+            except ValueError:
+                if any(
+                    other != key and key.startswith(other + ".")
+                    for other in pending
+                ):
+                    continue
+                raise
+            variant = _choice(
+                record, key, pending[key], resolved, resolved_source
             )
-        if variant.body is not None:
-            definition = _body_definition(target, variant, resolved)
-            resolved.add_part_def(definition)
-            target.usage.type_name = definition.name
-        else:
-            target.usage.type_name = variant.type_name
-        target.usage.is_variation = False
+            removed = _apply(resolved, record, variant)
+            applied.append((record, variant, removed))
+            del pending[key]
+            progressed = True
+            break
+        if not progressed:
+            key = min(pending, key=lambda item: (item.count("."), item))
+            raise _unknown_key(key, resolved_source)
 
     final_parts = _usage_records(resolved, resolved_source)
     final_part_keys = {record.key for record in final_parts}
     final_attributes = _attribute_records(resolved, resolved_source)
     final_attribute_keys = {record.key for record in final_attributes}
-    for record, _ in choices:
+    for record, _, removed in applied:
+        if removed:
+            continue
         if isinstance(record, _AttributeUsage):
             if record.key not in final_attribute_keys:
                 raise ValueError(
@@ -677,3 +721,35 @@ def resolve(
     if remaining_attributes:
         raise _missing_attribute(remaining_attributes[0], resolved_source)
     return resolved
+
+
+def _apply(
+    resolved: Architecture,
+    record: _Usage | _AttributeUsage,
+    variant: VariantMember,
+) -> bool:
+    """Apply one selection in place; return True when it removes the usage.
+
+    A body with neither parts nor connections is a statement container: its
+    attributes and bindings are merged into the owning definition and the
+    variation usage itself is removed, so no empty component reaches the SSD.
+    A body with parts or connections is a component definition and keeps the
+    usage.
+    """
+    if isinstance(record, _AttributeUsage):
+        record.usage.type_name = variant.type_name
+        return False
+
+    body = variant.body
+    if body is not None:
+        _merge_body(record, variant, body)
+        if not body.parts and not body.connections:
+            record.owner.parts.pop(record.usage.name, None)
+            return True
+        definition = _body_definition(record, variant, resolved)
+        resolved.add_part_def(definition)
+        record.usage.type_name = definition.name
+    else:
+        record.usage.type_name = variant.type_name
+    record.usage.is_variation = False
+    return False

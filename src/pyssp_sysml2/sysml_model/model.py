@@ -214,17 +214,19 @@ class VariantBody:
     """The members a ``variant part name { ... }`` declares for itself.
 
     A body is the implicit anonymous definition of that variant usage. It
-    carries its own subparts, connections, and the bindings it would apply; a
-    binding inside a body is captured but not resolvable, see
-    :func:`pyssp_sysml2.variation.resolve`.
+    carries its own subparts, connections, attribute usages, and the bindings
+    it would apply. On selection, attributes and bindings are merged into the
+    definition that owns the variation usage, so ``values.height``-style
+    references resolve there; see :func:`pyssp_sysml2.variation.resolve`.
 
-    ``connections`` is keyed by :attr:`Connection.key`, ``parts`` by name, both
-    in declaration order.
+    ``connections`` is keyed by :attr:`Connection.key`, ``parts`` and
+    ``attributes`` by name, all in declaration order.
     """
 
     parts: dict[str, PartUsage] = field(default_factory=dict)
     connections: dict[str, Connection] = field(default_factory=dict)
     bindings: list[Binding] = field(default_factory=list)
+    attributes: dict[str, Attribute] = field(default_factory=dict)
 
 
 @dataclass

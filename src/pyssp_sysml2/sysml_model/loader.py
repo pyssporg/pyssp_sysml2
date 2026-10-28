@@ -701,7 +701,8 @@ def _capture_variant(node, facts: _VariationFacts) -> None:
     A ``variant part`` belongs either to its enclosing part definition or, when
     the point is a usage, to that usage (keyed by definition and usage name). A
     ``variant attribute`` belongs to an attribute definition. A member declared
-    inside another variant's body is skipped: nested variation is out of scope.
+    inside another variant's body has no definition owner here; the body walk
+    attaches it to the variation usage that declares it.
     """
     if node.partUsage() is not None:
         owner = _variant_owner(node)
@@ -730,7 +731,8 @@ def _variant_owner(
 
     Returns ``("definition", <PartDefinition name>)`` for a definition-level
     point and ``("usage", (<owning definition>, <usage name>))`` for a
-    usage-level point. A member inside a variant body has no owner.
+    usage-level point. A member inside a variant body has no enclosing-definition
+    owner; :func:`_nested_variants` attaches it to the inner usage instead.
     """
     parent = getattr(node, "parentCtx", None)
     while parent is not None:
@@ -888,8 +890,11 @@ def _variant_body(usage) -> VariantBody | None:
     """Members declared inside ``variant part name { ... }``, or ``None``.
 
     The body is the variant usage's own anonymous definition: its direct
-    members are nested part usages, connections, and bindings. Nested variant
-    members are skipped; variation inside a variant is out of scope.
+    members are part usages, connections, bindings, and attribute usages. A
+    part usage may itself be a variation usage; its variant members are kept on
+    that usage so a dotted selection can resolve it after the enclosing body is
+    selected. A member this walk cannot carry raises ``ValueError`` instead of
+    being dropped.
     """
     completion = usage.usage().usageCompletion()
     body = completion.usageBody() if completion is not None else None
@@ -901,15 +906,26 @@ def _variant_body(usage) -> VariantBody | None:
     for item in _as_list(definition_body.children):
         if type(item).__name__ != "DefinitionBodyItemContext":
             continue
-        if _first_descendant(item, "VariantUsageElementContext") is not None:
+        if _is_variant_member_item(item):
+            # A nested member of the enclosing point, captured by
+            # _capture_variant (part) or skipped (attribute/connect/bind).
+            continue
+        if _is_comment_item(item):
             continue
         part = _first_descendant(item, "PartUsageContext")
         if part is not None:
             name = _usage_name(part)
-            if name is not None:
-                captured.parts[name] = PartUsage(
-                    name=name, type_name=_usage_type(part)
+            if name is None:
+                raise ValueError(
+                    "A part usage in a variant body must be named"
                 )
+            _reject_body_decomposition(part, name)
+            captured.parts[name] = PartUsage(
+                name=name,
+                type_name=_usage_type(part),
+                is_variation=_has_variation_prefix(part),
+                variants=_nested_variants(part),
+            )
             continue
         connect = _first_descendant(item, "ConnectionUsageContext")
         if connect is not None:
@@ -919,9 +935,99 @@ def _variant_body(usage) -> VariantBody | None:
         bind = _first_descendant(item, "BindingConnectorAsUsageContext")
         if bind is not None:
             captured.bindings.append(_raw_binding(bind))
-    if not (captured.parts or captured.connections or captured.bindings):
+            continue
+        attribute = _first_descendant(item, "AttributeUsageContext")
+        if attribute is not None:
+            name = _usage_name(attribute)
+            if name is None:
+                raise ValueError(
+                    "An attribute usage in a variant body must be named"
+                )
+            if "=" in attribute.getText():
+                raise ValueError(
+                    f"Attribute usage '{name}' in a variant body declares a "
+                    "value; body attributes carry a type only. Declare the "
+                    "value on the attribute definition instead."
+                )
+            captured.attributes[name] = Attribute(
+                name=name, type_name=_usage_type(attribute)
+            )
+            continue
+        if _has_content(item):
+            raise ValueError(
+                "Unsupported member in a variant body: "
+                f"'{item.getText().strip()}'. A body carries parts, "
+                "connections, bindings, and attribute usages."
+            )
+    if not (
+        captured.parts
+        or captured.connections
+        or captured.bindings
+        or captured.attributes
+    ):
         return None
     return captured
+
+
+def _is_variant_member_item(item) -> bool:
+    """True when a body item declares a ``variant`` member of the body's point."""
+    for child in getattr(item, "children", None) or []:
+        if type(child).__name__ != "DefinitionBodyItemContentContext":
+            continue
+        for content in getattr(child, "children", None) or []:
+            if type(content).__name__ == "TerminalNodeImpl":
+                return content.getText() == "variant"
+    return False
+
+
+def _nested_variants(usage) -> list[VariantMember]:
+    """Variant members declared directly by a variation usage inside a body."""
+    completion = usage.usage().usageCompletion()
+    body = completion.usageBody() if completion is not None else None
+    definition_body = body.definitionBody() if body is not None else None
+    if definition_body is None:
+        return []
+    members: list[VariantMember] = []
+    for item in _as_list(definition_body.children):
+        if type(item).__name__ != "DefinitionBodyItemContext":
+            continue
+        if not _is_variant_member_item(item):
+            continue
+        element = _first_descendant(item, "VariantUsageElementContext")
+        member = _variant_member(element) if element is not None else None
+        if member is not None:
+            members.append(member)
+    return members
+
+
+def _reject_body_decomposition(usage, name: str) -> None:
+    """Reject a body part that declares its own members instead of a type."""
+    completion = usage.usage().usageCompletion()
+    body = completion.usageBody() if completion is not None else None
+    definition_body = body.definitionBody() if body is not None else None
+    if definition_body is None:
+        return
+    for item in _as_list(definition_body.children):
+        if type(item).__name__ == "DefinitionBodyItemContext" and not (
+            _is_variant_member_item(item) or _is_comment_item(item)
+        ):
+            raise ValueError(
+                f"Part usage '{name}' in a variant body declares its own "
+                "members; nested decomposition inside a variant body is not "
+                "supported. Give the part a type or flatten it."
+            )
+
+
+def _is_comment_item(item) -> bool:
+    """True when a body item is only a ``/* ... */`` doc comment."""
+    text = item.getText().strip()
+    return text.startswith("/*") and text.endswith("*/")
+
+
+def _has_content(item) -> bool:
+    """True when a body item carries more than a lone ``;`` terminator."""
+    text = item.getText().strip()
+    return bool(text and text != ";")
 
 
 def _first_descendant(node, kind: str):
