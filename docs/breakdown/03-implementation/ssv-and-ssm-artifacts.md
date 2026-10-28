@@ -22,6 +22,8 @@ Default behavior:
 
 - one `.ssv` per applied parameter set;
 - file name `<SetDefinitionName>.ssv`;
+- a selected attribute variant's type is the set definition, so the file holds
+  that variant's values;
 - only members with values are written;
 - list members expand to `name[0]`, `name[1]`, and so on;
 - interface defaults are not copied into the SSV.

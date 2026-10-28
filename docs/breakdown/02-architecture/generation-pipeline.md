@@ -38,12 +38,17 @@ parameter values; it references an SSV and optionally inlines a mapping.
 ## Variation selection
 
 - A variation point is unresolved until a caller supplies a selection.
-- `generate ssd` and `generate ssp` take `selections`, a mapping from a
-  part-usage path inside the composition to a variant name.
+- `generate ssd`, `generate ssp`, and `generate study` take `selections`, a
+  mapping from a part- or attribute-usage path inside the composition to a
+  variant name.
 - The CLI passes repeatable `--select KEY=VARIANT` values as that mapping.
 - Resolution runs on a deep copy of the architecture before generation.
 - The selected variant's type replaces the usage type; the usage name and the
   SSD element name stay unchanged.
+- For attribute variation, the selected type becomes the parameter set
+  definition, so parameter binds and the emitted SSV use its values.
+- Attribute usages on a study that composes the generated model are selectable
+  from the model's selection.
 - An unselected variation point fails generation.
 
 ## Practical ordering

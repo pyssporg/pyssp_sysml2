@@ -340,6 +340,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.composition,
                 model_name=args.model,
                 target_ssd=args.target_ssd,
+                selections=selections,
             )
             if artifacts.ssv is not None:
                 print(f"SSV written to {artifacts.ssv}")

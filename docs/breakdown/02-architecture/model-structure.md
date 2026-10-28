@@ -64,9 +64,10 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
   `variants` and never in `parts`.
 - A `variation part` usage carries `is_variation`; its `variant` members are
   captured only in the raw parse tree and are not model members.
-- A `variation attribute def` carries `is_variation`; its variants are not
-  captured.
-- A `VariantMember` has a name, a usage kind, and an optional declared type.
+- A `variation attribute def` carries `is_variation`; its `variant attribute`
+  members sit in `variants` and never in `attributes`.
+- A `VariantMember` has a name, a usage kind (`part` or `attribute`), and an
+  optional declared type.
 
 ## Top-level composition
 

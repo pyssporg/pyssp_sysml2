@@ -153,10 +153,10 @@ class PartUsage:
 class VariantMember:
     """One ``variant`` member of a variation point.
 
-    ``kind`` is the SysML usage kind of the member (``"part"`` today); it keeps
-    room for ``attribute``, ``connect``, and ``bind`` variants without changing
-    this contract. ``type_name`` is the declared type as written, or ``None``
-    for a variant with a body but no type.
+    ``kind`` is the SysML usage kind of the member (``"part"`` or
+    ``"attribute"``); it keeps room for ``connect`` and ``bind`` variants
+    without changing this contract. ``type_name`` is the declared type as
+    written, or ``None`` for a variant with a body but no type.
     """
 
     name: str
@@ -248,13 +248,16 @@ class AttributeDefinition(Definition):
     ``:> ParameterSet``) and by how they are used.
 
     ``is_variation`` marks an attribute-level variation point
-    (``variation attribute def ScenarioChoice``). Attribute variation is
-    captured but not resolved.
+    (``variation attribute def ScenarioChoice``). Its alternatives live in
+    ``variants``, never in ``attributes``: a variant declares one alternative
+    parameter set, not a member every use carries. A variant's ``type_name``
+    names the attribute definition the usage takes on when selected.
     """
 
     attributes: dict[str, Attribute] = field(default_factory=dict)
     specializes: tuple[str, ...] = ()
     is_variation: bool = False
+    variants: list[VariantMember] = field(default_factory=list)
 
 
 @dataclass

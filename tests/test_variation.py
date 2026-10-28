@@ -5,11 +5,12 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from pyssp_standard import SSD, SSP
+from pyssp_standard import SSD, SSP, SSV
 
 from pyssp_sysml2.cli import _parse_selections, main
 from pyssp_sysml2.ssd import generate_ssd
 from pyssp_sysml2.ssp import generate_ssp
+from pyssp_sysml2.study import generate_study
 from pyssp_sysml2.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml import generate_sysml_from_ssd
 from pyssp_sysml2.sysml_model import load
@@ -568,3 +569,349 @@ def test_sync_refuses_to_rewrite_variation(tmp_path: Path) -> None:
         match="SysML export does not represent variation points.*SourceChoice",
     ):
         sync_sysml_from_ssd(path, ssd_path, "System")
+
+
+ATTRIBUTE_SET_VARIATION = """\
+package AttributeSetVariation {
+  part def SspModel;
+  part def Study;
+
+  port def ParameterInterface;
+  attribute def ParameterSet;
+
+  port def StepParameters :> ParameterInterface {
+    attribute height : Real;
+    attribute offset : Real;
+    attribute startTime : Real;
+  }
+
+  port def GainParameters :> ParameterInterface {
+    attribute k : Real;
+  }
+
+  attribute def BaselineScenario :> ParameterSet {
+    attribute height = 2.0;
+    attribute offset = 1.0;
+    attribute startTime = 0.25;
+    attribute k = 3.0;
+  }
+
+  attribute def LateStepScenario :> ParameterSet {
+    attribute height = 2.0;
+    attribute offset = 1.0;
+    attribute startTime = 0.75;
+    attribute k = 3.0;
+  }
+
+  attribute def HighGainScenario :> ParameterSet {
+    attribute height = 2.0;
+    attribute offset = 1.0;
+    attribute startTime = 0.25;
+    attribute k = 9.0;
+  }
+
+  variation attribute def ScenarioChoice {
+    variant attribute baseline : BaselineScenario;
+    variant attribute lateStep : LateStepScenario;
+    variant attribute highGain : HighGainScenario;
+  }
+
+  attribute def Experiment {
+    attribute startTime : Real;
+    attribute stopTime : Real;
+    attribute stepSize : Real;
+    attribute tolerance : Real;
+  }
+
+  attribute def BaselineExperiment :> Experiment {
+    attribute startTime = 0.0;
+    attribute stopTime = 1.0;
+    attribute stepSize = 0.001;
+    attribute tolerance = 0.0001;
+  }
+
+  part def Step {
+    in port parameters : StepParameters;
+  }
+
+  part def Gain {
+    in port parameters : GainParameters;
+  }
+
+  part def System :> SspModel {
+    part step : Step;
+    part gain : Gain;
+  }
+
+  part def test_selected_scenario :> Study {
+    attribute experiment_baseline : BaselineExperiment;
+    attribute scenario : ScenarioChoice;
+    part sut : System;
+
+    bind sut.step.parameters.height = scenario.height;
+    bind sut.step.parameters.offset = scenario.offset;
+    bind sut.step.parameters.startTime = scenario.startTime;
+    bind sut.gain.parameters.k = scenario.k;
+  }
+}
+"""
+
+
+def _ssv_values(path: Path) -> dict[str, float]:
+    with SSV(path, mode="r") as ssv:
+        return {
+            name: float(parameter.attributes["value"])
+            for name, parameter in ssv.parameters_by_name().items()
+        }
+
+
+def test_attribute_variation_captures_variants(tmp_path: Path) -> None:
+    """A variation attribute def keeps variant attribute members, not attributes."""
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    choice = architecture.attribute_definitions["ScenarioChoice"]
+    assert choice.is_variation is True
+    assert [
+        (variant.name, variant.kind, variant.type_name)
+        for variant in choice.variants
+    ] == [
+        ("baseline", "attribute", "BaselineScenario"),
+        ("lateStep", "attribute", "LateStepScenario"),
+        ("highGain", "attribute", "HighGainScenario"),
+    ]
+    assert choice.attributes == {}
+
+
+def test_resolve_substitutes_the_attribute_usage_type(tmp_path: Path) -> None:
+    """Resolution rewrites the attribute usage type on a copy."""
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    resolved = resolve(architecture, "test_selected_scenario", {"scenario": "baseline"})
+
+    assert (
+        resolved.part_definitions["test_selected_scenario"]
+        .attributes["scenario"]
+        .type_name
+    ) == "BaselineScenario"
+    assert (
+        architecture.part_definitions["test_selected_scenario"]
+        .attributes["scenario"]
+        .type_name
+    ) == "ScenarioChoice"
+
+
+def test_resolve_finds_a_study_attribute_from_the_model(tmp_path: Path) -> None:
+    """A composing study's attribute usage is selectable when its model is resolved."""
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    resolved = resolve(architecture, "System", {"scenario": "lateStep"})
+
+    assert (
+        resolved.part_definitions["test_selected_scenario"]
+        .attributes["scenario"]
+        .type_name
+    ) == "LateStepScenario"
+
+
+@pytest.mark.parametrize(
+    ("variant", "expected"),
+    [
+        ("baseline", "BaselineScenario"),
+        ("lateStep", "LateStepScenario"),
+        ("highGain", "HighGainScenario"),
+    ],
+)
+def test_every_attribute_variant_resolves(
+    tmp_path: Path, variant: str, expected: str
+) -> None:
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    resolved = resolve(architecture, "test_selected_scenario", {"scenario": variant})
+
+    assert (
+        resolved.part_definitions["test_selected_scenario"]
+        .attributes["scenario"]
+        .type_name
+    ) == expected
+
+
+@pytest.mark.parametrize(
+    ("variant", "expected"),
+    [
+        (
+            "baseline",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.25, "k": 3.0},
+        ),
+        (
+            "lateStep",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.75, "k": 3.0},
+        ),
+        (
+            "highGain",
+            {"height": 2.0, "offset": 1.0, "startTime": 0.25, "k": 9.0},
+        ),
+    ],
+)
+def test_generate_study_writes_the_selected_attribute_set(
+    tmp_path: Path, variant: str, expected: dict[str, float]
+) -> None:
+    """The selected variant becomes the set definition behind the study SSV."""
+    path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    artifacts = generate_study(
+        path,
+        tmp_path / "study",
+        "test_selected_scenario",
+        model_name="System",
+        selections={"scenario": variant},
+    )
+
+    assert _ssv_values(artifacts.ssv) == expected
+    ssm = artifacts.ssm.read_text(encoding="utf-8")
+    assert 'target="step.height"' in ssm
+    assert 'target="gain.k"' in ssm
+
+
+def test_generate_ssd_is_identical_across_attribute_selections(
+    tmp_path: Path,
+) -> None:
+    """Attribute selection changes values only; the SSD bytes do not move."""
+    path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    written = [
+        generate_ssd(
+            path,
+            tmp_path / f"{variant}.ssd",
+            "System",
+            selections={"scenario": variant},
+        ).read_bytes()
+        for variant in ("baseline", "lateStep", "highGain")
+    ]
+
+    assert len(set(written)) == 1
+
+
+def test_generate_ssd_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
+    """An attribute variation point fails generation instead of flattening."""
+    path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="Attribute variation point 'ScenarioChoice' at 'scenario'.*"
+        "is not selected",
+    ):
+        generate_ssd(path, tmp_path / "out" / "SystemStructure.ssd", "System")
+
+
+def test_generate_study_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
+    path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="Attribute variation point 'ScenarioChoice' at 'scenario'",
+    ):
+        generate_study(
+            path,
+            tmp_path / "study",
+            "test_selected_scenario",
+            model_name="System",
+        )
+
+
+def test_resolve_rejects_an_unknown_attribute_key(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(ValueError, match="Unknown selection key 'missing'"):
+        resolve(architecture, "test_selected_scenario", {"missing": "baseline"})
+
+
+def test_resolve_rejects_a_non_variation_attribute_usage(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="names attribute usage 'experiment_baseline', which is not a "
+        "variation point",
+    ):
+        resolve(
+            architecture,
+            "test_selected_scenario",
+            {"experiment_baseline": "baseline"},
+        )
+
+
+def test_resolve_rejects_an_unknown_attribute_variant(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="Unknown variant 'nope' for variation point 'ScenarioChoice'",
+    ):
+        resolve(architecture, "test_selected_scenario", {"scenario": "nope"})
+
+
+def test_resolve_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+
+    with pytest.raises(
+        ValueError,
+        match="Attribute variation point 'ScenarioChoice' at 'scenario'.*"
+        "is not selected",
+    ):
+        resolve(architecture, "test_selected_scenario", {})
+
+
+UNTYPED_ATTRIBUTE_VARIANT = """\
+package UntypedAttributeVariant {
+  part def SspModel;
+
+  variation attribute def Choice {
+    variant attribute empty;
+  }
+
+  part def System :> SspModel {
+    attribute value : Choice;
+  }
+}
+"""
+
+
+def test_resolve_rejects_an_attribute_variant_without_a_type(tmp_path: Path) -> None:
+    _, architecture = _load_architecture(tmp_path, UNTYPED_ATTRIBUTE_VARIANT)
+
+    with pytest.raises(
+        ValueError,
+        match="'empty' of variation point 'Choice' has no resolvable type",
+    ):
+        resolve(architecture, "System", {"value": "empty"})
+
+
+def test_parse_selections_rejects_a_duplicate_key() -> None:
+    with pytest.raises(ValueError, match="Duplicate selection for 'scenario'"):
+        _parse_selections(["scenario=baseline", "scenario=lateStep"])
+
+
+def test_cli_generate_study_selects_an_attribute_variant(tmp_path: Path) -> None:
+    """`pyssp generate study --select scenario=...` writes that set's SSV."""
+    path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
+    output = tmp_path / "study"
+
+    code = main(
+        [
+            "generate",
+            "study",
+            "--architecture",
+            str(path),
+            "--composition",
+            "test_selected_scenario",
+            "--output-dir",
+            str(output),
+            "--model",
+            "System",
+            "--select",
+            "scenario=highGain",
+        ]
+    )
+
+    assert code == 0
+    assert _ssv_values(output / "HighGainScenario.ssv")["k"] == 9.0

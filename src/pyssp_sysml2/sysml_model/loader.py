@@ -268,6 +268,7 @@ def _attribute_definition(
         source_file=file.name,
         specializes=_specializes(element),
         is_variation=element.name in variation.attribute_points,
+        variants=list(variation.attribute_variants.get(element.name, ())),
     )
     for attribute in element.attributes:
         attribute_def.attributes[attribute.name] = _attribute(attribute)
@@ -643,6 +644,7 @@ class _VariationFacts:
     """Variation captured for one source file, keyed by definition name."""
 
     variants: dict[str, list[VariantMember]] = field(default_factory=dict)
+    attribute_variants: dict[str, list[VariantMember]] = field(default_factory=dict)
     usage_points: dict[str, set[str]] = field(default_factory=dict)
     attribute_points: set[str] = field(default_factory=set)
 
@@ -684,13 +686,26 @@ def _tree_nodes(node) -> Iterator:
 
 
 def _capture_variant(node, facts: _VariationFacts) -> None:
-    """Add one ``variant part`` member to its owning definition's variants."""
-    owner = _owning_part_definition(node)
-    name = _definition_name(owner) if owner is not None else None
-    member = _variant_member(node)
-    if name is None or member is None:
+    """Add one variant member to its owning definition's variants.
+
+    A ``variant part`` belongs to a part definition; a ``variant attribute``
+    belongs to an attribute definition. A member of a usage-level point or a
+    variant body has no definition owner and is skipped.
+    """
+    if node.partUsage() is not None:
+        owner = _owning_part_definition(node)
+        name = _definition_name(owner) if owner is not None else None
+        member = _variant_member(node)
+        if name is not None and member is not None:
+            facts.variants.setdefault(name, []).append(member)
         return
-    facts.variants.setdefault(name, []).append(member)
+
+    if node.attributeUsage() is not None:
+        owner = _owning_attribute_definition(node)
+        name = _definition_name(owner) if owner is not None else None
+        member = _variant_member(node)
+        if name is not None and member is not None:
+            facts.attribute_variants.setdefault(name, []).append(member)
 
 
 def _capture_usage_point(node, facts: _VariationFacts) -> None:
@@ -724,6 +739,24 @@ def _owning_part_definition(node):
         if kind == "PartDefinitionContext":
             return parent
         if kind in {"UsageContext", "PartUsageContext"}:
+            return None
+        parent = getattr(parent, "parentCtx", None)
+    return None
+
+
+def _owning_attribute_definition(node):
+    """The raw ``AttributeDefinitionContext`` that owns a node, or ``None``.
+
+    Mirrors :func:`_owning_part_definition`: a node inside a usage body has a
+    ``UsageContext`` between it and the definition, so a member of a variant
+    body is not a member of the enclosing definition.
+    """
+    parent = getattr(node, "parentCtx", None)
+    while parent is not None:
+        kind = type(parent).__name__
+        if kind == "AttributeDefinitionContext":
+            return parent
+        if kind in {"UsageContext", "PartUsageContext", "AttributeUsageContext"}:
             return None
         parent = getattr(parent, "parentCtx", None)
     return None
@@ -763,20 +796,24 @@ def _has_attribute_variation_prefix(ctx) -> bool:
 def _variant_member(node) -> VariantMember | None:
     """Repo VariantMember for one raw ``VariantUsageElementContext``.
 
-    Only ``variant part`` is captured today; an attribute, connect, or bind
-    variant has no ``partUsage`` and is skipped.
+    ``variant part`` and ``variant attribute`` are captured; a connect or bind
+    variant has neither usage and is skipped.
     """
     usage = node.partUsage()
+    kind = "part"
+    if usage is None:
+        usage = node.attributeUsage()
+        kind = "attribute"
     if usage is None:
         return None
     name = _usage_name(usage)
     if name is None:
         return None
-    return VariantMember(name=name, kind="part", type_name=_usage_type(usage))
+    return VariantMember(name=name, kind=kind, type_name=_usage_type(usage))
 
 
 def _usage_type(ctx) -> str | None:
-    """Declared type of a raw ``PartUsageContext`` as written, or ``None``."""
+    """Declared type of a raw part or attribute usage as written, or ``None``."""
     usage = ctx.usage()
     declaration = usage.usageDeclaration() if usage is not None else None
     specialization = (

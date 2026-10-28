@@ -12,6 +12,7 @@ body is named by the model's ``ssp_meta.source`` and recorded as
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -35,6 +36,7 @@ from pyssp_sysml2.roles import (
 from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.variation import resolve
 
 
 @dataclass(frozen=True)
@@ -59,9 +61,16 @@ def generate_study(
     *,
     model_name: str,
     target_ssd: str = "SystemStructure.ssd",
+    selections: Mapping[str, str] | None = None,
 ) -> StudyArtifacts:
-    """Write ``study.json`` and, for one applied set, its SSV and SSM."""
+    """Write ``study.json`` and, for one applied set, its SSV and SSM.
+
+    ``selections`` resolves variation points in the study before generation;
+    see :func:`pyssp_sysml2.variation.resolve`. A study that carries an
+    unselected variation point fails instead of emitting a flat scenario.
+    """
     architecture = load(architecture_path)
+    architecture = resolve(architecture, composition, selections or {})
     study = architecture.get_part_def(composition)
     validate_role_markers(architecture)
     if not is_study(architecture, study):

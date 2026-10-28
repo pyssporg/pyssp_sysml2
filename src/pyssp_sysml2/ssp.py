@@ -49,7 +49,10 @@ from pyssp_sysml2.ssd import build_ssd
 from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
-from pyssp_sysml2.variation import resolve
+from pyssp_sysml2.variation import (
+    require_resolved_attribute_variation,
+    resolve,
+)
 
 DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
 SELECTION_ENTRY = "extra/org.pyssp/selection.json"
@@ -263,6 +266,7 @@ def generate_ssp(
         architecture = resolve(architecture, system, selections)
         system = architecture.get_part_def(composition)
     require_resolved_variation(architecture, system)
+    require_resolved_attribute_variation(architecture, system)
     validate_role_markers(architecture)
     if is_study(architecture, system):
         raise ValueError(

@@ -44,7 +44,10 @@ from pyssp_sysml2.sysml import (
     FLAT_CONNECTOR_ATTR,
 )
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
-from pyssp_sysml2.variation import resolve
+from pyssp_sysml2.variation import (
+    require_resolved_attribute_variation,
+    resolve,
+)
 
 
 def _endpoint_port_def(
@@ -338,6 +341,7 @@ def generate_ssd(
         architecture = resolve(architecture, system, selections)
         system = architecture.get_part_def(composition)
     require_resolved_variation(architecture, system)
+    require_resolved_attribute_variation(architecture, system)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
         build_ssd(
