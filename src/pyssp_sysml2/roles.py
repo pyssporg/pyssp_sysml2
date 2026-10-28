@@ -95,6 +95,52 @@ def is_experiment_definition(
     return _specializes_marker(architecture, definition, EXPERIMENT_MARKER)
 
 
+def _variation_point(
+    architecture: Architecture,
+    definition: PartDefinition | None,
+    seen: set[str] | None = None,
+) -> str | None:
+    """Name of the first variation point reachable from a composition, or None.
+
+    A point is either a variation definition used by a part, or a part usage
+    that is itself a variation point (``variation part source : S;``).
+    """
+    if definition is None:
+        return None
+    if definition.is_variation:
+        return definition.name
+    seen = set() if seen is None else seen
+    if definition.name in seen:
+        return None
+    seen.add(definition.name)
+    for usage in definition.parts.values():
+        if usage.is_variation:
+            return usage.name
+        found = _variation_point(architecture, architecture.resolve_part(usage), seen)
+        if found is not None:
+            return found
+    return None
+
+
+def require_resolved_variation(
+    architecture: Architecture, composition: PartDefinition
+) -> None:
+    """Reject generation of a composition that still carries a variation point.
+
+    Selection is not implemented, so a variation point cannot be resolved and
+    generation would silently emit a variant-less artifact. Reject instead, and
+    name the point (IMP-006).
+    """
+    point = _variation_point(architecture, composition)
+    if point is None:
+        return
+    raise ValueError(
+        f"Variation point '{point}' in composition '{composition.name}' is not "
+        "resolved: selecting a variant is not supported yet. Write one "
+        "composition per alternative, or remove the variation point."
+    )
+
+
 def validate_role_markers(architecture: Architecture) -> None:
     """Reject marker use when the marker definition is missing."""
     used = {

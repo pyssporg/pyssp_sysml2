@@ -19,7 +19,11 @@ sysmlpy quirks compensated here (verified in the migration notes,
 - ``get_value()`` raises ``AttributeError`` for value-less attributes and
   drops the sign of negative number literals (``-1.5`` reads as ``1.5``);
 - unnamed ``connect`` statements get a UUID as their name, so the legacy
-  ``"{src}.{src_port}_to_{dst}.{dst_port}"`` name is rebuilt for them.
+  ``"{src}.{src_port}_to_{dst}.{dst_port}"`` name is rebuilt for them;
+- ``variant`` members, usage-level ``variation`` flags, and ``variation
+  attribute def`` flags never reach the parsed model, so all are recovered from
+  the raw parse tree (``_variation_facts``); the tree is a sysmlpy internal and
+  is read here only.
 
 Loading stays non-validating: ``resolve_types()``/``analyze()`` are never
 called, so unresolved references simply surface as ``resolve_part``/
@@ -30,7 +34,9 @@ from __future__ import annotations
 
 import re
 import warnings
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterator
 
 import sysmlpy
 
@@ -45,6 +51,7 @@ from pyssp_sysml2.sysml_model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
+    VariantMember,
     endpoint_text,
 )
 
@@ -104,40 +111,50 @@ def _resolve_files(path: Path) -> list[Path]:
 
 def _architecture_from(file: Path) -> Architecture:
     """Build a fresh Architecture from the first file of a load."""
-    packages = _file_packages(file)
+    packages, variation = _parse_file(file)
     architecture = Architecture(package_name=packages[0].name)
-    _merge_packages(architecture, packages, file)
+    _merge_packages(architecture, packages, file, variation)
     return architecture
 
 
 def _merge_file(architecture: Architecture, file: Path) -> None:
     """Merge one more file into ``architecture`` (package names must match)."""
-    packages = _file_packages(file)
+    packages, variation = _parse_file(file)
     name = packages[0].name
     if name != architecture.package_name:
         raise ValueError(
             f"Mismatched package names: {architecture.package_name} vs {name} in {file}"
         )
-    _merge_packages(architecture, packages, file)
+    _merge_packages(architecture, packages, file, variation)
 
 
-def _file_packages(file: Path) -> list:
-    """Parse one file and return its package(s), enforcing one package name.
+def _parse_file(file: Path) -> tuple[list, _VariationFacts]:
+    """Parse one file: its package(s), plus variation facts from the raw tree.
 
     sysmlpy's ``load_files`` parses a single file into a Model whose direct
     children are the file's top-level ``package`` declarations; everything
     the repo supports lives in exactly one same-named package per file.
+
+    The source text is read once here: ``load_files`` takes the path, and the
+    raw-tree walk takes the text, so variation capture adds a parse pass but no
+    second read.
     """
+    source = file.read_text(encoding="utf-8")
     model = sysmlpy.load_files([str(file)])
     names = sorted({package.name for package in model.packages})
     if not names:
         raise ValueError(f"No package declaration found in {file}")
     if len(names) > 1:
         raise ValueError(f"Expected one package per file, found {', '.join(names)} in {file}")
-    return list(model.packages)
+    return list(model.packages), _variation_facts(source)
 
 
-def _merge_packages(architecture: Architecture, packages: list, file: Path) -> None:
+def _merge_packages(
+    architecture: Architecture,
+    packages: list,
+    file: Path,
+    variation: _VariationFacts,
+) -> None:
     """Add every definition of one file's package(s) to the architecture.
 
     Top-level usages and other non-definition children are skipped silently
@@ -148,7 +165,7 @@ def _merge_packages(architecture: Architecture, packages: list, file: Path) -> N
     for package in packages:
         for element in package.parts:
             if element.is_definition:
-                part_def = _part_definition(element, file)
+                part_def = _part_definition(element, file, variation)
                 _add_definition(architecture, architecture.add_part_def, part_def, file)
         for element in package.ports:
             if element.is_definition:
@@ -156,7 +173,7 @@ def _merge_packages(architecture: Architecture, packages: list, file: Path) -> N
                 _add_definition(architecture, architecture.add_port_def, port_def, file)
         for element in package.attributes:
             if element.is_definition:
-                attribute_def = _attribute_definition(element, file)
+                attribute_def = _attribute_definition(element, file, variation)
                 _add_definition(
                     architecture, architecture.add_attribute_def, attribute_def, file
                 )
@@ -180,29 +197,43 @@ def _add_definition(architecture: Architecture, add, definition, file: Path) -> 
 # -- definition builders ----------------------------------------------------
 
 
-def _part_definition(element, file: Path) -> PartDefinition:
+def _part_definition(element, file: Path, variation: _VariationFacts) -> PartDefinition:
     """Repo PartDefinition from a sysmlpy part definition.
 
     Member docs are not captured: sysmlpy attaches a ``doc /* ... */``
     written above a member to the owning definition, so per-member docs are
     not recoverable from a parsed model (sysmlpy_api.md §3).
+
+    The variation flag comes from the grammar prefix; the variant members and
+    usage-level flags come from the raw-tree walk, keyed by this definition's
+    name.
     """
     part_def = PartDefinition(
         name=element.name,
         doc=element.doc,
         source_file=file.name,
         specializes=_specializes(element),
+        is_variation=_is_definition_variation(element),
+        variants=list(variation.variants.get(element.name, ())),
     )
+    variation_usages = variation.usage_points.get(element.name, ())
     for attribute in element.attributes:
         part_def.attributes[attribute.name] = _attribute(attribute)
     for port in element.ports:
-        part_def.ports[port.name] = PortUsage(
-            name=port.name,
+        # A redefining port (``out port :>> y : T;``) gets a UUID as its parsed
+        # name; ``display_name`` keeps the name the composition connects to.
+        name = getattr(port, "display_name", None) or port.name
+        part_def.ports[name] = PortUsage(
+            name=name,
             direction=_port_direction(port),
             type_name=port.typed_by_name,
         )
     for part in element.parts:
-        part_def.parts[part.name] = PartUsage(name=part.name, type_name=part.typed_by_name)
+        part_def.parts[part.name] = PartUsage(
+            name=part.name,
+            type_name=part.typed_by_name,
+            is_variation=part.name in variation_usages,
+        )
     for connect in element.connections:
         connection = _connection(connect, file)
         # Keyed by endpoint pair: a later connect with identical endpoints
@@ -227,13 +258,16 @@ def _port_definition(element, file: Path) -> PortDefinition:
     return port_def
 
 
-def _attribute_definition(element, file: Path) -> AttributeDefinition:
+def _attribute_definition(
+    element, file: Path, variation: _VariationFacts
+) -> AttributeDefinition:
     """Repo AttributeDefinition from a sysmlpy attribute definition."""
     attribute_def = AttributeDefinition(
         name=element.name,
         doc=element.doc,
         source_file=file.name,
         specializes=_specializes(element),
+        is_variation=element.name in variation.attribute_points,
     )
     for attribute in element.attributes:
         attribute_def.attributes[attribute.name] = _attribute(attribute)
@@ -453,6 +487,18 @@ def _decode_escapes(text: str) -> str:
 # -- grammar-layer walks (sysmlpy internals; swap here on a future release) --
 
 
+def _is_definition_variation(element) -> bool:
+    """True for a ``variation part def``: a definition-level variation point.
+
+    sysmlpy keeps the keyword but no dataclass exposes it; it sits in the
+    definition prefix as ``PartDefinition.prefix`` (``OccurrenceDefinitionPrefix``)
+    → ``prefix`` (``BasicDefinitionPrefix``) → ``isVariation == "variation"``.
+    """
+    prefix = getattr(element.grammar, "prefix", None)  # OccurrenceDefinitionPrefix
+    prefix = getattr(prefix, "prefix", None) if prefix else None  # BasicDefinitionPrefix
+    return getattr(prefix, "isVariation", None) == "variation"
+
+
 def _port_direction(port) -> str | None:
     """'in' | 'out' | 'inout' | None for a parsed port usage.
 
@@ -587,3 +633,169 @@ def _literal_is_negative(element) -> bool:
     except (AttributeError, IndexError, TypeError):
         return False
     return getattr(unary, "operator", None) == "-"
+
+
+# -- variation points (raw parse tree; see IMP-006) --------------------------
+
+
+@dataclass
+class _VariationFacts:
+    """Variation captured for one source file, keyed by definition name."""
+
+    variants: dict[str, list[VariantMember]] = field(default_factory=dict)
+    usage_points: dict[str, set[str]] = field(default_factory=dict)
+    attribute_points: set[str] = field(default_factory=set)
+
+
+def _variation_facts(source: str) -> _VariationFacts:
+    """Recover variation points from the raw parse tree of one file.
+
+    sysmlpy drops every ``variant`` member and every usage-level ``variation``
+    flag, but keeps both in the tree: a member is a
+    ``VariantUsageElementContext`` with its full text and a usage flag is the
+    ``variation`` token in the usage prefix. The walk is deliberately tolerant —
+    a shape it does not recognize is skipped, so a parser pin change degrades to
+    "not captured" rather than a failed load.
+    """
+    facts = _VariationFacts()
+    for node in _tree_nodes(sysmlpy.antlr_parser.parse(source)):
+        try:
+            if type(node).__name__ == "VariantUsageElementContext":
+                _capture_variant(node, facts)
+            elif type(node).__name__ == "PartUsageContext" and _has_variation_prefix(
+                node
+            ):
+                _capture_usage_point(node, facts)
+            elif (
+                type(node).__name__ == "AttributeDefinitionContext"
+                and _has_attribute_variation_prefix(node)
+            ):
+                _capture_attribute_point(node, facts)
+        except (AttributeError, IndexError, TypeError):
+            continue
+    return facts
+
+
+def _tree_nodes(node) -> Iterator:
+    """Pre-order traversal of a raw ANTLR parse tree."""
+    yield node
+    for child in getattr(node, "children", None) or []:
+        yield from _tree_nodes(child)
+
+
+def _capture_variant(node, facts: _VariationFacts) -> None:
+    """Add one ``variant part`` member to its owning definition's variants."""
+    owner = _owning_part_definition(node)
+    name = _definition_name(owner) if owner is not None else None
+    member = _variant_member(node)
+    if name is None or member is None:
+        return
+    facts.variants.setdefault(name, []).append(member)
+
+
+def _capture_usage_point(node, facts: _VariationFacts) -> None:
+    """Record one ``variation part`` usage of its enclosing definition."""
+    owner = _owning_part_definition(node)
+    definition = _definition_name(owner) if owner is not None else None
+    usage = _usage_name(node)
+    if definition is None or usage is None:
+        return
+    facts.usage_points.setdefault(definition, set()).add(usage)
+
+
+def _capture_attribute_point(node, facts: _VariationFacts) -> None:
+    """Record one ``variation attribute def`` of this file."""
+    name = _definition_name(node)
+    if name is not None:
+        facts.attribute_points.add(name)
+
+
+def _owning_part_definition(node):
+    """The raw ``PartDefinitionContext`` that owns a node, or ``None``.
+
+    A node inside a usage body has a ``UsageContext`` between it and the
+    definition, so it has no definition owner: the variants of a usage-level
+    point are not definition variants, and a member of a variant body is not a
+    member of the enclosing definition. Both are skipped.
+    """
+    parent = getattr(node, "parentCtx", None)
+    while parent is not None:
+        kind = type(parent).__name__
+        if kind == "PartDefinitionContext":
+            return parent
+        if kind in {"UsageContext", "PartUsageContext"}:
+            return None
+        parent = getattr(parent, "parentCtx", None)
+    return None
+
+
+def _definition_name(ctx) -> str | None:
+    """Declared name of a raw ``PartDefinitionContext`` or ``AttributeDefinitionContext``."""
+    definition = ctx.definition()
+    declaration = definition.definitionDeclaration() if definition is not None else None
+    identification = declaration.identification() if declaration is not None else None
+    return identification.getText() if identification is not None else None
+
+
+def _usage_name(ctx) -> str | None:
+    """Declared name of a raw ``PartUsageContext``, or ``None`` when anonymous."""
+    usage = ctx.usage()
+    declaration = usage.usageDeclaration() if usage is not None else None
+    identification = declaration.identification() if declaration is not None else None
+    return identification.getText() if identification is not None else None
+
+
+def _has_variation_prefix(ctx) -> bool:
+    """True when a usage carries the ``variation`` keyword before ``part``."""
+    prefix = ctx.occurrenceUsagePrefix()
+    basic = prefix.basicUsagePrefix() if prefix is not None else None
+    ref = basic.refPrefix() if basic is not None else None
+    return ref is not None and ref.VARIATION() is not None
+
+
+def _has_attribute_variation_prefix(ctx) -> bool:
+    """True for a ``variation attribute def`` in the raw tree."""
+    prefix = ctx.definitionPrefix()
+    basic = prefix.basicDefinitionPrefix() if prefix is not None else None
+    return basic is not None and basic.VARIATION() is not None
+
+
+def _variant_member(node) -> VariantMember | None:
+    """Repo VariantMember for one raw ``VariantUsageElementContext``.
+
+    Only ``variant part`` is captured today; an attribute, connect, or bind
+    variant has no ``partUsage`` and is skipped.
+    """
+    usage = node.partUsage()
+    if usage is None:
+        return None
+    name = _usage_name(usage)
+    if name is None:
+        return None
+    return VariantMember(name=name, kind="part", type_name=_usage_type(usage))
+
+
+def _usage_type(ctx) -> str | None:
+    """Declared type of a raw ``PartUsageContext`` as written, or ``None``."""
+    usage = ctx.usage()
+    declaration = usage.usageDeclaration() if usage is not None else None
+    specialization = (
+        declaration.featureSpecializationPart() if declaration is not None else None
+    )
+    if specialization is None:
+        return None
+    for feature in _as_list(specialization.featureSpecialization()):
+        typings = feature.typings()
+        typed_by = typings.typedBy() if typings is not None else None
+        for typing in _as_list(
+            typed_by.featureTyping() if typed_by is not None else None
+        ):
+            return typing.getText()
+    return None
+
+
+def _as_list(value) -> list:
+    """ANTLR accessors return a context or a list of them; normalize to a list."""
+    if value is None:
+        return []
+    return value if isinstance(value, list) else [value]

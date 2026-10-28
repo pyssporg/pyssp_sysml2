@@ -18,6 +18,8 @@ Core modules under `src/pyssp_sysml2/`:
 - `ssm.py`: generates SSP parameter-mapping `.ssm` files.
 - `parameters.py`: resolves parameter interfaces, sets, applied-set bindings,
   and mapping entries.
+- `variation.py`: resolves variation points into one concrete architecture for
+  a selection.
 - `parameter_synthesis.py`: synthesizes interfaces, sets, and binds from SSD
   parameter connectors and bindings, including nested systems and multiple
   disjoint sets per element.
@@ -65,4 +67,5 @@ parser's serializer.
 - SSD-to-SysML model synthesis: `sysml.py`; `tests/test_generate_sysml.py`.
 - Sync: `sync.py`; `tests/test_sync.py`.
 - Control attributes: `control.py`.
+- Variation selection: `variation.py`; `tests/test_variation.py`.
 - SysML model adapter: `sysml_model/`; `tests/test_sysml_model.py`.

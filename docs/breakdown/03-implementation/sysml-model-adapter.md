@@ -49,3 +49,10 @@ again, only `loader.py` needs rewriting.
   `None`, and the exporter emits unnamed `bind` lines.
 - `attribute def` members keep declared multiplicity, `Real[3]` or `Real[0..*]`.
   Parameter tooling requires a fixed length for SSP output.
+- `variant` members, usage-level `variation` flags, and `variation attribute
+  def` flags are recovered from the raw parse tree, because sysmlpy drops
+  them; only `loader.py` reads that tree.
+- The model exposes variation as `is_variation` and `variants` on part and
+  attribute definitions and on part usages.
+- A redefining port (`out port :>> y : T;`) keeps its declared name; sysmlpy
+  gives its parsed name a UUID.

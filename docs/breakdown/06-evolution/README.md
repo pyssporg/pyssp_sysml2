@@ -18,4 +18,5 @@ Not-yet-decided improvements. Current state is never restated here.
 - **IMP-003** [Reuse round-trip and adapter gap](reuse-roundtrip-and-gap.md) — Generation synthesizes flat sets; sync should preserve inheritance; the current model and exporter cannot represent redefinition.
 - **IMP-004** [Reuse phases and open decisions](reuse-phases-and-decisions.md) — Implementation proceeds through model, generation, sync, and optional interface inheritance; six decisions remain open.
 - **IMP-005** [Reuse contract forms](reuse-contract-forms.md) — Base sets, additive reuse, value override by redefinition, multiple inheritance as union, and explicit conflict resolution.
+- **IMP-006** [SysML variation points to one SSP per selection](sysml-variation-points-to-one-ssp-per-selection.md) — Capture variation and variant members through the raw parse tree, fail loud today, and generate one SSP per explicit selection.
 <!-- pb:index:end -->

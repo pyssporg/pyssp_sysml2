@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from pyssp_standard import (
@@ -31,7 +32,11 @@ from pyssp_sysml2.parameters import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_parent_dir
-from pyssp_sysml2.roles import is_study, validate_role_markers
+from pyssp_sysml2.roles import (
+    is_study,
+    require_resolved_variation,
+    validate_role_markers,
+)
 from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.sysml import (
     DEFAULT_START_ATTR,
@@ -39,6 +44,7 @@ from pyssp_sysml2.sysml import (
     FLAT_CONNECTOR_ATTR,
 )
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
+from pyssp_sysml2.variation import resolve
 
 
 def _endpoint_port_def(
@@ -323,10 +329,15 @@ def generate_ssd(
     composition: str,
     type_check=True,
     parameter_set_prefix: str = "parameter_sets",
+    selections: Mapping[str, str] | None = None,
 ) -> Path:
 
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    if selections:
+        architecture = resolve(architecture, system, selections)
+        system = architecture.get_part_def(composition)
+    require_resolved_variation(architecture, system)
     ensure_parent_dir(output_path)
     with SSD(output_path, mode="w") as ssd:
         build_ssd(

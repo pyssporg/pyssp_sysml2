@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import tempfile
 import warnings
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -38,11 +39,16 @@ from pyssp_sysml2.parameters import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.paths import ensure_parent_dir
-from pyssp_sysml2.roles import is_study, validate_role_markers
+from pyssp_sysml2.roles import (
+    is_study,
+    require_resolved_variation,
+    validate_role_markers,
+)
 from pyssp_sysml2.ssd import build_ssd
 from pyssp_sysml2.ssp_metadata import ssp_metadata
 from pyssp_sysml2.ssv import write_parameter_set
 from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
+from pyssp_sysml2.variation import resolve
 
 DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
 
@@ -207,6 +213,7 @@ def generate_ssp(
     type_check: bool = True,
     validate_fmus: bool = True,
     allow_missing_fmus: bool = False,
+    selections: Mapping[str, str] | None = None,
 ) -> Path:
     """Build an ``.ssp`` archive from a SysML architecture and its built FMUs.
 
@@ -226,10 +233,17 @@ def generate_ssp(
     ``fmu_meta.source`` does not exist on disk is exported the same way, with
     its expected ``resources/<name>`` source and no packaged FMU. Without the
     flag, a missing declared source is an error.
+
+    ``selections`` resolves variation points before generation; see
+    :func:`pyssp_sysml2.variation.resolve`.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    if selections:
+        architecture = resolve(architecture, system, selections)
+        system = architecture.get_part_def(composition)
+    require_resolved_variation(architecture, system)
     validate_role_markers(architecture)
     if is_study(architecture, system):
         raise ValueError(

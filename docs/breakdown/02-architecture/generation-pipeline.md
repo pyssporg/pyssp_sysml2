@@ -35,6 +35,17 @@ parameter values; it references an SSV and optionally inlines a mapping.
 - **SysML from SSD**: source is SSD plus referenced SSV/SSM. Contains a
   synthesized model, sets, interfaces, and binds.
 
+## Variation selection
+
+- A variation point is unresolved until a caller supplies a selection.
+- `generate ssd` and `generate ssp` take `selections`, a mapping from a
+  part-usage path inside the composition to a variant name.
+- The CLI passes repeatable `--select KEY=VARIANT` values as that mapping.
+- Resolution runs on a deep copy of the architecture before generation.
+- The selected variant's type replaces the usage type; the usage name and the
+  SSD element name stay unchanged.
+- An unselected variation point fails generation.
+
 ## Practical ordering
 
 1. Generate SSV, SSD, and FMI from SysML.

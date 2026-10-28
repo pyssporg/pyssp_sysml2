@@ -58,6 +58,16 @@ A `part def` with no subparts is a leaf component even if the SSD originally had
 a `System` element with no children. No structural marker distinguishes an
 empty system from an FMU leaf; this is a documented round-trip limitation.
 
+## Variation points
+
+- A `variation part def` carries `is_variation`; its `variant` members sit in
+  `variants` and never in `parts`.
+- A `variation part` usage carries `is_variation`; its `variant` members are
+  captured only in the raw parse tree and are not model members.
+- A `variation attribute def` carries `is_variation`; its variants are not
+  captured.
+- A `VariantMember` has a name, a usage kind, and an optional declared type.
+
 ## Top-level composition
 
 The top composition is a structural container, not a parameter target.

@@ -33,6 +33,38 @@ def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
         default=DEFAULT_COMPOSITION_NAME,
         help="Top-level composition part definition name.",
     )
+    parser.add_argument(
+        "--select",
+        action="append",
+        default=None,
+        metavar="KEY=VARIANT",
+        help=(
+            "Select one variant for a variation point, keyed by part-usage path "
+            "(repeatable), e.g. source=stepImplementation."
+        ),
+    )
+
+
+def _parse_selections(values: list[str] | None) -> dict[str, str] | None:
+    """Parse repeatable ``--select KEY=VARIANT`` values into a mapping."""
+    if not values:
+        return None
+    selections: dict[str, str] = {}
+    for value in values:
+        key, separator, variant = value.partition("=")
+        key = key.strip()
+        variant = variant.strip()
+        if not separator or not key or not variant:
+            raise ValueError(
+                f"Invalid --select value '{value}'; expected KEY=VARIANT, for "
+                "example source=stepImplementation."
+            )
+        if key in selections:
+            raise ValueError(
+                f"Duplicate selection for '{key}'; pass each variation point once."
+            )
+        selections[key] = variant
+    return selections
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -243,6 +275,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        selections = _parse_selections(getattr(args, "select", None))
         if args.command == "generate" and args.artifact == "ssp":
             output = args.output or (GENERATED_DIR / f"{args.composition}.ssp")
             output = generate_ssp(
@@ -254,6 +287,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 type_check=args.skip_type_check,
                 validate_fmus=args.validate_fmus,
                 allow_missing_fmus=args.allow_missing_fmus,
+                selections=selections,
             )
             print(f"SSP written to {output}")
             return 0
@@ -265,6 +299,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.composition,
                 args.skip_type_check,
                 parameter_set_prefix=args.parameter_set_prefix,
+                selections=selections,
             )
             print(f"SSD written to {output}")
             return 0
