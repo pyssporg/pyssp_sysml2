@@ -44,7 +44,7 @@ is the public surface for other projects.
   documented public functions; parser internals and schema bindings do not
   cross.
 - **SysML parsing stays in the adapter.** Only
-  `src/pyssp_sysml2/model/loader.py` imports `sysmlpy`; generators use the
+  `src/pyssp_sysml2/model/parser.py` imports `sysmlpy`; generators use the
   repo-owned dataclasses in `src/pyssp_sysml2/model/model.py`, and
   `src/pyssp_sysml2/model/exporter.py` emits the SysML text contract.
 - **SSP/FMI XML object handling belongs to `pyssp_standard`.** Do not duplicate

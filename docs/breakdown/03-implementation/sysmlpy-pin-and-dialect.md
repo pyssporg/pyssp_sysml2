@@ -2,7 +2,7 @@
 id: INFO-014
 type: info
 title: sysmlpy pin internals and dialect
-summary: Internal sysmlpy structures the loader depends on, and the standard SysML v2 dialect the adapter accepts.
+summary: Internal sysmlpy structures the parser depends on, and the standard SysML v2 dialect the adapter accepts.
 date: 2026-10-23
 status: current
 ---
@@ -10,8 +10,8 @@ status: current
 # sysmlpy pin internals and dialect
 
 These sysmlpy 0.96.4 internals are not part of sysmlpy's public API. They are
-the first things to check when upgrading the pin. All are isolated at the
-bottom of `model/loader.py` in the grammar-layer walks section.
+the first things to check when upgrading the pin. All are isolated in
+`model/parser.py`, in the grammar-layer walks and value normalizers.
 
 - **Port direction** lives at
   `port.grammar.prefix.prefix.prefix.direction` with
@@ -34,10 +34,10 @@ bottom of `model/loader.py` in the grammar-layer walks section.
   re-attached from the grammar's `UnaryExpression.operator`.
 - `get_value()` raises `AttributeError` for value-less attributes, returns
   `'true'`, `'false'`, and `'(1.0,2.0)'` as raw strings for bool and tuple
-  literals, and returns a pint `Quantity` for unit literals. `model/loader.py`
+  literals, and returns a pint `Quantity` for unit literals. `model/parser.py`
   normalizes all of these.
 - Loading emits a benign one-time `UserWarning` about a failed DFA cache save;
-  it is suppressed at `model/loader.py` import time.
+  it is suppressed at `model/parser.py` import time.
 
 ## Model dialect requirements
 

@@ -48,7 +48,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from pyssp_sysml2.parameters import is_parameter_interface
+from pyssp_sysml2.parameters.dialect.markers import is_parameter_interface
 from pyssp_sysml2.metadata.roles import is_study
 from pyssp_sysml2.model import (
     Architecture,

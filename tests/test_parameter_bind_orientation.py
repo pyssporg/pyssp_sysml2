@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.dialect.composition import (
     has_parameter_dialect,
-    mapping_specs,
     parameter_bind,
 )
+from pyssp_sysml2.parameters.dialect.mapping import mapping_specs
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
 from pyssp_sysml2.model import load

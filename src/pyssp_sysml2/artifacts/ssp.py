@@ -33,12 +33,12 @@ from pyssp_standard import (
 
 from pyssp_sysml2.core.fmi_helpers import fmu_filename
 from pyssp_sysml2.metadata.fmu_metadata import fmu_metadata
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.dialect.composition import (
     component_definitions,
-    parameter_set_resource,
-    parameter_sets_for_generation,
     validate_parameter_dialect,
 )
+from pyssp_sysml2.parameters.dialect.mapping import parameter_sets_for_generation
+from pyssp_sysml2.parameters.dialect.markers import parameter_set_resource
 from pyssp_sysml2.core.paths import ensure_parent_dir
 from pyssp_sysml2.metadata.roles import (
     is_study,

@@ -11,8 +11,8 @@ from pyssp_sysml2.metadata.fmu_metadata import (
     fmu_metadata,
     update_fmu_metadata_from_component,
 )
-from pyssp_sysml2.parameters.synthesis import synthesize_parameter_dialect
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
+from pyssp_sysml2.parameters.dialect.composition import (
     has_parameter_dialect,
     validate_parameter_dialect,
 )

@@ -1,12 +1,12 @@
 """Stable in-memory SysML v2 architecture model for pyssp_sysml2.
 
-This module is the repo-owned contract between the sysmlpy-backed loader
-(`pyssp_sysml2.model.loader`) and every generator
+This module is the repo-owned contract between the parser adapter
+(`pyssp_sysml2.model.parser`) and every generator
 (`ssd.py`, `ssv.py`, `fmi.py`, `sysml.py`, `sync.py`).
 
-Design rule: nothing outside `loader.py` may import `sysmlpy`. All repo code
+Design rule: nothing outside `parser.py` may import `sysmlpy`. All repo code
 works against the dataclasses below, so a sysmlpy API change can only break
-the loader, and a future parser swap only touches the loader.
+`parser.py`, and a future parser swap only touches `parser.py`.
 
 Value semantics (mirrors the retired `pycps_sysmlv2` contract):
 

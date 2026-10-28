@@ -18,13 +18,15 @@ from pathlib import Path
 
 from pyssp_standard import SSM
 
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.dialect.composition import (
     applied_sets,
-    mapping_specs,
-    parameter_sets_for_generation,
-    validate_marker_definitions,
     validate_parameter_dialect,
 )
+from pyssp_sysml2.parameters.dialect.mapping import (
+    mapping_specs,
+    parameter_sets_for_generation,
+)
+from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
 from pyssp_sysml2.core.paths import ensure_directory
 from pyssp_sysml2.metadata.roles import (
     is_ssp_model,

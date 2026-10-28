@@ -3,7 +3,7 @@
 The package root is the documented surface; everything below it is a domain
 package. This test reads source text only so a broken import graph cannot hide a
 layout problem. It also ratchets the size of the modules that are deliberately
-large, and keeps ``sysmlpy`` confined to the model loader.
+large, and keeps ``sysmlpy`` confined to ``model/parser.py``.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ SUBPACKAGES = frozenset(
 )
 
 #: The only module allowed to import the external parser.
-SYMLPY_IMPORT_ALLOWLIST = frozenset({"model/loader.py"})
+SYMLPY_IMPORT_ALLOWLIST = frozenset({"model/parser.py"})
 SYMLPY_IMPORT = re.compile(r"\s*(?:import|from)\s+sysmlpy\b")
 
 #: Modules that exceeded the line budget when the layout was introduced.
@@ -31,11 +31,16 @@ SYMLPY_IMPORT = re.compile(r"\s*(?:import|from)\s+sysmlpy\b")
 MAX_MODULE_LINES = 600
 
 LARGE_MODULES: dict[str, str] = {
-    "parameters/dialect.py": "parameter dialect helpers and validators kept together",
-    "parameters/synthesis.py": "SSD-to-SysML parameter synthesis in one pass",
-    "parameters/variation.py": "variation traversal and selection resolution",
-    "model/loader.py": "the only module that reads the sysmlpy parse tree",
+    "parameters/variation.py": (
+        "one variation pass: inventory, discovery, validation, body materialisation, driver"
+    ),
 }
+
+#: The parameters package deliberately has no flat re-export surface; callers
+#: import the precise layer. A shim would undo the split silently.
+PARAMETERS_FLAT_IMPORT = re.compile(
+    r"^\s*from\s+(?:pyssp_sysml2\.|\.+)?parameters(?:\.(?:dialect|synthesis))?\s+import\b"
+)
 
 
 def _package_dirs() -> list[Path]:
@@ -79,7 +84,7 @@ def test_every_subpackage_has_an_init():
     assert not missing, "directory without __init__.py:\n" + "\n".join(missing)
 
 
-def test_sysmlpy_is_only_imported_by_the_model_loader():
+def test_sysmlpy_is_only_imported_by_the_parser():
     violations = []
     for path in sorted(PACKAGE.rglob("*.py")):
         relative = str(path.relative_to(PACKAGE))
@@ -91,7 +96,7 @@ def test_sysmlpy_is_only_imported_by_the_model_loader():
             if SYMLPY_IMPORT.match(line):
                 violations.append(f"{relative}:{lineno}")
     assert not violations, (
-        "only model/loader.py may import sysmlpy; found:\n" + "\n".join(violations)
+        "only model/parser.py may import sysmlpy; found:\n" + "\n".join(violations)
     )
 
 
@@ -119,3 +124,19 @@ def test_large_module_entries_are_real_and_explained():
         name for name, reason in LARGE_MODULES.items() if not reason.strip() or "\n" in reason
     ]
     assert not unexplained, f"LARGE_MODULES entries need a one-line reason: {unexplained}"
+
+
+def test_parameters_is_imported_by_the_precise_layer():
+    """No flat ``pyssp_sysml2.parameters`` import: a shim would hide the split."""
+    violations = []
+    for root in (PACKAGE, PROJECT / "tests"):
+        for path in sorted(root.rglob("*.py")):
+            for lineno, line in enumerate(
+                path.read_text(encoding="utf-8").splitlines(), start=1
+            ):
+                if PARAMETERS_FLAT_IMPORT.match(line):
+                    violations.append(f"{path.relative_to(PROJECT)}:{lineno}")
+    assert not violations, (
+        "import the precise parameters layer, not the package root:\n"
+        + "\n".join(violations)
+    )

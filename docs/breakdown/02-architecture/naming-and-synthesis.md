@@ -33,8 +33,9 @@ contract.
   name, with `_2` suffix on collision.
 - **Inferred port definitions**: `Port_1`, `Port_2`, and so on.
 
-Collision behavior lives in `parameters/synthesis.py` (`_unique_name`,
-`_interface_name`) and `sysml/generate.py` (`_unique_part_def_name`).
+Collision behavior lives in `parameters/synthesis/` (`_unique_name` in
+`generation.py`, `_interface_name` in `interfaces.py`) and `sysml/generate.py`
+(`_unique_part_def_name`).
 
 ## Source files for synthesized definitions
 

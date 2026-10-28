@@ -13,8 +13,8 @@ from pyssp_sysml2.core.control import (
     is_control_attribute,
 )
 from pyssp_sysml2.metadata.fmu_metadata import update_fmu_metadata_from_component
-from pyssp_sysml2.parameters.synthesis import synthesize_parameter_dialect
-from pyssp_sysml2.parameters import is_parameter_interface
+from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
+from pyssp_sysml2.parameters.dialect.markers import is_parameter_interface
 from pyssp_sysml2.core.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
 from pyssp_sysml2.model import (
     Architecture,

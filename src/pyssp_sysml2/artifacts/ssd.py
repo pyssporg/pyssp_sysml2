@@ -20,16 +20,20 @@ from pyssp_sysml2.metadata.fmu_metadata import (
     component_source,
     fmu_metadata,
 )
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.dialect.composition import (
     MappingSpec,
     has_parameter_dialect,
-    is_parameter_interface,
-    mapping_specs,
+    validate_parameter_dialect,
+)
+from pyssp_sysml2.parameters.dialect.declarations import (
     parameter_declarations,
     parameter_interface,
     parameter_items,
+)
+from pyssp_sysml2.parameters.dialect.mapping import mapping_specs
+from pyssp_sysml2.parameters.dialect.markers import (
+    is_parameter_interface,
     parameter_set_resource,
-    validate_parameter_dialect,
 )
 from pyssp_sysml2.core.paths import ensure_parent_dir
 from pyssp_sysml2.metadata.roles import (

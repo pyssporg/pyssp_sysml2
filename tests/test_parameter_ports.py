@@ -7,11 +7,11 @@ import pytest
 from pyssp_standard import SSD
 
 from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
-from pyssp_sysml2.parameters import (
+from pyssp_sysml2.parameters.dialect.declarations import (
     parameter_declarations,
     parameter_interface,
-    validate_marker_definitions,
 )
+from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.model import load
 from tests.fixture_files import render_fixture

@@ -8,11 +8,11 @@ import pytest
 from pyssp_standard import SSD, SSM, SSV
 
 from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
-from pyssp_sysml2.parameters import (
-    mapping_specs,
+from pyssp_sysml2.parameters.dialect.declarations import (
     parameter_declarations,
     parameter_interface,
 )
+from pyssp_sysml2.parameters.dialect.mapping import mapping_specs
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
 from pyssp_sysml2.artifacts.ssv import generate_parameter_sets

@@ -2,7 +2,7 @@
 id: INFO-013
 type: info
 title: SysML model adapter
-summary: Only loader.py imports sysmlpy; generators use repo-owned dataclasses and a repo-owned exporter.
+summary: Only parser.py imports sysmlpy; variation.py walks the raw tree; generators use repo-owned dataclasses and a repo-owned exporter.
 date: 2026-10-23
 status: current
 ---
@@ -15,11 +15,17 @@ retired in-repo parser `pycps_sysmlv2`; see `EVAL-001`.
 
 ## Design rule
 
-Only `model/loader.py` imports `sysmlpy`. Everything else works against the
-repo-owned dataclasses in `model/model.py`.
+Only `model/parser.py` imports `sysmlpy`, and only `model/variation.py` walks
+the raw parse tree it returns. Everything else works against the repo-owned
+dataclasses in `model/model.py`.
 
-- `loader.py` parses `.sysml` files, from a file or directory with same-package
-  merge, into the repo model. All sysmlpy-specific knowledge lives here.
+- `parser.py` exposes one file's `package` declarations, the raw parse tree,
+  and the grammar-layer walks and value normalizers. All sysmlpy-specific
+  knowledge starts here.
+- `variation.py` turns that raw tree into the per-file `VariationFacts` —
+  variant members and usage-level `variation` flags — that sysmlpy drops.
+- `loader.py` walks a file or directory with same-package merge, merges the
+  packages and the variation facts, and builds the repo-owned model.
 - `model.py` defines the stable model: `Architecture`, `PartDefinition`,
   `PortUsage` with `direction`, `Connection` with endpoints, and `Attribute`
   with Python-native values. A `None` part means the enclosing system's port.
@@ -29,8 +35,8 @@ repo-owned dataclasses in `model/model.py`.
   with sysmlpy releases. Round-trip tests re-load exports through sysmlpy to pin
   the syntax.
 
-If sysmlpy's API changes, only `loader.py` needs fixes. If the parser is swapped
-again, only `loader.py` needs rewriting.
+If sysmlpy's API changes, only `parser.py` needs fixes. If the parser is swapped
+again, `parser.py` and the tree walks in `variation.py` need rewriting.
 
 ## Behavior notes
 
@@ -51,7 +57,7 @@ again, only `loader.py` needs rewriting.
   Parameter tooling requires a fixed length for SSP output.
 - `variant` members, usage-level `variation` flags, and `variation attribute
   def` flags are recovered from the raw parse tree, because sysmlpy drops
-  them; only `loader.py` reads that tree.
+  them; only `variation.py` reads that tree.
 - A variant body (`variant part name { ... }`) is read from the same tree and
   becomes a repo-owned `VariantBody`: its direct part usages, its connections
   (with `part.port` or boundary-port ends), its bindings, and its attribute

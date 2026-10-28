@@ -8,13 +8,13 @@ from pyssp_standard import SSV
 
 from pyssp_sysml2.core.control import is_control_attribute
 from pyssp_sysml2.core.fmi_helpers import format_value
-from pyssp_sysml2.parameters import (
-    fixed_count,
+from pyssp_sysml2.parameters.dialect.composition import validate_parameter_dialect
+from pyssp_sysml2.parameters.dialect.declarations import fixed_count
+from pyssp_sysml2.parameters.dialect.mapping import (
     parameter_sets_for_generation,
     validate_applied_sets,
-    validate_marker_definitions,
-    validate_parameter_dialect,
 )
+from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
 from pyssp_sysml2.core.paths import ensure_directory, ensure_parent_dir
 from pyssp_sysml2.model import Attribute, AttributeDefinition, load
 

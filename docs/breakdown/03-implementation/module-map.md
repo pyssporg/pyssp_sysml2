@@ -17,14 +17,18 @@ src/pyssp_sysml2/
 ├── __init__.py          # canonical public surface: 9 generator functions
 ├── cli.py               # `pyssp` entrypoint
 ├── core/                # control.py, paths.py, fmi_helpers.py
-├── model/               # model.py, loader.py, exporter.py
-├── parameters/          # dialect.py, synthesis.py, variation.py
+├── model/               # model.py, parser.py, variation.py, loader.py, exporter.py
+├── parameters/          # dialect/, synthesis/, variation.py
 ├── metadata/            # fmu_metadata.py, ssp_metadata.py, roles.py
 ├── artifacts/           # ssd.py, ssv.py, ssm.py, ssp.py, fmi.py, study.py
 └── sysml/               # generate.py, sync.py
 ```
 
-Every directory carries an `__init__.py`.
+Every directory carries an `__init__.py`. `parameters/__init__.py`,
+`parameters/dialect/__init__.py`, and `parameters/synthesis/__init__.py` are
+docstring-only: there is no flat re-export surface, and callers import the
+precise layer, e.g.
+`from pyssp_sysml2.parameters.dialect.mapping import mapping_specs`.
 
 ## Public surface
 
@@ -37,19 +41,27 @@ maps `pyssp_sysml2.cli:main`.
 ## Concerns
 
 - `core/`: constants and path/format helpers.
-- `model/`: the SysML v2 language adapter. `loader.py` is the only module that
-  imports `sysmlpy`; `model.py` holds the dataclasses; `exporter.py` emits the
-  text contract. `model/__init__.py` re-exports the dataclasses and
-  `endpoint_text`, and defers `load` so the package import stays parser-free.
-- `parameters/`: the parameter dialect and variation resolution. `dialect.py`
-  resolves interfaces, sets, binds, and mappings; `synthesis.py` builds them
-  from SSD connectors; `variation.py` selects one concrete architecture.
+- `model/`: the SysML v2 language adapter. `parser.py` is the only module that
+  imports `sysmlpy` and the only one that parses a raw ANTLR tree;
+  `variation.py` walks that tree for the variation points sysmlpy drops;
+  `loader.py` walks files, merges packages, and builds the dataclasses;
+  `model.py` holds them; `exporter.py` emits the text contract.
+  `model/__init__.py` re-exports the dataclasses and `endpoint_text`, and
+  defers `load` so the package import stays parser-free.
+- `parameters/`: the parameter dialect, synthesis, and variation resolution.
+  `dialect/` owns the accepted dialect — `markers` the marker vocabulary,
+  `declarations` interfaces and declarations, `composition` binds and applied
+  sets, `mapping` the SSP mapping expansion. `synthesis/` owns building that
+  dialect from SSD inputs — `inputs`, `interfaces`, `application`, and
+  `generation`, which holds `synthesize_parameter_dialect`. `variation.py`
+  selects one concrete architecture.
 - `metadata/`: typed FMU/SSP metadata and role markers.
 - `artifacts/`: SSP/FMI artifact generation, one module per artifact: SSD, SSV,
   SSM, SSP, FMI model descriptions, and the study descriptor.
-- `sysml/`: SysML generation and sync. It uses `model/` and `artifacts/`;
-  `generate.py` emits a minimal model from an SSD and `sync.py` applies SSD
-  wiring edits. `sysml/__init__.py` re-exports both functions.
+- `sysml/`: SysML generation and sync. It uses `model/`, `metadata/`, and
+  `parameters/`; `generate.py` emits a minimal model from an SSD and `sync.py`
+  applies SSD wiring edits. `artifacts/ssd.py` calls `generate.py`, so that
+  edge points into `sysml/`. `sysml/__init__.py` re-exports both functions.
 
 ## Dependencies
 
@@ -60,16 +72,17 @@ maps `pyssp_sysml2.cli:main`.
 
 ## Adapter boundary
 
-`model/` is the anti-corruption layer. Only `model/loader.py` imports
-`sysmlpy`; `tests/test_module_layout.py` enforces that by scanning source text.
+`model/` is the anti-corruption layer. Only `model/parser.py` imports
+`sysmlpy`; only `model/variation.py` reads the raw tree it returns.
+`tests/test_module_layout.py` enforces the import rule by scanning source text.
 Generators use the dataclasses in `model/model.py`, and `model/exporter.py`
 emits the SysML v2 text contract independently of the parser's serializer.
 
 ## Topic to code and tests
 
-- Parameter interfaces, sets, and binds: `parameters/dialect.py`;
+- Parameter interfaces, sets, and binds: `parameters/dialect/`;
   `tests/test_parameter_sets.py`.
-- Parameter synthesis: `parameters/synthesis.py`; `tests/test_generate_sysml.py`,
+- Parameter synthesis: `parameters/synthesis/`; `tests/test_generate_sysml.py`,
   `tests/test_roundtrip.py`.
 - Variation selection: `parameters/variation.py`; `tests/test_variation.py`.
 - SSD, SSV, and SSM generation: `artifacts/ssd.py`, `artifacts/ssv.py`,
