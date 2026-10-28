@@ -45,10 +45,10 @@ Belongs elsewhere:
   SSP, SSD, SSV, SSM, or FMI XML artifact. A Python consumer uses only
   documented public functions; parser internals and schema bindings do not
   cross.
-- **The parser sits behind an adapter.** Only `sysml_model/loader.py` imports
+- **The parser sits behind an adapter.** Only `model/loader.py` imports
   `sysmlpy`. Generators work against the repo-owned dataclasses in
-  `sysml_model/model.py`, and `sysml_model/exporter.py` emits the SysML text
-  contract independently of the parser's serializer.
+  `model/model.py`, and `model/exporter.py` emits the SysML text contract
+  independently of the parser's serializer.
 - **Standard handling is delegated.** SSP/FMI XML objects come from
   `pyssp_standard`; this package does not reimplement them.
 - **Generated SysML is deliberately minimal.** Only SSD information with a

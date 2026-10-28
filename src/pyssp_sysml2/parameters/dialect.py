@@ -22,19 +22,19 @@ from __future__ import annotations
 import warnings
 from dataclasses import dataclass
 
-from pyssp_sysml2.control import FLAT_CONNECTOR_ATTR, is_control_attribute
-from pyssp_sysml2.fmu_metadata import (
+from pyssp_sysml2.core.control import FLAT_CONNECTOR_ATTR, is_control_attribute
+from pyssp_sysml2.metadata.fmu_metadata import (
     FMU_METADATA_ATTR,
     fmu_metadata,
     is_fmu_metadata_definition,
     validate_retired_control_attributes,
 )
-from pyssp_sysml2.roles import is_ssp_model, is_study
-from pyssp_sysml2.ssp_metadata import (
+from pyssp_sysml2.metadata.roles import is_ssp_model, is_study
+from pyssp_sysml2.metadata.ssp_metadata import (
     is_ssp_metadata_definition,
     ssp_metadata,
 )
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

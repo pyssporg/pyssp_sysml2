@@ -13,9 +13,9 @@ from pyssp_standard import (
     System,
 )
 
-from pyssp_sysml2.control import is_control_attribute
-from pyssp_sysml2.fmi_helpers import to_fmi_direction_definition
-from pyssp_sysml2.fmu_metadata import (
+from pyssp_sysml2.core.control import is_control_attribute
+from pyssp_sysml2.core.fmi_helpers import to_fmi_direction_definition
+from pyssp_sysml2.metadata.fmu_metadata import (
     component_implementation,
     component_source,
     fmu_metadata,
@@ -31,20 +31,20 @@ from pyssp_sysml2.parameters import (
     parameter_set_resource,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import ensure_parent_dir
-from pyssp_sysml2.roles import (
+from pyssp_sysml2.core.paths import ensure_parent_dir
+from pyssp_sysml2.metadata.roles import (
     is_study,
     require_resolved_variation,
     validate_role_markers,
 )
-from pyssp_sysml2.ssp_metadata import ssp_metadata
-from pyssp_sysml2.sysml import (
+from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
+from pyssp_sysml2.sysml.generate import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
 )
-from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
-from pyssp_sysml2.variation import (
+from pyssp_sysml2.model import Architecture, PartDefinition, load
+from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve,
 )

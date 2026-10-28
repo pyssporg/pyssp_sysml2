@@ -10,9 +10,9 @@ from pyssp_sysml2.parameters import (
     mapping_specs,
     parameter_bind,
 )
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_sets
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
+from pyssp_sysml2.model import load
 from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 

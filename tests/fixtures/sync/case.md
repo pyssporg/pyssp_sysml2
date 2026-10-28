@@ -18,9 +18,9 @@ what `sync_sysml_from_ssd` wrote after an SSD edit and a reviewer accepted.
 - **Expected:** `part-type-update.sysml`, `add-part.sysml`, and
   `preserved-layout.sysml`, compared as whole documents.
 - **Independent oracle:** the `pyssp_standard` facade parses the SSD the test
-  edits, and `pyssp_sysml2.sysml_model.load` parses both the input and the
+  edits, and `pyssp_sysml2.model.load` parses both the input and the
   synced output; the exporter's documented text contract
-  (`src/pyssp_sysml2/sysml_model/exporter.py`) defines the expected shape.
+  (`src/pyssp_sysml2/model/exporter.py`) defines the expected shape.
 - **Comparison:** exact bytes through `assert_matches_fixture` for the expected
   documents; summary and substring assertions where the test only claims one
   property.

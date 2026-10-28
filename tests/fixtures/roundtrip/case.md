@@ -17,7 +17,7 @@ SSD wiring and parameter bindings, so no whole expected document is committed.
   selected generated substrings before and after the loop.
 - **Independent oracle:** the `pyssp_standard` facade (`SSD`, `SSV`, `SSM`,
   `Component`, `System`) re-parses each generated artifact; the exporter's
-  documented text contract (`src/pyssp_sysml2/sysml_model/exporter.py`) defines
+  documented text contract (`src/pyssp_sysml2/model/exporter.py`) defines
   the generated shape.
 - **Comparison:** structural equality through the facade plus targeted substring
   assertions; `assert_matches_fixture` is not used because this case has no

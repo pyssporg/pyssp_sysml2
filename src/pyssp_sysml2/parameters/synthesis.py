@@ -26,11 +26,11 @@ from typing import Iterable
 
 from pyssp_standard import Component, SSM, SSV, System
 
-from pyssp_sysml2.control import (
+from pyssp_sysml2.core.control import (
     CONTROL_PREFIX,
     is_control_attribute,
 )
-from pyssp_sysml2.fmu_metadata import is_fmu_metadata_definition
+from pyssp_sysml2.metadata.fmu_metadata import is_fmu_metadata_definition
 from pyssp_sysml2.parameters import (
     PARAMETERS_PORT_NAME,
     PARAMETER_INTERFACE_MARKER,
@@ -43,7 +43,7 @@ from pyssp_sysml2.parameters import (
     validate_marker_definitions,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

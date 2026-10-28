@@ -9,14 +9,14 @@ status: current
 
 # SysML model adapter
 
-`pyssp_sysml2.sysml_model` is the anti-corruption layer between the generators
+`pyssp_sysml2.model` is the anti-corruption layer between the generators
 and the external `sysmlpy` parser, pinned `sysmlpy==0.96.4`. It replaced the
 retired in-repo parser `pycps_sysmlv2`; see `EVAL-001`.
 
 ## Design rule
 
-Only `sysml_model/loader.py` imports `sysmlpy`. Everything else works against
-the repo-owned dataclasses in `sysml_model/model.py`.
+Only `model/loader.py` imports `sysmlpy`. Everything else works against the
+repo-owned dataclasses in `model/model.py`.
 
 - `loader.py` parses `.sysml` files, from a file or directory with same-package
   merge, into the repo model. All sysmlpy-specific knowledge lives here.

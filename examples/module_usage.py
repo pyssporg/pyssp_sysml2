@@ -23,11 +23,11 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_sets
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 
 
 def parse_args() -> argparse.Namespace:

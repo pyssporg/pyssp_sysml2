@@ -5,8 +5,8 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD, SSM, SSV
 
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.model import load
 from tests.fixture_files import assert_matches_fixture, fixture_text
 from tests.testhelpers import write_bootstrap_ssd
 

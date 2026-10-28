@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from pyssp_sysml2 import fmi
-from pyssp_sysml2.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts import fmi
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from tests.fixture_files import fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 

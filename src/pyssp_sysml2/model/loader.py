@@ -2,8 +2,8 @@
 
 This is the ONLY module in the repo that imports `sysmlpy` (0.96.4). It
 converts parsed files into the dataclasses of
-:mod:`pyssp_sysml2.sysml_model.model` and merges them into one
-:class:`~pyssp_sysml2.sysml_model.model.Architecture`; every other module
+:mod:`pyssp_sysml2.model.model` and merges them into one
+:class:`~pyssp_sysml2.model.model.Architecture`; every other module
 works against that repo-owned model, never against sysmlpy objects.
 
 sysmlpy quirks compensated here (verified in the migration notes,
@@ -40,7 +40,7 @@ from typing import Iterator
 
 import sysmlpy
 
-from pyssp_sysml2.sysml_model.model import (
+from pyssp_sysml2.model.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

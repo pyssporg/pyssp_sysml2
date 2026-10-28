@@ -5,8 +5,8 @@ package that a test writes with `write_model` and loads; nothing is generated
 from them, so the tree holds inputs only.
 
 - **Conversion:** SysML v2 text → `Architecture` through
-  `pyssp_sysml2.sysml_model.load`, then variation resolution
-  (`pyssp_sysml2.variation.resolve`) and SSD, SSP, or study generation for the
+  `pyssp_sysml2.model.load`, then variation resolution
+  (`pyssp_sysml2.parameters.variation.resolve`) and SSD, SSP, or study generation for the
   selected composition.
 - **Requirement / fault:** a variation point must be captured, resolved by its
   usage path, or refused by name — never flattened silently. The set pins

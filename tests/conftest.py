@@ -48,6 +48,7 @@ FILE_LEVELS: dict[str, tuple[str, ...]] = {
     "test_generate_sysml.py": ("component",),
     "test_golden_artifacts.py": ("component",),
     "test_layering.py": ("static",),
+    "test_module_layout.py": ("static",),
     "test_parameter_bind_orientation.py": ("unit",),
     "test_parameter_ports.py": ("unit",),
     "test_parameter_sets.py": ("component",),

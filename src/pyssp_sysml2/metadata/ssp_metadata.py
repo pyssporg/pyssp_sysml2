@@ -28,8 +28,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pyssp_sysml2.roles import is_ssp_model
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.metadata.roles import is_ssp_model
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from pyssp_sysml2.study import generate_study
-from pyssp_sysml2.sysml_model import load
-from pyssp_sysml2.sysml_model.exporter import export_declared
-from pyssp_sysml2.roles import is_ssp_model, is_study
+from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.model import load
+from pyssp_sysml2.model.exporter import export_declared
+from pyssp_sysml2.metadata.roles import is_ssp_model, is_study
 from tests.fixture_files import fixture_text
 
 
@@ -183,7 +183,7 @@ def test_generate_study_rejects_study_scenario_when_model_owns_one(
 
 
 def test_generate_ssd_emits_model_owned_parameter_binding(tmp_path: Path) -> None:
-    from pyssp_sysml2.ssd import generate_ssd
+    from pyssp_sysml2.artifacts.ssd import generate_ssd
 
     architecture = tmp_path / "model_owned.sysml"
     architecture.write_text(MODEL_OWNED_SCENARIO_ARCHITECTURE, encoding="utf-8")
@@ -197,7 +197,7 @@ def test_generate_ssd_emits_model_owned_parameter_binding(tmp_path: Path) -> Non
 
 
 def test_generate_ssp_rejects_study(tmp_path: Path) -> None:
-    from pyssp_sysml2.ssp import generate_ssp
+    from pyssp_sysml2.artifacts.ssp import generate_ssp
 
     architecture = _write_architecture(tmp_path)
     with pytest.raises(ValueError, match="Study"):

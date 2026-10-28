@@ -5,15 +5,15 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD
 
-from pyssp_sysml2.fmu_metadata import (
+from pyssp_sysml2.metadata.fmu_metadata import (
     FmuMetadata,
     component_source,
     fmu_metadata,
 )
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.sync import sync_sysml_from_ssd
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.model import load
 from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 

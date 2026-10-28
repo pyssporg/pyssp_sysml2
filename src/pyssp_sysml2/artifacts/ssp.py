@@ -31,25 +31,25 @@ from pyssp_standard import (
     validate_component_fmu,
 )
 
-from pyssp_sysml2.fmi_helpers import fmu_filename
-from pyssp_sysml2.fmu_metadata import fmu_metadata
+from pyssp_sysml2.core.fmi_helpers import fmu_filename
+from pyssp_sysml2.metadata.fmu_metadata import fmu_metadata
 from pyssp_sysml2.parameters import (
     component_definitions,
     parameter_set_resource,
     parameter_sets_for_generation,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import ensure_parent_dir
-from pyssp_sysml2.roles import (
+from pyssp_sysml2.core.paths import ensure_parent_dir
+from pyssp_sysml2.metadata.roles import (
     is_study,
     require_resolved_variation,
     validate_role_markers,
 )
-from pyssp_sysml2.ssd import build_ssd
-from pyssp_sysml2.ssp_metadata import ssp_metadata
-from pyssp_sysml2.ssv import write_parameter_set
-from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
-from pyssp_sysml2.variation import (
+from pyssp_sysml2.artifacts.ssd import build_ssd
+from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
+from pyssp_sysml2.artifacts.ssv import write_parameter_set
+from pyssp_sysml2.model import Architecture, PartDefinition, load
+from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve,
 )
@@ -256,7 +256,7 @@ def generate_ssp(
     flag, a missing declared source is an error.
 
     ``selections`` resolves variation points before generation; see
-    :func:`pyssp_sysml2.variation.resolve`. A non-empty mapping is also
+    :func:`pyssp_sysml2.parameters.variation.resolve`. A non-empty mapping is also
     recorded in the archive at ``extra/org.pyssp/selection.json``.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)

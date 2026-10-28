@@ -1,7 +1,7 @@
 """Stable in-memory SysML v2 architecture model for pyssp_sysml2.
 
 This module is the repo-owned contract between the sysmlpy-backed loader
-(`pyssp_sysml2.sysml_model.loader`) and every generator
+(`pyssp_sysml2.model.loader`) and every generator
 (`ssd.py`, `ssv.py`, `fmi.py`, `sysml.py`, `sync.py`).
 
 Design rule: nothing outside `loader.py` may import `sysmlpy`. All repo code
@@ -217,7 +217,7 @@ class VariantBody:
     carries its own subparts, connections, attribute usages, and the bindings
     it would apply. On selection, attributes and bindings are merged into the
     definition that owns the variation usage, so ``values.height``-style
-    references resolve there; see :func:`pyssp_sysml2.variation.resolve`.
+    references resolve there; see :func:`pyssp_sysml2.parameters.variation.resolve`.
 
     ``connections`` is keyed by :attr:`Connection.key`, ``parts`` and
     ``attributes`` by name, all in declaration order.
@@ -411,6 +411,6 @@ class Architecture:
 
     def export_declared(self) -> dict[str, str]:
         """Per-source-file SysML v2 text; see ``exporter.py`` for the format."""
-        from pyssp_sysml2.sysml_model.exporter import export_declared
+        from pyssp_sysml2.model.exporter import export_declared
 
         return export_declared(self)

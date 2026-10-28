@@ -8,13 +8,13 @@ import pytest
 from pyssp_standard import SSD, SSP, SSV
 
 from pyssp_sysml2.cli import _parse_selections, main
-from pyssp_sysml2.ssd import build_ssd, generate_ssd
-from pyssp_sysml2.ssp import generate_ssp
-from pyssp_sysml2.study import generate_study
-from pyssp_sysml2.sync import sync_sysml_from_ssd
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sysml_model import load
-from pyssp_sysml2.variation import has_variation, resolve
+from pyssp_sysml2.artifacts.ssd import build_ssd, generate_ssd
+from pyssp_sysml2.artifacts.ssp import generate_ssp
+from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.model import load
+from pyssp_sysml2.parameters.variation import has_variation, resolve
 from tests.fixture_files import fixture_text
 from tests.testhelpers import write_bootstrap_ssd, write_model
 

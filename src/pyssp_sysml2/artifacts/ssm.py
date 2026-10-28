@@ -7,8 +7,8 @@ from pathlib import Path
 from pyssp_standard import SSM
 
 from pyssp_sysml2.parameters import mapping_specs
-from pyssp_sysml2.paths import ensure_directory
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.core.paths import ensure_directory
+from pyssp_sysml2.model import load
 
 
 def generate_parameter_mappings(

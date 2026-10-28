@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssp import generate_ssp
-from pyssp_sysml2.ssp_metadata import ssp_metadata
-from pyssp_sysml2.study import generate_study
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssp import generate_ssp
+from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
+from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.model import load
 
 from tests.fixture_files import fixture_text
 

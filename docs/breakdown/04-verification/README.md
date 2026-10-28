@@ -17,5 +17,5 @@ checks that run before a generator.
 - **INFO-017** [Validation of FMU metadata and composition](validation-metadata-composition.md) — Metadata must be typed, unique, leaf-only, and use known string members; part hierarchies must resolve and stay acyclic.
 - **INFO-018** [Validation of generation, sync, and packaging](validation-generation-sync-packaging.md) — Set selection, referenced SSV/SSM files, connector mappings, boundary ports, and FMU packaging each have explicit diagnostics.
 - **INFO-019** [Warnings and pre-flight checklist](warnings-and-preflight.md) — Warnings do not stop generation; the checklist catches dialect mistakes before a generator runs.
-- **TEST-001** [Test strategy](test-strategy.md) — Small behavior-focused tests with test-local SysML snippets and no shared fixtures by default.
+- **TEST-001** [Test strategy](test-strategy.md) — Small behavior-focused tests whose SysML documents are committed files, with the per-test case kept test-local.
 <!-- pb:index:end -->

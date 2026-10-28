@@ -32,7 +32,7 @@ architecture or an SSD, and syncs SSD wiring edits back into SysML. The
 interchange artifact (SSD/SSV/SSM/SSP/FMI XML) is the library boundary; the CLI
 is the public surface for other projects.
 
-- SysML parsing sits behind the adapter in `src/pyssp_sysml2/sysml_model/`.
+- SysML parsing sits behind the adapter in `src/pyssp_sysml2/model/`.
 - Current state, intent, and modeling conventions live in `docs/breakdown/`; the
   code is the source of truth when the two disagree.
 - This is also a test and experiment repo: keep it easy to extend.
@@ -44,9 +44,9 @@ is the public surface for other projects.
   documented public functions; parser internals and schema bindings do not
   cross.
 - **SysML parsing stays in the adapter.** Only
-  `src/pyssp_sysml2/sysml_model/loader.py` imports `sysmlpy`; generators use the
-  repo-owned dataclasses in `src/pyssp_sysml2/sysml_model/model.py`, and
-  `src/pyssp_sysml2/sysml_model/exporter.py` emits the SysML text contract.
+  `src/pyssp_sysml2/model/loader.py` imports `sysmlpy`; generators use the
+  repo-owned dataclasses in `src/pyssp_sysml2/model/model.py`, and
+  `src/pyssp_sysml2/model/exporter.py` emits the SysML text contract.
 - **SSP/FMI XML object handling belongs to `pyssp_standard`.** Do not duplicate
   it.
 - **Generated SysML is deliberately minimal.** Only SSD information with a

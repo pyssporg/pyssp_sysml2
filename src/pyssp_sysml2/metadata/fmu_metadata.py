@@ -32,9 +32,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pyssp_sysml2.control import RETIRED_CONTROL_ATTRS
-from pyssp_sysml2.fmi_helpers import fmu_resource_path
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.core.control import RETIRED_CONTROL_ATTRS
+from pyssp_sysml2.core.fmi_helpers import fmu_resource_path
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

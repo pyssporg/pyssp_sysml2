@@ -49,8 +49,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pyssp_sysml2.parameters import is_parameter_interface
-from pyssp_sysml2.roles import is_study
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.metadata.roles import is_study
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

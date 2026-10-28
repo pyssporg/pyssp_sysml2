@@ -6,18 +6,18 @@ from typing import Dict, Iterable, Mapping, Tuple
 
 from pyssp_standard import Component, System
 
-from pyssp_sysml2.fmu_metadata import (
+from pyssp_sysml2.metadata.fmu_metadata import (
     component_source,
     fmu_metadata,
     update_fmu_metadata_from_component,
 )
-from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
+from pyssp_sysml2.parameters.synthesis import synthesize_parameter_dialect
 from pyssp_sysml2.parameters import (
     has_parameter_dialect,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import ensure_parent_dir
-from pyssp_sysml2.sysml import (
+from pyssp_sysml2.core.paths import ensure_parent_dir
+from pyssp_sysml2.sysml.generate import (
     SCALAR_ATTRIBUTE_NAME,
     _ensure_system_part_def,
     _merge_type_names,
@@ -28,7 +28,7 @@ from pyssp_sysml2.sysml import (
     split_connector,
     split_connector_or_scalar,
 )
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     Connection,
@@ -39,7 +39,7 @@ from pyssp_sysml2.sysml_model import (
     endpoint_text,
     load,
 )
-from pyssp_sysml2.variation import refuse_variation_erasure
+from pyssp_sysml2.parameters.variation import refuse_variation_erasure
 
 INFERRED_PARTS_FILENAME = "inferred_external_parts.sysml"
 

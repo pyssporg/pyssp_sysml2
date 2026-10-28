@@ -6,14 +6,14 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD
 
-from pyssp_sysml2.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.parameters import (
     parameter_declarations,
     parameter_interface,
     validate_marker_definitions,
 )
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.sysml_model import load
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.model import load
 from tests.fixture_files import render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 

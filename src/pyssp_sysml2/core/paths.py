@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-PACKAGE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parent.parent
 SRC_DIR = PACKAGE_DIR.parent
 REPO_ROOT = SRC_DIR.parent
 

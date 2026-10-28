@@ -8,8 +8,8 @@ import pytest
 from pyssp_standard import FMU, SSP, SSV
 
 from pyssp_sysml2.cli import main
-from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.ssp import generate_ssp
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.ssp import generate_ssp
 from tests.fixture_files import fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 

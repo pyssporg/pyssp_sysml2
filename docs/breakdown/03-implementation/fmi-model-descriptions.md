@@ -31,7 +31,7 @@ Behavior:
 - `fmiVersion` is `"2.0"` and every GUID derives from one fixed namespace, so
   changing either is an artifact-contract change;
 - `generationDateAndTime` is the current UTC time by default, injectable with
-  `generation_time=` (or by replacing `pyssp_sysml2.fmi.utc_now`), so a fixed
+  `generation_time=` (or by replacing `pyssp_sysml2.artifacts.fmi.utc_now`), so a fixed
   clock makes two runs byte-identical;
 - nothing is written outside `output_dir`: generation never creates files next
   to the package.

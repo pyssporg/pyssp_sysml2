@@ -6,17 +6,17 @@ from typing import Iterable
 
 from pyssp_standard import Component, SSD, System
 
-from pyssp_sysml2.control import (
+from pyssp_sysml2.core.control import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
     is_control_attribute,
 )
-from pyssp_sysml2.fmu_metadata import update_fmu_metadata_from_component
-from pyssp_sysml2.parameter_synthesis import synthesize_parameter_dialect
+from pyssp_sysml2.metadata.fmu_metadata import update_fmu_metadata_from_component
+from pyssp_sysml2.parameters.synthesis import synthesize_parameter_dialect
 from pyssp_sysml2.parameters import is_parameter_interface
-from pyssp_sysml2.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.core.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     Connection,
@@ -27,7 +27,7 @@ from pyssp_sysml2.sysml_model import (
     endpoint_text,
     load,
 )
-from pyssp_sysml2.variation import refuse_variation_erasure
+from pyssp_sysml2.parameters.variation import refuse_variation_erasure
 
 SCALAR_ATTRIBUTE_NAME = "value"
 

@@ -466,12 +466,12 @@ SSV values stay set values and are not promoted to interface defaults.
 ```python
 from pathlib import Path
 
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssv import generate_parameter_sets
-from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.ssp import generate_ssp
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.ssp import generate_ssp
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 
 architecture = Path("examples/aircraft_subset")
 composition = "AircraftComposition"

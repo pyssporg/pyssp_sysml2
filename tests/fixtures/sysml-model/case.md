@@ -2,7 +2,7 @@
 
 Input documents for `tests/test_sysml_model.py`. Every file is a complete SysML
 v2 package that a test writes with `write_model` and loads through
-`pyssp_sysml2.sysml_model.load`; nothing here is an expected artifact.
+`pyssp_sysml2.model.load`; nothing here is an expected artifact.
 
 - **Conversion:** SysML v2 text → `Architecture`, and `Architecture` →
   SysML text through `export_declared()`, which the round-trip case reloads.

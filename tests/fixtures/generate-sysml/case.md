@@ -17,9 +17,9 @@ what the exporter produced and a reviewer accepted, not prose written by hand.
 - **Expected:** the committed `*.sysml` files listed under *Artifacts*; each is
   compared as a whole document.
 - **Independent oracle:** the `pyssp_standard` facade re-parses the SSV inputs
-  the test feeds in, and `pyssp_sysml2.sysml_model.load` re-parses each generated
+  the test feeds in, and `pyssp_sysml2.model.load` re-parses each generated
   architecture; the exporter's documented text contract
-  (`src/pyssp_sysml2/sysml_model/exporter.py`) defines the expected shape. The
+  (`src/pyssp_sysml2/model/exporter.py`) defines the expected shape. The
   writer is this repository, so the committed file records an accepted output
   rather than an independently produced one.
 - **Comparison:** exact bytes against the committed file, via

@@ -25,18 +25,18 @@ from pyssp_sysml2.parameters import (
     validate_marker_definitions,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import ensure_directory
-from pyssp_sysml2.roles import (
+from pyssp_sysml2.core.paths import ensure_directory
+from pyssp_sysml2.metadata.roles import (
     is_ssp_model,
     is_study,
     model_usage,
     read_experiment,
     validate_role_markers,
 )
-from pyssp_sysml2.ssp_metadata import ssp_metadata
-from pyssp_sysml2.ssv import write_parameter_set
-from pyssp_sysml2.sysml_model import load
-from pyssp_sysml2.variation import resolve
+from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
+from pyssp_sysml2.artifacts.ssv import write_parameter_set
+from pyssp_sysml2.model import load
+from pyssp_sysml2.parameters.variation import resolve
 
 
 @dataclass(frozen=True)
@@ -66,7 +66,7 @@ def generate_study(
     """Write ``study.json`` and, for one applied set, its SSV and SSM.
 
     ``selections`` resolves variation points in the study before generation;
-    see :func:`pyssp_sysml2.variation.resolve`. A study that carries an
+    see :func:`pyssp_sysml2.parameters.variation.resolve`. A study that carries an
     unselected variation point fails instead of emitting a flat scenario.
     """
     architecture = load(architecture_path)

@@ -8,8 +8,8 @@ from typing import Optional
 from uuid import NAMESPACE_URL, uuid5
 import xml.etree.ElementTree as ET
 
-from pyssp_sysml2.control import is_control_attribute
-from pyssp_sysml2.fmi_helpers import format_value, map_fmi_type
+from pyssp_sysml2.core.control import is_control_attribute
+from pyssp_sysml2.core.fmi_helpers import format_value, map_fmi_type
 from pyssp_sysml2.parameters import (
     component_definitions,
     is_parameter_interface,
@@ -17,8 +17,8 @@ from pyssp_sysml2.parameters import (
     parameter_items,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.paths import ensure_directory
-from pyssp_sysml2.sysml_model import Architecture, PartDefinition, load
+from pyssp_sysml2.core.paths import ensure_directory
+from pyssp_sysml2.model import Architecture, PartDefinition, load
 
 CO_SIMULATION_ATTRS = {
     "modelIdentifier": "",

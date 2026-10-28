@@ -1,6 +1,6 @@
 """Loader tests: sysmlpy → repo-owned model, and the export round trip.
 
-Everything here goes through the public ``pyssp_sysml2.sysml_model`` surface
+Everything here goes through the public ``pyssp_sysml2.model`` surface
 (``load`` + dataclasses) so the tests stay insulated from sysmlpy, exactly
 like the rest of the repo.
 """
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from pyssp_sysml2.sysml_model import Architecture, load
+from pyssp_sysml2.model import Architecture, load
 from tests.fixture_files import fixture_text
 from tests.testhelpers import write_model
 

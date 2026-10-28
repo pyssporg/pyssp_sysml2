@@ -11,7 +11,7 @@ Anti-corruption layer over the external `sysmlpy` parser:
 If sysmlpy's API changes, only ``loader.py`` needs fixes.
 """
 
-from pyssp_sysml2.sysml_model.model import (
+from pyssp_sysml2.model.model import (
     Architecture,
     Attribute,
     AttributeDefinition,
@@ -50,8 +50,8 @@ __all__ = [
 def load(path) -> Architecture:
     """Load a ``.sysml`` file or directory into an :class:`Architecture`.
 
-    Implemented in :mod:`pyssp_sysml2.sysml_model.loader`.
+    Implemented in :mod:`pyssp_sysml2.model.loader`.
     """
-    from pyssp_sysml2.sysml_model.loader import load as _load
+    from pyssp_sysml2.model.loader import load as _load
 
     return _load(path)

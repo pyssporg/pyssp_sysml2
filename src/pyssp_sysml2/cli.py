@@ -6,19 +6,19 @@ import argparse
 from pathlib import Path
 from typing import Optional
 
-from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.paths import (
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.core.paths import (
     DEFAULT_ARCH_PATH,
     DEFAULT_COMPOSITION_NAME,
     GENERATED_DIR,
 )
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssm import generate_parameter_mappings
-from pyssp_sysml2.ssp import DEFAULT_PARAMETER_SET_PREFIX, generate_ssp
-from pyssp_sysml2.ssv import generate_parameter_sets
-from pyssp_sysml2.study import generate_study
-from pyssp_sysml2.sysml import generate_sysml_from_ssd
-from pyssp_sysml2.sync import sync_sysml_from_ssd
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
+from pyssp_sysml2.artifacts.ssp import DEFAULT_PARAMETER_SET_PREFIX, generate_ssp
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
+from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
+from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 
 
 def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:

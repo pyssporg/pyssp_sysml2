@@ -24,10 +24,10 @@ from pathlib import Path
 import pytest
 from pyssp_standard import ModelDescription, SSD, SSM, SSV
 
-from pyssp_sysml2.fmi import generate_model_descriptions
-from pyssp_sysml2.ssd import generate_ssd
-from pyssp_sysml2.ssm import generate_parameter_mappings
-from pyssp_sysml2.ssv import generate_parameter_sets
+from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
 
 GOLDEN_ROOT = Path(__file__).resolve().parent / "golden"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

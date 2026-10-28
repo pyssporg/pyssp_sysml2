@@ -59,7 +59,7 @@ parameter values; it references an SSV and optionally inlines a mapping.
 - A body's attribute usages are merged into the owning definition when its
   variant is selected, so references such as `values.height` resolve there.
 - A body's bindings are merged into the owning definition's `bindings` in
-  declaration order; `parameters.py` then consumes them through the ordinary
+  declaration order; `parameters/dialect.py` then consumes them through the ordinary
   applied-set path.
 - Body connections that touch a parameter-interface port are kept on the
   captured body but are not emitted as SSD connections; parameters are applied

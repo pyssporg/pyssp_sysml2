@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from pyssp_sysml2.sysml_model import (
+from pyssp_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,

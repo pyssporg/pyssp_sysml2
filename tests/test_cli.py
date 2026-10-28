@@ -7,7 +7,7 @@ import pytest
 from pyssp_standard import SSD
 
 from pyssp_sysml2.cli import main
-from pyssp_sysml2.ssd import generate_ssd
+from pyssp_sysml2.artifacts.ssd import generate_ssd
 from tests.fixture_files import render_fixture
 from tests.test_generate_ssd import _ssd_summary
 from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
