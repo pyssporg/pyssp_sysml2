@@ -1,6 +1,6 @@
-package LegacyStudy {
+package LegacyAnalysis {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   attribute def Experiment {
     attribute startTime : Real;
@@ -16,7 +16,7 @@ package LegacyStudy {
 
   part def LegacyModel :> SspModel;
 
-  part def baseline :> Study {
+  part def baseline :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
     part sut : LegacyModel;
   }

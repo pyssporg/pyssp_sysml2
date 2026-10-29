@@ -1,4 +1,4 @@
-package StudyDemo {
+package AnalysisDemo {
   attribute def NominalScenario :> ParameterSet {
     attribute inputScale = 1.0;
     attribute gain = 1.0;
@@ -25,7 +25,7 @@ package StudyDemo {
     attribute tolerance = 0.0000001;
   }
 
-  part def test_baseline :> Study {
+  part def test_baseline :> Analysis {
     doc /* Nominal actuator over a long horizon. */
     attribute experiment_baseline : BaselineExperiment;
     attribute scenario : NominalScenario;
@@ -36,7 +36,7 @@ package StudyDemo {
     bind sut.axis.plant.parameters.timeConstant = scenario.timeConstant;
   }
 
-  part def test_aggressive :> Study {
+  part def test_aggressive :> Analysis {
     doc /* Higher input scale and gain over a short horizon. */
     attribute experiment_aggressive : FastExperiment;
     attribute scenario : AggressiveScenario;

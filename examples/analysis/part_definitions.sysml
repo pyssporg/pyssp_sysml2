@@ -1,6 +1,6 @@
-package StudyDemo {
+package AnalysisDemo {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   port def ParameterInterface;
   attribute def ParameterSet;

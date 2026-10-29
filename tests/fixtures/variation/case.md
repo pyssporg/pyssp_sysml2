@@ -6,7 +6,7 @@ from them, so the tree holds inputs only.
 
 - **Conversion:** SysML v2 text → `Architecture` through
   `pyssp_sysml2.model.load`, then variation resolution
-  (`pyssp_sysml2.parameters.variation.resolve`) and SSD, SSP, or study generation for the
+  (`pyssp_sysml2.parameters.variation.resolve`) and SSD, SSP, or analysis generation for the
   selected composition.
 - **Requirement / fault:** a variation point must be captured, resolved by its
   usage path, or refused by name — never flattened silently. The set pins
@@ -15,7 +15,7 @@ from them, so the tree holds inputs only.
   bare key, a body port the point does not declare, three levels of nesting,
   and a body attribute carrying a value it cannot keep.
 - **Level:** unit and component. Most tests read the resolved model; the
-  example cases generate an SSD, an SSP, or a study.
+  example cases generate an SSD, an SSP, or an analysis.
 - **Input:** the files listed below. `definition.sysml`,
   `definition-fmu.sysml`, `usage.sysml`, `body.sysml`, `nested.sysml`,
   `ambiguous-names.sysml`, `no-variation.sysml`,
@@ -64,11 +64,11 @@ Inputs, relative to this directory. None is generated.
 | `three-levels.sysml` | variation nested three levels deep, refused |
 | `valued-body-attribute.sysml` | variant body attribute with a value, refused |
 | `attribute-variation.sysml` | `variation attribute def` marker |
-| `attribute-set-variation.sysml` | attribute variation over parameter sets, resolved through a study |
+| `attribute-set-variation.sysml` | attribute variation over parameter sets, resolved through an analysis |
 | `untyped-attribute-variant.sysml` | attribute variant without a resolvable type |
 | `usage-level.sysml` | example 03: usage-level point, SSD name stays `source` |
 | `connection.sysml` | example 08: two path variants with different decompositions |
-| `parameter-binding.sysml` | example 09: variation over parameter bindings inside a study |
+| `parameter-binding.sysml` | example 09: variation over parameter bindings inside an analysis |
 | `nested-body.sysml` | example 10: variation point nested in a variant body |
 
 ## What this case proves

@@ -20,7 +20,7 @@ src/pyssp_sysml2/
 ├── model/               # model.py, parser.py, variation.py, loader.py, exporter.py
 ├── parameters/          # dialect/, synthesis/, variation.py
 ├── metadata/            # fmu_metadata.py, ssp_metadata.py, roles.py
-├── artifacts/           # ssd.py, ssv.py, ssm.py, ssp.py, fmi.py, study.py
+├── artifacts/           # ssd.py, ssv.py, ssm.py, ssp.py, fmi.py, analysis.py
 └── sysml/               # generate.py, sync.py
 ```
 
@@ -34,7 +34,7 @@ precise layer, e.g.
 
 `__init__.py` is canonical. `__all__` names exactly `build_ssd`, `generate_ssd`,
 `generate_ssp`, `generate_parameter_sets`, `generate_parameter_mappings`,
-`generate_study`, `generate_model_descriptions`, `generate_sysml_from_ssd`,
+`generate_analysis`, `generate_model_descriptions`, `generate_sysml_from_ssd`,
 and `sync_sysml_from_ssd`. `cli.py` stays at the root because `pyproject.toml`
 maps `pyssp_sysml2.cli:main`.
 
@@ -57,7 +57,7 @@ maps `pyssp_sysml2.cli:main`.
   selects one concrete architecture.
 - `metadata/`: typed FMU/SSP metadata and role markers.
 - `artifacts/`: SSP/FMI artifact generation, one module per artifact: SSD, SSV,
-  SSM, SSP, FMI model descriptions, and the study descriptor.
+  SSM, SSP, FMI model descriptions, and the analysis descriptor.
 - `sysml/`: SysML generation and sync. It uses `model/`, `metadata/`, and
   `parameters/`; `generate.py` emits a minimal model from an SSD and `sync.py`
   applies SSD wiring edits. `artifacts/ssd.py` calls `generate.py`, so that
@@ -91,7 +91,7 @@ emits the SysML v2 text contract independently of the parser's serializer.
   `tests/test_roundtrip.py`.
 - FMU metadata: `metadata/fmu_metadata.py`; `tests/test_fmu_metadata.py`.
 - SSP packaging: `artifacts/ssp.py`; `tests/test_generate_ssp.py`.
-- Study descriptors: `artifacts/study.py`; `tests/test_roles_study.py`,
+- Analysis descriptors: `artifacts/analysis.py`; `tests/test_roles_analysis.py`,
   `tests/test_variation.py`.
 - SSD-to-SysML synthesis: `sysml/generate.py`; `tests/test_generate_sysml.py`.
 - Sync: `sysml/sync.py`; `tests/test_sync.py`.

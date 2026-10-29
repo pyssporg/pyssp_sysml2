@@ -37,7 +37,7 @@ from pyssp_sysml2.parameters.dialect.markers import (
 )
 from pyssp_sysml2.core.paths import ensure_parent_dir
 from pyssp_sysml2.metadata.roles import (
-    is_study,
+    is_analysis,
     require_resolved_variation,
     validate_role_markers,
 )
@@ -286,15 +286,15 @@ def build_ssd(
     parameter_set_prefix: str = "parameter_sets",
 ) -> None:
     validate_role_markers(architecture)
-    if is_study(architecture, system):
+    if is_analysis(architecture, system):
         raise ValueError(
-            f"Composition '{system.name}' is a Study; studies generate scenario "
+            f"Composition '{system.name}' is an Analysis; analyses generate scenario "
             "data and are never exported as an SSD or SSP"
         )
     if ssp_metadata(architecture, system) is not None:
         raise ValueError(
             f"Composition '{system.name}' selects an external SSP source via "
-            "'ssp_meta'; it is a study-only boundary and cannot be exported"
+            "'ssp_meta'; it is an analysis-only boundary and cannot be exported"
         )
     top = ssd.new_system(system.name)
     ssd.rename(system.name)

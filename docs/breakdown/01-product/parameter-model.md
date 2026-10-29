@@ -13,7 +13,7 @@ A simulation component has two parameter concerns:
 
 - **Interface** describes what parameters exist: names, types, fixed lengths,
   optional defaults.
-- **Values** describe which values a particular study uses: nominal mission,
+- **Values** describe which values a particular analysis uses: nominal mission,
   aggressive mission, trimmed configuration.
 
 The dialect separates them so a component definition stays stable while

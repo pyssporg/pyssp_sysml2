@@ -1,6 +1,6 @@
 package AttributeSetVariation {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   port def ParameterInterface;
   attribute def ParameterSet;
@@ -69,7 +69,7 @@ package AttributeSetVariation {
     part gain : Gain;
   }
 
-  part def test_selected_scenario :> Study {
+  part def test_selected_scenario :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
     attribute scenario : ScenarioChoice;
     part sut : System;

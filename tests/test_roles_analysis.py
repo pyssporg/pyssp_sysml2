@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.model import load
 from pyssp_sysml2.model.exporter import export_declared
-from pyssp_sysml2.metadata.roles import is_ssp_model, is_study
+from pyssp_sysml2.metadata.roles import is_ssp_model, is_analysis
 from tests.fixture_files import fixture_text
 
 
-ARCHITECTURE = fixture_text("roles-study/architecture.sysml")
+ARCHITECTURE = fixture_text("roles-analysis/architecture.sysml")
 
 
 def _write_architecture(tmp_path: Path) -> Path:
@@ -26,26 +26,26 @@ def test_part_definition_specialization_roundtrips(tmp_path: Path) -> None:
     architecture = load(path)
 
     assert architecture.get_part_def("System").specializes == ("SspModel",)
-    assert architecture.get_part_def("test_baseline").specializes == ("Study",)
+    assert architecture.get_part_def("test_baseline").specializes == ("Analysis",)
     assert is_ssp_model(architecture, architecture.get_part_def("System"))
-    assert is_study(architecture, architecture.get_part_def("test_baseline"))
+    assert is_analysis(architecture, architecture.get_part_def("test_baseline"))
 
     exported = export_declared(architecture)["architecture.sysml"]
     assert "part def System :> SspModel {" in exported
-    assert "part def test_baseline :> Study {" in exported
+    assert "part def test_baseline :> Analysis {" in exported
 
     roundtrip = tmp_path / "roundtrip"
     roundtrip.mkdir()
     (roundtrip / "architecture.sysml").write_text(exported, encoding="utf-8")
     reloaded = load(roundtrip)
     assert reloaded.get_part_def("System").specializes == ("SspModel",)
-    assert reloaded.get_part_def("test_baseline").specializes == ("Study",)
+    assert reloaded.get_part_def("test_baseline").specializes == ("Analysis",)
 
 
-def test_generate_study_writes_scenario_and_descriptor(tmp_path: Path) -> None:
+def test_generate_analysis_writes_scenario_and_descriptor(tmp_path: Path) -> None:
     architecture = _write_architecture(tmp_path)
-    output = tmp_path / "study"
-    artifacts = generate_study(
+    output = tmp_path / "analysis"
+    artifacts = generate_analysis(
         architecture,
         output,
         "test_baseline",
@@ -59,7 +59,7 @@ def test_generate_study_writes_scenario_and_descriptor(tmp_path: Path) -> None:
     assert not any(output.glob("*.ssp"))
 
     descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
-    assert descriptor["study"] == "test_baseline"
+    assert descriptor["analysis"] == "test_baseline"
     assert descriptor["composition"] == "System"
     assert descriptor["sut"] == "sut"
     assert descriptor["scenario"]["ssv"] == artifacts.ssv.name
@@ -70,14 +70,14 @@ def test_generate_study_writes_scenario_and_descriptor(tmp_path: Path) -> None:
     assert 'target="sut.' not in ssm
 
 
-EXPERIMENT_ONLY_ARCHITECTURE = fixture_text("roles-study/experiment-only.sysml")
+EXPERIMENT_ONLY_ARCHITECTURE = fixture_text("roles-analysis/experiment-only.sysml")
 
 
-def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) -> None:
+def test_generate_analysis_without_scenario_writes_experiment_only(tmp_path: Path) -> None:
     architecture = tmp_path / "legacy.sysml"
     architecture.write_text(EXPERIMENT_ONLY_ARCHITECTURE, encoding="utf-8")
-    output = tmp_path / "study"
-    artifacts = generate_study(
+    output = tmp_path / "analysis"
+    artifacts = generate_analysis(
         architecture,
         output,
         "baseline",
@@ -96,7 +96,7 @@ def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) 
     assert descriptor["model"] == "legacy_model"
     assert descriptor["composition"] == "LegacyModel"
     assert descriptor["sut"] == "sut"
-    assert descriptor["study"] == "baseline"
+    assert descriptor["analysis"] == "baseline"
     assert descriptor["experiment"] == {
         "name": "experiment_baseline",
         "start_time": 0.0,
@@ -105,18 +105,18 @@ def test_generate_study_without_scenario_writes_experiment_only(tmp_path: Path) 
     }
 
 
-def test_generate_study_writes_study_doc_as_description(tmp_path: Path) -> None:
+def test_generate_analysis_writes_analysis_doc_as_description(tmp_path: Path) -> None:
     architecture = tmp_path / "described.sysml"
     architecture.write_text(
         EXPERIMENT_ONLY_ARCHITECTURE.replace(
-            "  part def baseline :> Study {",
-            "  part def baseline :> Study {\n"
+            "  part def baseline :> Analysis {",
+            "  part def baseline :> Analysis {\n"
             "    doc /* Baseline body over the default window. */",
         ),
         encoding="utf-8",
     )
-    output = tmp_path / "study"
-    artifacts = generate_study(
+    output = tmp_path / "analysis"
+    artifacts = generate_analysis(
         architecture,
         output,
         "baseline",
@@ -128,18 +128,18 @@ def test_generate_study_writes_study_doc_as_description(tmp_path: Path) -> None:
 
 
 MODEL_OWNED_SCENARIO_ARCHITECTURE = fixture_text(
-    "roles-study/model-owned-scenario.sysml"
+    "roles-analysis/model-owned-scenario.sysml"
 )
 
 
-def test_generate_study_with_model_owned_scenario_writes_experiment_only(
+def test_generate_analysis_with_model_owned_scenario_writes_experiment_only(
     tmp_path: Path,
 ) -> None:
     architecture = tmp_path / "model_owned.sysml"
     architecture.write_text(MODEL_OWNED_SCENARIO_ARCHITECTURE, encoding="utf-8")
-    output = tmp_path / "study"
+    output = tmp_path / "analysis"
 
-    artifacts = generate_study(
+    artifacts = generate_analysis(
         architecture,
         output,
         "baseline",
@@ -153,17 +153,17 @@ def test_generate_study_with_model_owned_scenario_writes_experiment_only(
     assert "scenario" not in descriptor
 
 
-def test_generate_study_rejects_study_scenario_when_model_owns_one(
+def test_generate_analysis_rejects_analysis_scenario_when_model_owns_one(
     tmp_path: Path,
 ) -> None:
     architecture = tmp_path / "conflict.sysml"
     architecture.write_text(
         MODEL_OWNED_SCENARIO_ARCHITECTURE.replace(
-            """  part def baseline :> Study {
+            """  part def baseline :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
     part sut : System;
   }""",
-            """  part def baseline :> Study {
+            """  part def baseline :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
     attribute scenario : ScenarioSet;
     part sut : System;
@@ -174,9 +174,9 @@ def test_generate_study_rejects_study_scenario_when_model_owns_one(
     )
 
     with pytest.raises(ValueError, match="already applies one"):
-        generate_study(
+        generate_analysis(
             architecture,
-            tmp_path / "study",
+            tmp_path / "analysis",
             "baseline",
             model_name="model_owned",
         )
@@ -196,14 +196,14 @@ def test_generate_ssd_emits_model_owned_parameter_binding(tmp_path: Path) -> Non
     assert 'MappingEntry source="k" target="leaf.k"' in text
 
 
-def test_generate_ssp_rejects_study(tmp_path: Path) -> None:
+def test_generate_ssp_rejects_analysis(tmp_path: Path) -> None:
     from pyssp_sysml2.artifacts.ssp import generate_ssp
 
     architecture = _write_architecture(tmp_path)
-    with pytest.raises(ValueError, match="Study"):
+    with pytest.raises(ValueError, match="Analysis"):
         generate_ssp(
             architecture,
-            tmp_path / "study.ssp",
+            tmp_path / "analysis.ssp",
             "test_baseline",
             validate_fmus=False,
         )

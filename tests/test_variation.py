@@ -10,7 +10,7 @@ from pyssp_standard import SSD, SSP, SSV
 from pyssp_sysml2.cli import _parse_selections, main
 from pyssp_sysml2.artifacts.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.artifacts.ssp import generate_ssp
-from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
 from pyssp_sysml2.model import load
@@ -451,19 +451,19 @@ def test_example_09_captures_body_attributes_and_bindings(tmp_path: Path) -> Non
     ]
 
 
-def test_example_09_selected_body_merges_into_the_study(
+def test_example_09_selected_body_merges_into_the_analysis(
     tmp_path: Path,
 ) -> None:
-    """Selection adds the set usage and binds to the study, not a component."""
+    """Selection adds the set usage and binds to the analysis, not a component."""
     _, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
 
     resolved = resolve(
         architecture, "test_selected", {"parameters": "lateStepBinding"}
     )
-    study = resolved.part_definitions["test_selected"]
-    assert "parameters" not in study.parts
-    assert study.attributes["values"].type_name == "LateStepValues"
-    assert [binding.key for binding in study.bindings] == [
+    analysis = resolved.part_definitions["test_selected"]
+    assert "parameters" not in analysis.parts
+    assert analysis.attributes["values"].type_name == "LateStepValues"
+    assert [binding.key for binding in analysis.bindings] == [
         "sut.step.parameters.height=values.height",
         "sut.step.parameters.offset=values.offset",
         "sut.step.parameters.startTime=values.startTime",
@@ -492,15 +492,15 @@ def test_example_09_selected_body_merges_into_the_study(
         ),
     ],
 )
-def test_example_09_study_selection_writes_the_body_set(
+def test_example_09_analysis_selection_writes_the_body_set(
     tmp_path: Path, variant: str, expected: dict[str, float]
 ) -> None:
-    """The merged set usage becomes the SSV behind the study."""
+    """The merged set usage becomes the SSV behind the analysis."""
     path, _ = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
 
-    artifacts = generate_study(
+    artifacts = generate_analysis(
         path,
-        tmp_path / "study",
+        tmp_path / "analysis",
         "test_selected",
         model_name="System",
         selections={"parameters": variant},
@@ -513,7 +513,7 @@ def test_example_09_study_selection_writes_the_body_set(
     assert 'target="gain.k"' in ssm
 
 
-def test_example_09_study_ssd_equals_the_fixed_topology_ssd(
+def test_example_09_analysis_ssd_equals_the_fixed_topology_ssd(
     tmp_path: Path,
 ) -> None:
     """The statement container never reaches the SSD; bytes stay fixed."""
@@ -815,8 +815,8 @@ def test_resolve_substitutes_the_attribute_usage_type(tmp_path: Path) -> None:
     ) == "ScenarioChoice"
 
 
-def test_resolve_finds_a_study_attribute_from_the_model(tmp_path: Path) -> None:
-    """A composing study's attribute usage is selectable when its model is resolved."""
+def test_resolve_finds_an_analysis_attribute_from_the_model(tmp_path: Path) -> None:
+    """A composing analysis's attribute usage is selectable when its model is resolved."""
     _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
     resolved = resolve(architecture, "System", {"scenario": "lateStep"})
@@ -867,15 +867,15 @@ def test_every_attribute_variant_resolves(
         ),
     ],
 )
-def test_generate_study_writes_the_selected_attribute_set(
+def test_generate_analysis_writes_the_selected_attribute_set(
     tmp_path: Path, variant: str, expected: dict[str, float]
 ) -> None:
-    """The selected variant becomes the set definition behind the study SSV."""
+    """The selected variant becomes the set definition behind the analysis SSV."""
     path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
-    artifacts = generate_study(
+    artifacts = generate_analysis(
         path,
-        tmp_path / "study",
+        tmp_path / "analysis",
         "test_selected_scenario",
         model_name="System",
         selections={"scenario": variant},
@@ -918,16 +918,16 @@ def test_generate_ssd_rejects_an_unselected_attribute_point(tmp_path: Path) -> N
         generate_ssd(path, tmp_path / "out" / "SystemStructure.ssd", "System")
 
 
-def test_generate_study_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
+def test_generate_analysis_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
     path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
     with pytest.raises(
         ValueError,
         match="Attribute variation point 'ScenarioChoice' at 'scenario'",
     ):
-        generate_study(
+        generate_analysis(
             path,
-            tmp_path / "study",
+            tmp_path / "analysis",
             "test_selected_scenario",
             model_name="System",
         )
@@ -994,15 +994,15 @@ def test_parse_selections_rejects_a_duplicate_key() -> None:
         _parse_selections(["scenario=baseline", "scenario=lateStep"])
 
 
-def test_cli_generate_study_selects_an_attribute_variant(tmp_path: Path) -> None:
-    """`pyssp generate study --select scenario=...` writes that set's SSV."""
+def test_cli_generate_analysis_selects_an_attribute_variant(tmp_path: Path) -> None:
+    """`pyssp generate analysis --select scenario=...` writes that set's SSV."""
     path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
-    output = tmp_path / "study"
+    output = tmp_path / "analysis"
 
     code = main(
         [
             "generate",
-            "study",
+            "analysis",
             "--architecture",
             str(path),
             "--composition",

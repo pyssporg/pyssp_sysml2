@@ -31,8 +31,8 @@ component reaches the SSD.
 A selection key is the usage name, dotted for nesting (``source=stepImplementation``,
 ``scenario=baseline``, ``path.inner=variantName``). A bare name is accepted
 only when exactly one reachable usage carries it. Attribute usages are
-collected on the composition and on any study that composes it, so a study
-scenario stays selectable when its model is generated.
+collected on the composition and on any analysis that composes it, so an
+analysis scenario stays selectable when its model is generated.
 
 A variation usage inside a selected body is itself a point. After an outer
 selection is applied, inner points are resolved by their full dotted path. An
@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pyssp_sysml2.parameters.dialect.markers import is_parameter_interface
-from pyssp_sysml2.metadata.roles import is_study
+from pyssp_sysml2.metadata.roles import is_analysis
 from pyssp_sysml2.model import (
     Architecture,
     Attribute,
@@ -220,13 +220,13 @@ def _usage_records(
     return records
 
 
-def _study_roots(
+def _analysis_roots(
     architecture: Architecture, composition: PartDefinition
 ) -> list[PartDefinition]:
-    """The composition plus every study that composes it directly."""
+    """The composition plus every analysis that composes it directly."""
     roots = [composition]
     for definition in architecture.part_definitions.values():
-        if definition is composition or not is_study(architecture, definition):
+        if definition is composition or not is_analysis(architecture, definition):
             continue
         if any(
             architecture.resolve_part(usage) is composition
@@ -239,7 +239,7 @@ def _study_roots(
 def _attribute_records(
     architecture: Architecture, composition: PartDefinition
 ) -> list[_AttributeUsage]:
-    """Every attribute usage reachable from the composition or a composing study."""
+    """Every attribute usage reachable from the composition or a composing analysis."""
     records: list[_AttributeUsage] = []
     seen_usages: set[tuple[str, str]] = set()
 
@@ -274,7 +274,7 @@ def _attribute_records(
             if definition is not None:
                 walk(definition, prefix + (part_name,), seen)
 
-    for root in _study_roots(architecture, composition):
+    for root in _analysis_roots(architecture, composition):
         walk(root, (), frozenset())
     return records
 

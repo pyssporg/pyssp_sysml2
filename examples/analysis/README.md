@@ -1,37 +1,37 @@
-# Study / SspModel Example
+# Analysis / SspModel Example
 
-Demonstrates the `Study` and `SspModel` role markers:
+Demonstrates the `Analysis` and `SspModel` role markers:
 
 - `PositionServo :> SspModel` is the exportable model.
-- `test_baseline` and `test_aggressive` are `:> Study` definitions over the
+- `test_baseline` and `test_aggressive` are `:> Analysis` definitions over the
   same model. Each composes it through `sut`, applies exactly one parameter
   set, and declares exactly one `Experiment`.
 
 The model is a position servo with a `ServoAxis` system containing a `driver`
-and a parameterized `plant`. Both studies bind the applied scenario set to the
+and a parameterized `plant`. Both analyses bind the applied scenario set to the
 plant's parameter interface.
 
 ```text
-examples/study/
+examples/analysis/
 ├── part_definitions.sysml  roles, experiment, parameter interface, model
-├── composition.sysml       scenario sets, experiments, studies
+├── composition.sysml       scenario sets, experiments, analyses
 └── README.md
 ```
 
-## Generate study artifacts
+## Generate analysis artifacts
 
 ```bash
-pyssp generate study \
-  --architecture examples/study \
+pyssp generate analysis \
+  --architecture examples/analysis \
   --composition test_baseline \
   --model position_servo \
-  --output-dir build/generated/studies/test_baseline
+  --output-dir build/generated/analyses/test_baseline
 
-pyssp generate study \
-  --architecture examples/study \
+pyssp generate analysis \
+  --architecture examples/analysis \
   --composition test_aggressive \
   --model position_servo \
-  --output-dir build/generated/studies/test_aggressive
+  --output-dir build/generated/analyses/test_aggressive
 ```
 
 Each run writes:
@@ -41,13 +41,14 @@ Each run writes:
   exported model root. The `sut.` prefix is stripped, so the targets are
   `axis.plant.inputScale`, `axis.plant.gain`, and
   `axis.plant.timeConstant`.
-- `study.json`: the model name, composition, `sut` usage, target SSD,
+- `analysis.json`: the model name, composition, `sut` usage, target SSD,
   experiment window, and scenario paths.
 
-For example, `test_baseline/study.json` contains:
+For example, `test_baseline/analysis.json` contains:
 
 ```json
 {
+  "analysis": "test_baseline",
   "composition": "PositionServo",
   "experiment": {
     "name": "experiment_baseline",
@@ -62,28 +63,27 @@ For example, `test_baseline/study.json` contains:
     "ssm": "test_baseline.ssm",
     "ssv": "NominalScenario.ssv"
   },
-  "study": "test_baseline",
   "sut": "sut",
   "target_ssd": "SystemStructure.ssd"
 }
 ```
 
-`generate study` never writes an SSD or an SSP. Generate the model structure
+`generate analysis` never writes an SSD or an SSP. Generate the model structure
 separately when needed:
 
 ```bash
 pyssp generate ssd \
-  --architecture examples/study \
+  --architecture examples/analysis \
   --composition PositionServo \
   --output build/generated/PositionServo/SystemStructure.ssd
 ```
 
 ## Rules this example relies on
 
-- The marker definitions `part def SspModel;` and `part def Study;` live in
+- The marker definitions `part def SspModel;` and `part def Analysis;` live in
   the same package.
-- A study has exactly one `SspModel` part usage (`sut` here), one applied
+- An analysis has exactly one `SspModel` part usage (`sut` here), one applied
   scenario set, and one attribute typed by an `Experiment`.
-- `generate ssp` accepts `PositionServo` but rejects any `:> Study`
+- `generate ssp` accepts `PositionServo` but rejects any `:> Analysis`
   composition. Packaging the model as an SSP additionally requires
   `fmu_meta.source` on each leaf component.

@@ -1,6 +1,6 @@
-package ModelOwnedStudy {
+package RoleModel {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   port def ParameterInterface;
   attribute def ParameterSet;
@@ -17,12 +17,14 @@ package ModelOwnedStudy {
     attribute startTime : Real;
     attribute stopTime : Real;
     attribute stepSize : Real;
+    attribute tolerance : Real;
   }
 
   attribute def BaselineExperiment :> Experiment {
     attribute startTime = 0.0;
     attribute stopTime = 1.0;
     attribute stepSize = 0.1;
+    attribute tolerance = 0.0001;
   }
 
   part def Leaf {
@@ -30,13 +32,13 @@ package ModelOwnedStudy {
   }
 
   part def System :> SspModel {
-    attribute scenario : ScenarioSet;
     part leaf : Leaf;
-    bind leaf.parameters.k = scenario.k;
   }
 
-  part def baseline :> Study {
+  part def test_baseline :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
+    attribute scenario : ScenarioSet;
     part sut : System;
+    bind sut.leaf.parameters.k = scenario.k;
   }
 }

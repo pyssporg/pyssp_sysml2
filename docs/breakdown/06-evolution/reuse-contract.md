@@ -14,7 +14,7 @@ Status: proposed, not implemented. Current tooling rejects inherited sets and
 
 ## Problem
 
-A study often needs several variants of the same parameters:
+An analysis often needs several variants of the same parameters:
 
 - a nominal set;
 - an aggressive set that changes a few values;

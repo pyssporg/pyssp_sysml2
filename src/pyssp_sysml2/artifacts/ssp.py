@@ -41,7 +41,7 @@ from pyssp_sysml2.parameters.dialect.mapping import parameter_sets_for_generatio
 from pyssp_sysml2.parameters.dialect.markers import parameter_set_resource
 from pyssp_sysml2.core.paths import ensure_parent_dir
 from pyssp_sysml2.metadata.roles import (
-    is_study,
+    is_analysis,
     require_resolved_variation,
     validate_role_markers,
 )
@@ -268,17 +268,17 @@ def generate_ssp(
     require_resolved_variation(architecture, system)
     require_resolved_attribute_variation(architecture, system)
     validate_role_markers(architecture)
-    if is_study(architecture, system):
+    if is_analysis(architecture, system):
         raise ValueError(
-            f"Composition '{composition}' is a Study; studies are not "
+            f"Composition '{composition}' is an Analysis; analyses are not "
             "exportable as SSPs. Export its 'part sut : <SspModel>' model "
             "instead."
         )
     if ssp_metadata(architecture, system) is not None:
         raise ValueError(
             f"Composition '{composition}' selects an external SSP source via "
-            "'ssp_meta'; it is a study-only boundary and cannot be exported. "
-            "Generate its study instead."
+            "'ssp_meta'; it is an analysis-only boundary and cannot be exported. "
+            "Generate its analysis instead."
         )
     validate_parameter_dialect(architecture, system)
 

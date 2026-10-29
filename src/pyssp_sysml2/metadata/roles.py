@@ -1,9 +1,9 @@
-"""Role markers for exportable models, studies, and experiments.
+"""Role markers for exportable models, analyses, and experiments.
 
 The marker definitions are ordinary SysML definitions in the model package::
 
     part def SspModel;
-    part def Study;
+    part def Analysis;
 
     attribute def Experiment {
       attribute startTime : Real;
@@ -12,9 +12,9 @@ The marker definitions are ordinary SysML definitions in the model package::
       attribute tolerance : Real;
     }
 
-A composition is exportable when its ``part def`` specializes ``SspModel``. A
-study specializes ``Study`` and composes the exported model through a single
-part usage, conventionally named ``sut``. Studies are never exported as SSPs.
+A composition is exportable when its ``part def`` specializes ``SspModel``. An
+analysis specializes ``Analysis`` and composes the exported model through a single
+part usage, conventionally named ``sut``. Analyses are never exported as SSPs.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pyssp_sysml2.model import (
 )
 
 SSP_MODEL_MARKER = "SspModel"
-STUDY_MARKER = "Study"
+ANALYSIS_MARKER = "Analysis"
 EXPERIMENT_MARKER = "Experiment"
 
 EXPERIMENT_FIELDS = ("startTime", "stopTime", "stepSize")
@@ -38,7 +38,7 @@ EXPERIMENT_FIELDS = ("startTime", "stopTime", "stepSize")
 
 @dataclass(frozen=True)
 class Experiment:
-    """One resolved study experiment.
+    """One resolved analysis experiment.
 
     Tolerance is not part of the experiment: it is a property of the composed
     FMUs and is read from their model descriptions by the simulation stage.
@@ -85,8 +85,8 @@ def is_ssp_model(architecture: Architecture, definition: PartDefinition) -> bool
     return _specializes_marker(architecture, definition, SSP_MODEL_MARKER)
 
 
-def is_study(architecture: Architecture, definition: PartDefinition) -> bool:
-    return _specializes_marker(architecture, definition, STUDY_MARKER)
+def is_analysis(architecture: Architecture, definition: PartDefinition) -> bool:
+    return _specializes_marker(architecture, definition, ANALYSIS_MARKER)
 
 
 def is_experiment_definition(
@@ -148,7 +148,7 @@ def validate_role_markers(architecture: Architecture) -> None:
         _short_name(name)
         for definition in architecture.part_definitions.values()
         for name in definition.specializes
-        if _short_name(name) in {SSP_MODEL_MARKER, STUDY_MARKER}
+        if _short_name(name) in {SSP_MODEL_MARKER, ANALYSIS_MARKER}
     }
     for marker in sorted(used):
         if marker not in architecture.part_definitions:
@@ -166,31 +166,31 @@ def exportable_part_definitions(architecture: Architecture) -> list[PartDefiniti
     ]
 
 
-def study_part_definitions(architecture: Architecture) -> list[PartDefinition]:
+def analysis_part_definitions(architecture: Architecture) -> list[PartDefinition]:
     return [
         definition
         for definition in architecture.part_definitions.values()
-        if is_study(architecture, definition)
+        if is_analysis(architecture, definition)
     ]
 
 
 def model_usage(
-    architecture: Architecture, study: PartDefinition
+    architecture: Architecture, analysis: PartDefinition
 ) -> tuple[PartUsage, PartDefinition]:
-    """The single exportable model usage composed by a study."""
+    """The single exportable model usage composed by an analysis."""
     usages: list[tuple[PartUsage, PartDefinition]] = []
-    for usage in study.parts.values():
+    for usage in analysis.parts.values():
         definition = architecture.resolve_part(usage)
         if definition is None:
             raise ValueError(
-                f"Unresolved part definition for {study.name}.{usage.name}"
+                f"Unresolved part definition for {analysis.name}.{usage.name}"
             )
         if is_ssp_model(architecture, definition):
             usages.append((usage, definition))
     if len(usages) != 1:
         names = ", ".join(usage.name for usage, _ in usages) or "none"
         raise ValueError(
-            f"Study '{study.name}' must compose exactly one SspModel part; "
+            f"Analysis '{analysis.name}' must compose exactly one SspModel part; "
             f"found {names}"
         )
     return usages[0]
@@ -225,11 +225,11 @@ def _effective_members(
 
 
 def experiment_attribute(
-    architecture: Architecture, study: PartDefinition
+    architecture: Architecture, analysis: PartDefinition
 ) -> tuple[str, Attribute, AttributeDefinition]:
-    """The single experiment attribute declared by a study."""
+    """The single experiment attribute declared by an analysis."""
     found: list[tuple[str, Attribute, AttributeDefinition]] = []
-    for name, attribute in study.attributes.items():
+    for name, attribute in analysis.attributes.items():
         definition = architecture.resolve_attribute_def(attribute)
         if is_experiment_definition(architecture, definition):
             assert definition is not None
@@ -237,16 +237,16 @@ def experiment_attribute(
     if len(found) != 1:
         names = ", ".join(name for name, _, _ in found) or "none"
         raise ValueError(
-            f"Study '{study.name}' must declare exactly one Experiment "
+            f"Analysis '{analysis.name}' must declare exactly one Experiment "
             f"attribute; found {names}"
         )
     return found[0]
 
 
 def read_experiment(
-    architecture: Architecture, study: PartDefinition
+    architecture: Architecture, analysis: PartDefinition
 ) -> Experiment:
-    name, _attribute, definition = experiment_attribute(architecture, study)
+    name, _attribute, definition = experiment_attribute(architecture, analysis)
     members = _effective_members(architecture, definition)
     values: dict[str, float] = {}
     for field in EXPERIMENT_FIELDS:

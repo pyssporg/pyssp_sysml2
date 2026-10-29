@@ -1,6 +1,6 @@
 package LegacyModel {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   attribute def SspMetadata {
     attribute source : String;
@@ -26,7 +26,7 @@ package LegacyModel {
     attribute ssp_meta : LegacySsp;
   }
 
-  part def baseline :> Study {
+  part def baseline :> Analysis {
     attribute experiment_baseline : BaselineExperiment;
     part sut : LegacyBody;
   }

@@ -20,7 +20,7 @@ one such attribute is allowed per definition, and only on an ``SspModel``.
 
 ``source`` names a directory containing ``SystemStructure.ssd`` and optional
 ``resources/``. The build stage resolves it against the repository root. A
-composition that carries this metadata is a study-only boundary: its body is
+composition that carries this metadata is an analysis-only boundary: its body is
 the checked-in SSP, not an export from SysML.
 """
 

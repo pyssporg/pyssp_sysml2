@@ -9,7 +9,7 @@ package ParameterDemo {
   }
 
   attribute def NominalSet :> ParameterSet {
-    doc /* Nominal mission-planning parameter set, in study-side names. */
+    doc /* Nominal mission-planning parameter set, in analysis-side names. */
     attribute n_waypoints = 10;
     attribute waypoints_x_km = (0.0, 10.0, 20.0);
   }

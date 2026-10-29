@@ -52,7 +52,7 @@ FILE_LEVELS: dict[str, tuple[str, ...]] = {
     "test_parameter_bind_orientation.py": ("unit",),
     "test_parameter_ports.py": ("unit",),
     "test_parameter_sets.py": ("component",),
-    "test_roles_study.py": ("component",),
+    "test_roles_analysis.py": ("component",),
     "test_roundtrip.py": ("contract",),
     "test_ssp_metadata.py": ("unit",),
     "test_sync.py": ("contract",),

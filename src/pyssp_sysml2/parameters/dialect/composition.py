@@ -11,7 +11,7 @@ from pyssp_sysml2.metadata.fmu_metadata import (
     is_fmu_metadata_definition,
     validate_retired_control_attributes,
 )
-from pyssp_sysml2.metadata.roles import is_ssp_model, is_study
+from pyssp_sysml2.metadata.roles import is_ssp_model, is_analysis
 from pyssp_sysml2.metadata.ssp_metadata import (
     is_ssp_metadata_definition,
     ssp_metadata,
@@ -359,7 +359,7 @@ def applied_sets(
             continue
         seen_definitions.add(ref.part_def.name)
         if is_ssp_model(architecture, ref.part_def):
-            # Model-owned bindings belong to the exported model, not the study.
+            # Model-owned bindings belong to the exported model, not the analysis.
             continue
         if any(
             parameter_bind(binding) is not None
@@ -453,7 +453,7 @@ def validate_parameter_dialect(
                 f"{system.name}.{name} is FMU metadata, but the composition is "
                 "not an FMU component"
             )
-        if _is_ssp_metadata_attribute(architecture, attribute) and is_study(
+        if _is_ssp_metadata_attribute(architecture, attribute) and is_analysis(
             architecture, system
         ):
             raise ValueError(

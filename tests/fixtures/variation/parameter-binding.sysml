@@ -1,6 +1,6 @@
 package ParameterBindingVariation {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   port def ParameterInterface;
 
@@ -97,8 +97,8 @@ package ParameterBindingVariation {
    * values, so the variation usage has no interface of its own. */
   part def ParameterBinding;
 
-  part def test_selected :> Study {
-    doc /* One study per selection; the topology is the same composition. */
+  part def test_selected :> Analysis {
+    doc /* One analysis per selection; the topology is the same composition. */
     attribute experiment_baseline : BaselineExperiment;
     part sut : System;
 

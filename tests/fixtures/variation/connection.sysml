@@ -1,6 +1,6 @@
 package ConnectionVariation {
   part def SspModel;
-  part def Study;
+  part def Analysis;
 
   port def ParameterInterface;
 
@@ -109,8 +109,8 @@ package ConnectionVariation {
     connect path.y to y;
   }
 
-  part def test_selected :> Study {
-    doc /* One study per selection; the selection itself is not recorded here. */
+  part def test_selected :> Analysis {
+    doc /* One analysis per selection; the selection itself is not recorded here. */
     attribute experiment_baseline : BaselineExperiment;
     attribute scenario : BaselineScenario;
     part sut : System;

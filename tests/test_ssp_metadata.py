@@ -8,7 +8,7 @@ import pytest
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.artifacts.ssp import generate_ssp
 from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
-from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.model import load
 
 from tests.fixture_files import fixture_text
@@ -23,10 +23,10 @@ def _architecture(tmp_path: Path, text: str = ARCHITECTURE) -> Path:
     return path
 
 
-def test_generate_study_records_model_source(tmp_path: Path) -> None:
-    artifacts = generate_study(
+def test_generate_analysis_records_model_source(tmp_path: Path) -> None:
+    artifacts = generate_analysis(
         _architecture(tmp_path),
-        tmp_path / "study",
+        tmp_path / "analysis",
         "baseline",
         model_name="legacy",
     )
@@ -42,9 +42,9 @@ def test_model_source_is_omitted_when_unset(tmp_path: Path) -> None:
     text = ARCHITECTURE.replace(
         '    attribute source = "models/ssp/example/ssp";\n', ""
     )
-    artifacts = generate_study(
+    artifacts = generate_analysis(
         _architecture(tmp_path, text),
-        tmp_path / "study",
+        tmp_path / "analysis",
         "baseline",
         model_name="legacy",
     )
@@ -55,9 +55,9 @@ def test_model_source_is_omitted_when_unset(tmp_path: Path) -> None:
 
 def test_external_source_is_not_exportable(tmp_path: Path) -> None:
     architecture = _architecture(tmp_path)
-    with pytest.raises(ValueError, match="study-only boundary"):
+    with pytest.raises(ValueError, match="analysis-only boundary"):
         generate_ssp(architecture, tmp_path / "model.ssp", "LegacyBody")
-    with pytest.raises(ValueError, match="study-only boundary"):
+    with pytest.raises(ValueError, match="analysis-only boundary"):
         generate_ssd(architecture, tmp_path / "SystemStructure.ssd", "LegacyBody")
 
 

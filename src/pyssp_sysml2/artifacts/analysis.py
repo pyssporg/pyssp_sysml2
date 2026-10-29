@@ -1,12 +1,12 @@
-"""Generate study artifacts from a SysML ``Study`` composition.
+"""Generate analysis artifacts from a SysML ``Analysis`` composition.
 
-A study composes one ``SspModel`` usage (conventionally ``sut``), applies zero
-or one scenario parameter set, and declares one experiment. Generation writes a
-``study.json`` descriptor and, when a set is applied, an SSV plus one SSM with
-targets relative to the exported model root. A study without a set yields an
-experiment-only descriptor for a model body that stays a checked-in SSP; that
-body is named by the model's ``ssp_meta.source`` and recorded as
-``model_source``. It never writes an SSD or an SSP.
+An analysis composes one ``SspModel`` usage (conventionally ``sut``), applies
+zero or one scenario parameter set, and declares one experiment. Generation
+writes an ``analysis.json`` descriptor and, when a set is applied, an SSV plus
+one SSM with targets relative to the exported model root. An analysis without a
+set yields an experiment-only descriptor for a model body that stays a
+checked-in SSP; that body is named by the model's ``ssp_meta.source`` and
+recorded as ``model_source``. It never writes an SSD or an SSP.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
 from pyssp_sysml2.core.paths import ensure_directory
 from pyssp_sysml2.metadata.roles import (
     is_ssp_model,
-    is_study,
+    is_analysis,
     model_usage,
     read_experiment,
     validate_role_markers,
@@ -42,8 +42,8 @@ from pyssp_sysml2.parameters.variation import resolve
 
 
 @dataclass(frozen=True)
-class StudyArtifacts:
-    """Paths written by :func:`generate_study`."""
+class AnalysisArtifacts:
+    """Paths written by :func:`generate_analysis`."""
 
     ssv: Path | None
     ssm: Path | None
@@ -56,7 +56,7 @@ def _relative_name(path: Path, output_dir: Path) -> str:
     return path.relative_to(output_dir).as_posix()
 
 
-def generate_study(
+def generate_analysis(
     architecture_path: Path,
     output_dir: Path,
     composition: str,
@@ -64,49 +64,50 @@ def generate_study(
     model_name: str,
     target_ssd: str = "SystemStructure.ssd",
     selections: Mapping[str, str] | None = None,
-) -> StudyArtifacts:
-    """Write ``study.json`` and, for one applied set, its SSV and SSM.
+) -> AnalysisArtifacts:
+    """Write ``analysis.json`` and, for one applied set, its SSV and SSM.
 
-    ``selections`` resolves variation points in the study before generation;
-    see :func:`pyssp_sysml2.parameters.variation.resolve`. A study that carries an
-    unselected variation point fails instead of emitting a flat scenario.
+    ``selections`` resolves variation points in the analysis before generation;
+    see :func:`pyssp_sysml2.parameters.variation.resolve`. An analysis that
+    carries an unselected variation point fails instead of emitting a flat
+    scenario.
     """
     architecture = load(architecture_path)
     architecture = resolve(architecture, composition, selections or {})
-    study = architecture.get_part_def(composition)
+    analysis = architecture.get_part_def(composition)
     validate_role_markers(architecture)
-    if not is_study(architecture, study):
+    if not is_analysis(architecture, analysis):
         raise ValueError(
-            f"Composition '{composition}' is not marked ':> Study'"
+            f"Composition '{composition}' is not marked ':> Analysis'"
         )
 
-    model_part_usage, model_definition = model_usage(architecture, study)
+    model_part_usage, model_definition = model_usage(architecture, analysis)
     if not is_ssp_model(architecture, model_definition):
         raise ValueError(
-            f"Study '{composition}' composes '{model_part_usage.type_name}', "
+            f"Analysis '{composition}' composes '{model_part_usage.type_name}', "
             "which is not marked ':> SspModel'"
         )
 
     validate_marker_definitions(architecture)
-    validate_parameter_dialect(architecture, study)
-    sets = parameter_sets_for_generation(architecture, study)
+    validate_parameter_dialect(architecture, analysis)
+    sets = parameter_sets_for_generation(architecture, analysis)
     if len(sets) > 1:
         names = ", ".join(definition.name for definition in sets) or "none"
         raise ValueError(
-            f"Study '{composition}' must apply at most one scenario parameter "
+            f"Analysis '{composition}' must apply at most one scenario parameter "
             f"set; found {names}"
         )
 
     model_applications = applied_sets(architecture, model_definition)
     if model_applications and sets:
         raise ValueError(
-            f"Study '{composition}' applies a scenario set, but its sut "
+            f"Analysis '{composition}' applies a scenario set, but its sut "
             f"'{model_definition.name}' already applies one. A model-owned "
-            "scenario is fixed for all studies; remove the study set or move "
-            "the scenario to the study."
+            "scenario is fixed for all analyses; remove the analysis set or move "
+            "the scenario to the analysis."
         )
 
-    experiment = read_experiment(architecture, study)
+    experiment = read_experiment(architecture, analysis)
     model_metadata = ssp_metadata(architecture, model_definition)
     ensure_directory(output_dir)
 
@@ -122,11 +123,11 @@ def generate_study(
         prefix = f"{model_part_usage.name}."
         ssm_path = output_dir / f"{composition}.ssm"
         with SSM(ssm_path, mode="w") as ssm:
-            for spec in mapping_specs(architecture, study):
+            for spec in mapping_specs(architecture, analysis):
                 for source, target in spec.entries:
                     if not target.startswith(prefix):
                         raise ValueError(
-                            f"Study mapping target '{target}' is not below "
+                            f"Analysis mapping target '{target}' is not below "
                             f"'{model_part_usage.name}'"
                         )
                     ssm.add_mapping(source, target[len(prefix) :])
@@ -142,7 +143,7 @@ def generate_study(
         "composition": model_definition.name,
         "sut": model_part_usage.name,
         "target_ssd": target_ssd,
-        "study": composition,
+        "analysis": composition,
         "experiment": {
             "name": experiment.name,
             "start_time": experiment.start_time,
@@ -150,19 +151,19 @@ def generate_study(
             "step_size": experiment.step_size,
         },
     }
-    if study.doc:
-        descriptor["description"] = study.doc
+    if analysis.doc:
+        descriptor["description"] = analysis.doc
     if scenario is not None:
         descriptor["scenario"] = scenario
     if model_metadata is not None and model_metadata.source is not None:
         descriptor["model_source"] = model_metadata.source
-    descriptor_path = output_dir / "study.json"
+    descriptor_path = output_dir / "analysis.json"
     descriptor_path.write_text(
         json.dumps(descriptor, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
     )
 
-    return StudyArtifacts(
+    return AnalysisArtifacts(
         ssv=ssv_path,
         ssm=ssm_path,
         descriptor=descriptor_path,

@@ -1,5 +1,5 @@
 package ExplicitExample {
-  doc /* Explicit binds rename study-side set members to interface members. */
+  doc /* Explicit binds rename analysis-side set members to interface members. */
 
   port def ParameterInterface;
   attribute def ParameterSet;

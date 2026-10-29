@@ -7,7 +7,7 @@ from pyssp_sysml2.artifacts.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
 from pyssp_sysml2.artifacts.ssp import generate_ssp
 from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
-from pyssp_sysml2.artifacts.study import generate_study
+from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
 from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 
@@ -17,7 +17,7 @@ __all__ = [
     "generate_ssp",
     "generate_parameter_sets",
     "generate_parameter_mappings",
-    "generate_study",
+    "generate_analysis",
     "generate_model_descriptions",
     "generate_sysml_from_ssd",
     "sync_sysml_from_ssd",

@@ -62,7 +62,7 @@ pip install -e .
 `pyssp` exposes two command families:
 
 ```bash
-pyssp generate <ssp|ssd|ssv|ssm|study|fmi|sysml> [options]
+pyssp generate <ssp|ssd|ssv|ssm|analysis|fmi|sysml> [options]
 pyssp sync ssd [options]
 ```
 
@@ -127,15 +127,15 @@ pyssp generate ssm \
 separate `.ssm` file is optional. `generate ssm` remains useful for external
 SSM artifacts or inspection.
 
-### Study
+### Analysis
 
-A `part def ... :> Study` composes one exportable `part def ... :> SspModel`
-through a single part usage, conventionally named `sut`. The study applies zero
-or one parameter set and declares one `Experiment` attribute:
+A `part def ... :> Analysis` composes one exportable `part def ... :> SspModel`
+through a single part usage, conventionally named `sut`. The analysis applies
+zero or one parameter set and declares one `Experiment` attribute:
 
 ```sysml
 part def SspModel;
-part def Study;
+part def Analysis;
 
 attribute def Experiment {
   attribute startTime : Real;
@@ -144,7 +144,7 @@ attribute def Experiment {
   attribute tolerance : Real;
 }
 
-part def test_baseline :> Study {
+part def test_baseline :> Analysis {
   attribute experiment_baseline : BaselineExperiment;
   attribute scenario : ScenarioSet;
   part sut : System;
@@ -152,25 +152,25 @@ part def test_baseline :> Study {
 }
 ```
 
-Generate study artifacts:
+Generate analysis artifacts:
 
 ```bash
-pyssp generate study \
-  --architecture examples/study \
+pyssp generate analysis \
+  --architecture examples/analysis \
   --composition test_baseline \
   --model position_servo \
-  --output-dir build/generated/studies/test_baseline
+  --output-dir build/generated/analyses/test_baseline
 ```
 
-The command writes the applied scenario SSV, one `<Study>.ssm` with targets
+The command writes the applied scenario SSV, one `<Analysis>.ssm` with targets
 relative to the exported model root (the `sut.` prefix is stripped), and
-`study.json` with the experiment window and scenario paths. With zero applied
-sets it writes an experiment-only `study.json` (no SSV, no SSM), for a model
+`analysis.json` with the experiment window and scenario paths. With zero applied
+sets it writes an experiment-only `analysis.json` (no SSV, no SSM), for a model
 body that stays a checked-in SSP and only authors its experiment window in
-SysML. It never writes an SSD or an SSP. `generate ssp` rejects a `:> Study`
+SysML. It never writes an SSD or an SSP. `generate ssp` rejects a `:> Analysis`
 composition.
 
-A study over a checked-in SSP body selects that body through `SspMetadata`:
+An analysis over a checked-in SSP body selects that body through `SspMetadata`:
 
 ```sysml
 attribute def SspMetadata {
@@ -187,12 +187,12 @@ part def LegacyBody :> SspModel {
 ```
 
 `source` is a directory with `SystemStructure.ssd` and optional `resources/`,
-resolved against the repository root. `study.json` records it as
-`model_source`. Such a composition is a study-only boundary; `generate ssp`
+resolved against the repository root. `analysis.json` records it as
+`model_source`. Such a composition is an analysis-only boundary; `generate ssp`
 and `generate ssd` reject it.
 
-A complete two-study example over one `SspModel` is in
-[`examples/study/`](examples/study/README.md).
+A complete two-analysis example over one `SspModel` is in
+[`examples/analysis/`](examples/analysis/README.md).
 
 ### Parameter Sets
 
@@ -515,7 +515,7 @@ PYTHONPATH=src python3 examples/module_usage.py
 
 - CLI workflow: [`examples/cli_usage.sh`](examples/cli_usage.sh)
 - Python module workflow: [`examples/module_usage.py`](examples/module_usage.py)
-- Study / `SspModel` workflow: [`examples/study/README.md`](examples/study/README.md)
+- Analysis / `SspModel` workflow: [`examples/analysis/README.md`](examples/analysis/README.md)
 
 ## Help / Discovery
 
