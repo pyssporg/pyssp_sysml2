@@ -8,6 +8,7 @@ import pytest
 
 from pyssp_sysml2.model import load
 from pyssp_sysml2.model.variation import variation_facts
+from pyssp_sysml2.parameters.variation import refuse_variation_erasure
 from tests.fixture_files import fixture_text
 from tests.testhelpers import write_model
 
@@ -356,4 +357,30 @@ def test_export_reload_export_is_byte_identical(tmp_path: Path) -> None:
     second = load(reloaded_path).export_declared()
 
     assert second == first
+
+
+# -- export guard -------------------------------------------------------------
+
+
+def test_a_configuration_with_bodies_never_reaches_a_sysml_writer(
+    tmp_path: Path,
+) -> None:
+    """The writer refuses the document, so a usage body cannot be dropped.
+
+    The exporter emits bindings but not a usage body, so a nested
+    configuration would lose its inner selection on a round trip. Every SysML
+    writer calls this guard first; pinning it keeps that path unreachable.
+    """
+    path, architecture = _load_configuration(tmp_path)
+
+    nested = architecture.part_definitions["NestedGainSystem"].parts["nestedGainPath"]
+    assert nested.body is not None
+
+    with pytest.raises(ValueError) as excinfo:
+        refuse_variation_erasure(architecture, path)
+
+    message = str(excinfo.value)
+    assert message.startswith("SysML export does not represent variation points")
+    assert "PathChoice" in message
+
 
