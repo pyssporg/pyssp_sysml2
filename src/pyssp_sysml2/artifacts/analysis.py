@@ -39,6 +39,7 @@ from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
 from pyssp_sysml2.artifacts.ssv import write_parameter_set
 from pyssp_sysml2.model import load
 from pyssp_sysml2.parameters.constraints import enforce_constraints
+from pyssp_sysml2.parameters.configuration import scope_analysis_to_root
 from pyssp_sysml2.parameters.selection import analysis_selection
 from pyssp_sysml2.parameters.variation import resolve_selected
 
@@ -72,14 +73,17 @@ def generate_analysis(
     ``selections`` resolves variation points in the analysis before generation;
     see :func:`pyssp_sysml2.parameters.variation.resolve`. When it is ``None``,
     the analysis's model-level configuration binds the selection, via
-    :func:`pyssp_sysml2.parameters.configuration.derived_selection`. An explicit
-    map wins, so a caller can still force an illegal combination and have the
-    constraints reject it. An analysis that carries an unselected variation
-    point fails instead of emitting a flat scenario.
+    :func:`pyssp_sysml2.parameters.configuration.derived_selection`. The
+    ``sut`` usage is then retyped to the configuration's root composition, so
+    inherited parts, ports, connections, and binds resolve as before. An
+    explicit map wins, so a caller can still force an illegal combination and
+    have the constraints reject it. An analysis that carries an unselected
+    variation point fails instead of emitting a flat scenario.
     """
     architecture = load(architecture_path)
     if selections is None:
         selections = analysis_selection(architecture, composition)
+    scope_analysis_to_root(architecture, composition)
     architecture, canonical = resolve_selected(
         architecture, composition, selections or {}
     )

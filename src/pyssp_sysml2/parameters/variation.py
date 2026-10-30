@@ -53,7 +53,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from pyssp_sysml2.parameters.dialect.markers import is_parameter_interface
-from pyssp_sysml2.metadata.roles import is_analysis
+from pyssp_sysml2.metadata.roles import is_analysis, is_ssp_model
+from pyssp_sysml2.parameters.configuration import model_root
 from pyssp_sysml2.model import (
     Architecture,
     Attribute,
@@ -255,17 +256,33 @@ def _usage_records(
 def _analysis_roots(
     architecture: Architecture, composition: PartDefinition
 ) -> list[PartDefinition]:
-    """The composition plus every analysis that composes it directly."""
+    """The composition plus every analysis that composes it directly.
+
+    An analysis that composes a configuration of *composition* is a composing
+    analysis too: its local attribute points are accepted by the root build,
+    which is what lets one per-analysis map reach both generators.
+    """
     roots = [composition]
     for definition in architecture.part_definitions.values():
         if definition is composition or not is_analysis(architecture, definition):
             continue
         if any(
-            architecture.resolve_part(usage) is composition
+            _composes_root(architecture, usage, composition)
             for usage in definition.parts.values()
         ):
             roots.append(definition)
     return roots
+
+
+def _composes_root(
+    architecture: Architecture, usage: PartUsage, composition: PartDefinition
+) -> bool:
+    part = architecture.resolve_part(usage)
+    if part is composition:
+        return True
+    if part is None or not is_ssp_model(architecture, part):
+        return False
+    return model_root(architecture, part) is composition
 
 
 def _attribute_records(
@@ -737,6 +754,12 @@ def resolve_selected(
     Keys are applied outermost first. Selecting an outer body can introduce an
     inner variation point, which the next pass finds at its full dotted path
     (``path.inner=variant``).
+
+    A configuration is not a generation target (IMP-106 option B1): it only
+    redefines the root's usages, so resolving it would export an incomplete
+    composition under the configuration's name. Pass the root composition with
+    the derived selection instead; ``artifacts.analysis`` retypes ``sut`` for an
+    analysis.
     """
     name = (
         composition.name
@@ -744,6 +767,13 @@ def resolve_selected(
         else composition
     )
     source = architecture.get_part_def(name)
+    if is_ssp_model(architecture, source):
+        root = model_root(architecture, source)
+        if root is not source:
+            raise ValueError(
+                f"Composition '{name}' is a configuration of '{root.name}'; "
+                "generate the root composition with the derived selection."
+            )
 
     resolved = copy.deepcopy(architecture)
     resolved_source = resolved.get_part_def(source.name)

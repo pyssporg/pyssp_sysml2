@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
 
 from pyssp_sysml2.artifacts.analysis import generate_analysis
+from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.model import Architecture, load
 from pyssp_sysml2.parameters.configuration import (
     configuration_name,
@@ -226,9 +228,24 @@ def test_a_configuration_is_judged_by_its_inherited_assert(
     assert "requiresSingleStage fail" in (plans["sine_two"].detail or "")
 
 
-def test_generate_analysis_defaults_to_the_derived_selection(
+def test_generate_analysis_scopes_the_configuration_to_the_root(
     tmp_path: Path,
 ) -> None:
+    path, _ = _load(tmp_path)
+
+    artifacts = generate_analysis(
+        path,
+        tmp_path / "analysis",
+        "step_single",
+        model_name="selection",
+    )
+
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert descriptor["composition"] == "System"
+    assert descriptor["sut"] == "sut"
+
+
+def test_generate_analysis_keeps_a_nested_selection(tmp_path: Path) -> None:
     path, _ = _load(tmp_path)
 
     artifacts = generate_analysis(
@@ -238,7 +255,30 @@ def test_generate_analysis_defaults_to_the_derived_selection(
         model_name="selection",
     )
 
-    assert artifacts.descriptor.is_file()
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert descriptor["composition"] == "PathSystem"
+    _, architecture = _load(tmp_path)
+    assert derived_selection(architecture, "nested_gain") == {
+        "path": "nestedPath",
+        "path.inner_stage": "gainStage",
+    }
+
+
+def test_a_configuration_is_not_a_generation_target(tmp_path: Path) -> None:
+    path, _ = _load(tmp_path)
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Composition 'NestedGainSystem' is a configuration of 'PathSystem'"
+        ),
+    ):
+        generate_ssd(
+            path,
+            tmp_path / "out" / "NestedGainSystem.ssd",
+            "NestedGainSystem",
+            selections={"path": "nestedPath", "path.inner_stage": "gainStage"},
+        )
 
 
 def test_an_explicit_selection_overrides_the_derived_one(tmp_path: Path) -> None:

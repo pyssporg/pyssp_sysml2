@@ -37,7 +37,12 @@ from pyssp_sysml2.model import (
     VariantMember,
 )
 
-__all__ = ["configuration_name", "derived_selection", "model_root"]
+__all__ = [
+    "configuration_name",
+    "derived_selection",
+    "model_root",
+    "scope_analysis_to_root",
+]
 
 
 def _short(name: str) -> str:
@@ -74,12 +79,13 @@ def _model_supertype(
     """The single ``SspModel`` supertype, or ``None`` at the root boundary."""
     if _short(definition.name) == SSP_MODEL_MARKER:
         return None
+    names = [_short(name) for name in definition.specializes]
+    if SSP_MODEL_MARKER in names:
+        return None
     bases = []
     others = []
-    for name in definition.specializes:
-        if _short(name) == SSP_MODEL_MARKER:
-            continue
-        base = architecture.part_definitions.get(_short(name))
+    for name in names:
+        base = architecture.part_definitions.get(name)
         if base is None:
             continue
         if is_ssp_model(architecture, base):
@@ -115,6 +121,23 @@ def configuration_name(
     definition = _definition(architecture, analysis)
     composed = model_usage(architecture, definition)[1]
     return None if model_root(architecture, composed) is composed else composed.name
+
+
+def scope_analysis_to_root(
+    architecture: Architecture, analysis: PartDefinition | str
+) -> PartDefinition:
+    """Retype the analysis's ``SspModel`` usage to the root composition.
+
+    Generation stays on the root (IMP-106 option B1): a configuration only
+    redefines the family's usages, so its inherited parts, ports, connections,
+    and binds live on the root. Mutates *architecture* in place and returns the
+    root definition; callers load a private copy first.
+    """
+    definition = _definition(architecture, analysis)
+    usage, composed = model_usage(architecture, definition)
+    root = model_root(architecture, composed)
+    usage.type_name = root.name
+    return root
 
 
 @dataclass(frozen=True)

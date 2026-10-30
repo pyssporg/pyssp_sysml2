@@ -24,9 +24,32 @@ package Selection {
     variant part twoStages : Gain;
   }
 
-  part def Step;
-  part def Sine;
-  part def Gain;
+  part def Step {
+    in port parameters : SourceParameters;
+  }
+  part def Sine {
+    in port parameters : SourceParameters;
+  }
+  part def Gain {
+    in port parameters : GainParameters;
+  }
+
+  port def ParameterInterface;
+
+  port def SourceParameters :> ParameterInterface {
+    attribute amplitude : Real;
+  }
+
+  port def GainParameters :> ParameterInterface {
+    attribute k : Real;
+  }
+
+  attribute def ParameterSet;
+
+  attribute def NominalValues :> ParameterSet {
+    attribute amplitude = 2.0;
+    attribute k = 3.0;
+  }
 
   constraint def SineRequiresSingleStage {
     in chosenSource : SourceChoice;
@@ -38,6 +61,9 @@ package Selection {
   part def System :> SspModel {
     part source : SourceChoice;
     part gain : GainChoice;
+    attribute nominal : NominalValues;
+    bind source.parameters.amplitude = nominal.amplitude;
+    bind gain.parameters.k = nominal.k;
     constraint requiresSingleStage : SineRequiresSingleStage {
       in chosenSource = source;
       in chosenGain = gain;

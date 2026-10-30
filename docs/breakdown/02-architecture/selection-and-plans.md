@@ -52,6 +52,11 @@ unqualified value must name a local usage with exactly one subsetting target.
 Every reachable point must be selected, and an unbound point is an error, never
 a silently unselected artifact.
 
+Generation stays on the root composition. Analysis generation retypes its
+`sut` usage to the root before resolution, so inherited parts, ports,
+connections, and binds resolve; a configuration name is not a generation
+target.
+
 ## Plans
 
 `parameters/selection.py` returns an `AnalysisPlan` per `Analysis`:
