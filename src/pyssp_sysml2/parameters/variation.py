@@ -67,6 +67,7 @@ __all__ = [
     "refuse_variation_erasure",
     "require_resolved_attribute_variation",
     "resolve",
+    "resolve_selected",
 ]
 
 
@@ -239,44 +240,79 @@ def _analysis_roots(
 def _attribute_records(
     architecture: Architecture, composition: PartDefinition
 ) -> list[_AttributeUsage]:
-    """Every attribute usage reachable from the composition or a composing analysis."""
+    """Every attribute usage reachable from the composition or a composing analysis.
+
+    This is the *accepted* set: a caller may address any of these usages, so a
+    selection map authored for one analysis can be handed to the model build
+    unchanged. Required points are scoped by :func:`_target_attribute_records`.
+    """
     records: list[_AttributeUsage] = []
     seen_usages: set[tuple[str, str]] = set()
-
-    def walk(
-        part_def: PartDefinition, prefix: tuple[str, ...], seen: frozenset[str]
-    ) -> None:
-        if part_def.name in seen:
-            return
-        seen = seen | {part_def.name}
-        for name, attribute in part_def.attributes.items():
-            identity = (part_def.name, name)
-            if identity in seen_usages:
-                continue
-            seen_usages.add(identity)
-            definition = architecture.resolve_attribute_def(attribute)
-            records.append(
-                _AttributeUsage(
-                    owner_name=part_def.name,
-                    path=prefix + (name,),
-                    name=name,
-                    usage=attribute,
-                    definition=definition,
-                    variation=(
-                        definition
-                        if definition is not None and definition.is_variation
-                        else None
-                    ),
-                )
-            )
-        for part_name, usage in part_def.parts.items():
-            definition = architecture.resolve_part(usage)
-            if definition is not None:
-                walk(definition, prefix + (part_name,), seen)
-
     for root in _analysis_roots(architecture, composition):
-        walk(root, (), frozenset())
+        _walk_attribute_records(
+            architecture, root, (), frozenset(), seen_usages, records
+        )
     return records
+
+
+def _target_attribute_records(
+    architecture: Architecture, composition: PartDefinition
+) -> list[_AttributeUsage]:
+    """Every attribute usage reachable from *composition* only.
+
+    An analysis target walks its `sut` into the composed model, so both scopes
+    are covered. A model target does not require another analysis's scenario
+    usage; that is what makes a per-analysis selection map sufficient.
+    """
+    records: list[_AttributeUsage] = []
+    _walk_attribute_records(
+        architecture, composition, (), frozenset(), set(), records
+    )
+    return records
+
+
+def _walk_attribute_records(
+    architecture: Architecture,
+    part_def: PartDefinition,
+    prefix: tuple[str, ...],
+    seen: frozenset[str],
+    seen_usages: set[tuple[str, str]],
+    records: list[_AttributeUsage],
+) -> None:
+    if part_def.name in seen:
+        return
+    seen = seen | {part_def.name}
+    for name, attribute in part_def.attributes.items():
+        identity = (part_def.name, name)
+        if identity in seen_usages:
+            continue
+        seen_usages.add(identity)
+        definition = architecture.resolve_attribute_def(attribute)
+        records.append(
+            _AttributeUsage(
+                owner_name=part_def.name,
+                path=prefix + (name,),
+                name=name,
+                usage=attribute,
+                definition=definition,
+                variation=(
+                    definition
+                    if definition is not None and definition.is_variation
+                    else None
+                ),
+            )
+        )
+    for part_name, usage in part_def.parts.items():
+        definition = architecture.resolve_part(usage)
+        if definition is not None:
+            _walk_attribute_records(
+                architecture,
+                definition,
+                prefix + (part_name,),
+                seen,
+                seen_usages,
+                records,
+            )
 
 
 def _unknown_key(key: str, composition: PartDefinition) -> ValueError:
@@ -627,7 +663,7 @@ def require_resolved_attribute_variation(
     """Reject generation while an attribute variation point is unselected."""
     remaining = [
         record
-        for record in _attribute_records(architecture, composition)
+        for record in _target_attribute_records(architecture, composition)
         if record.is_point
     ]
     if remaining:
@@ -641,11 +677,28 @@ def resolve(
 ) -> Architecture:
     """Return a deep copy with every selected variation point substituted.
 
+    See :func:`resolve_selected`; this wrapper drops the canonical selection map.
+    """
+    return resolve_selected(architecture, composition, selections)[0]
+
+
+def resolve_selected(
+    architecture: Architecture,
+    composition: str | PartDefinition,
+    selections: Mapping[str, str] | None = None,
+) -> tuple[Architecture, dict[str, str]]:
+    """Return a resolved copy and the canonical selection map it was built from.
+
     ``composition`` is a part definition or its name. Each key in
     ``selections`` names a part or attribute usage reachable from that
     composition; each value names one variant of the variation point at that
     usage. An unknown, ambiguous, non-point, or unselected key raises
     ``ValueError``.
+
+    The returned map is keyed by the usage path as it exists in the target
+    composition (``source`` for a model, ``sut.source`` for an analysis). Pass
+    it to :func:`pyssp_sysml2.parameters.constraints.evaluate` so constraint
+    bindings resolve against the same keys the variation points used.
 
     Keys are applied outermost first. Selecting an outer body can introduce an
     inner variation point, which the next pass finds at its full dotted path
@@ -662,6 +715,7 @@ def resolve(
     resolved_source = resolved.get_part_def(source.name)
     pending = dict(selections or {})
     applied: list[tuple[_Usage | _AttributeUsage, VariantMember, bool]] = []
+    canonical: dict[str, str] = {}
 
     while pending:
         part_records = _usage_records(resolved, resolved_source)
@@ -684,6 +738,7 @@ def resolve(
             )
             removed = _apply(resolved, record, variant)
             applied.append((record, variant, removed))
+            canonical[record.key] = pending[key]
             del pending[key]
             progressed = True
             break
@@ -716,11 +771,13 @@ def resolve(
     if remaining:
         raise _missing(remaining[0], resolved_source)
     remaining_attributes = [
-        record for record in final_attributes if record.is_point
+        record
+        for record in _target_attribute_records(resolved, resolved_source)
+        if record.is_point
     ]
     if remaining_attributes:
         raise _missing_attribute(remaining_attributes[0], resolved_source)
-    return resolved
+    return resolved, canonical
 
 
 def _apply(

@@ -906,16 +906,15 @@ def test_generate_ssd_is_identical_across_attribute_selections(
     assert len(set(written)) == 1
 
 
-def test_generate_ssd_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
-    """An attribute variation point fails generation instead of flattening."""
+def test_generate_ssd_does_not_require_an_analysis_attribute_point(
+    tmp_path: Path,
+) -> None:
+    """A model build is not blocked by another analysis's scenario point."""
     path, _ = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
-    with pytest.raises(
-        ValueError,
-        match="Attribute variation point 'ScenarioChoice' at 'scenario'.*"
-        "is not selected",
-    ):
-        generate_ssd(path, tmp_path / "out" / "SystemStructure.ssd", "System")
+    generate_ssd(path, tmp_path / "out" / "SystemStructure.ssd", "System")
+
+    assert (tmp_path / "out" / "SystemStructure.ssd").is_file()
 
 
 def test_generate_analysis_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:

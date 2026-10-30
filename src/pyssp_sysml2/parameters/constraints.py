@@ -78,19 +78,30 @@ class ConstraintReport:
     def unasserted(self) -> tuple[ConstraintResult, ...]:
         return self._with_status("unasserted")
 
-    def enforce(self) -> None:
-        """Raise :class:`ConstraintViolation` on any asserted fail or invalid."""
+    @property
+    def ok(self) -> bool:
+        """Whether every asserted constraint passed or was not evaluated."""
+        return not self.failed and not self.invalid
+
+    @property
+    def detail(self) -> str | None:
+        """One-line summary of every blocking result, or ``None`` when clear."""
         blocking = self.failed + self.invalid
         if not blocking:
-            return
+            return None
         details = []
         for result in blocking:
             where = result.owner or "<root>"
             detail = f" ({result.detail})" if result.detail else ""
             details.append(f"{where}: {result.name} {result.status}{detail}")
-        raise ConstraintViolation(
-            "constraint check failed: " + "; ".join(details)
-        )
+        return "; ".join(details)
+
+    def enforce(self) -> None:
+        """Raise :class:`ConstraintViolation` on any asserted fail or invalid."""
+        detail = self.detail
+        if detail is None:
+            return
+        raise ConstraintViolation("constraint check failed: " + detail)
 
 
 class ConstraintViolation(ValueError):

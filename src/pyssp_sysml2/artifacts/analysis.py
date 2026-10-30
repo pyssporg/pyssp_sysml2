@@ -39,7 +39,8 @@ from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
 from pyssp_sysml2.artifacts.ssv import write_parameter_set
 from pyssp_sysml2.model import load
 from pyssp_sysml2.parameters.constraints import enforce_constraints
-from pyssp_sysml2.parameters.variation import resolve
+from pyssp_sysml2.parameters.selection import analysis_selection
+from pyssp_sysml2.parameters.variation import resolve_selected
 
 
 @dataclass(frozen=True)
@@ -69,13 +70,19 @@ def generate_analysis(
     """Write ``analysis.json`` and, for one applied set, its SSV and SSM.
 
     ``selections`` resolves variation points in the analysis before generation;
-    see :func:`pyssp_sysml2.parameters.variation.resolve`. An analysis that
-    carries an unselected variation point fails instead of emitting a flat
-    scenario.
+    see :func:`pyssp_sysml2.parameters.variation.resolve`. When it is ``None``,
+    the analysis's authored ``pyssp_selection`` is used. An explicit map wins,
+    so a caller can still force an illegal combination and have the constraints
+    reject it. An analysis that carries an unselected variation point fails
+    instead of emitting a flat scenario.
     """
     architecture = load(architecture_path)
-    architecture = resolve(architecture, composition, selections or {})
-    enforce_constraints(architecture, composition, selections)
+    if selections is None:
+        selections = analysis_selection(architecture, composition)
+    architecture, canonical = resolve_selected(
+        architecture, composition, selections or {}
+    )
+    enforce_constraints(architecture, composition, canonical)
     analysis = architecture.get_part_def(composition)
     validate_role_markers(architecture)
     if not is_analysis(architecture, analysis):

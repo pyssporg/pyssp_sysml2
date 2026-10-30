@@ -25,7 +25,6 @@ from pyssp_sysml2.model.model import (
     Binding,
     Connection,
     ConstraintDefinition,
-    ConstraintUsage,
     PartDefinition,
     PartUsage,
     PortDefinition,

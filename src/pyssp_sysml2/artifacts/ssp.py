@@ -52,7 +52,7 @@ from pyssp_sysml2.model import Architecture, PartDefinition, load
 from pyssp_sysml2.parameters.constraints import enforce_constraints
 from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
-    resolve,
+    resolve_selected,
 )
 
 DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
@@ -263,10 +263,11 @@ def generate_ssp(
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
+    canonical = None
     if selections:
-        architecture = resolve(architecture, system, selections)
+        architecture, canonical = resolve_selected(architecture, system, selections)
         system = architecture.get_part_def(composition)
-    enforce_constraints(architecture, composition, selections)
+    enforce_constraints(architecture, composition, canonical)
     require_resolved_variation(architecture, system)
     require_resolved_attribute_variation(architecture, system)
     validate_role_markers(architecture)
