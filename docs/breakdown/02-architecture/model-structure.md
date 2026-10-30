@@ -11,15 +11,14 @@ status: current
 
 ## Files and packages
 
-The loader accepts one `.sysml` file or a directory. Directory loading is:
+The loader accepts one `.sysml` file or a directory; definitions keep their
+`source_file`, which matters for export and sync. Directory loading is:
 
 - non-recursive;
 - only `*.sysml` files;
 - sorted by file name;
 - merged into one architecture;
 - expected to use the same package name in every file.
-
-Definitions keep their `source_file`, which matters for export and sync.
 
 The loader is deliberately non-validating:
 
@@ -83,34 +82,12 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
 - Bodies, usage-level members, and nested points inside a body are recovered
   from the raw parse tree, because sysmlpy drops them; the model exposes them as
   repo-owned dataclasses.
+- Authored selections and legality plans: `INFO-027`.
 
 ## Constraints
 
 Constraint capture is repo-owned; `sysmlpy.check_constraints` is unused. A package-level `constraint def` becomes a `ConstraintDefinition` with typed parameters and one source-scanned expression (sysmlpy garbles a definition's grammar dump). A `constraint name : Type { in p = ref; }` becomes a `ConstraintUsage` on its owning part def, bindings in source order; `assert [not] name;` sets `asserted`/`negated`, and an unknown name is rejected. Each binding resolves to `owner path + "." + reference` in the variant selection.
 `parameters/constraints.py` walks reachable part usages and evaluates asserted usages after `variation.resolve` over `==`, `!=`, `implies`, `and`, `or`, `xor`, `not`, parentheses, and references (`Type::member` → `member`). Asserted fail/invalid raises before an SSD, SSP, or analysis write; non-asserted usages report `unasserted`; no selection is a no-op.
-
-## Selection authoring and plans
-
-An analysis may declare its variant selection with one control attribute:
-`attribute pyssp_selection = "source=stepImplementation;gain=twoStages";`. The
-value uses the same `key=variant` language as `--select`; a dotted key addresses
-a nested point. Because the name carries the `pyssp_` prefix, every generator
-skips it as model data.
-
-`parameters/selection.py` parses the attribute and classifies each analysis by
-its authored selection: `legal` when the selection resolves and every asserted
-constraint passes, `violated` when it resolves but a constraint fails, and
-`invalid` when the selection is missing, malformed, or does not resolve. An
-analysis composing a varying model without a selection is `invalid`, never
-silently unselected.
-
-A selection key is canonicalized by `variation.resolve_selected`, which returns
-the resolved architecture and the map keyed by the target composition's usage
-paths (`source` for a model, `sut.source` for an analysis). Generation passes
-that canonical map to constraint evaluation, so variation and constraints share
-one key language. Required points are scoped to the target: a model build does
-not demand another analysis's scenario usage, while an analysis build requires
-its own and its model's points.
 
 ## Top-level composition
 

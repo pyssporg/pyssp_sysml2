@@ -19,4 +19,5 @@ behavior.
 - **INFO-005** [Naming and synthesized definitions](naming-and-synthesis.md) — Artifact names and synthesized definition names form part of the round-trip contract.
 - **INFO-006** [Generation pipeline](generation-pipeline.md) — SSV, SSM, SSD, FMI, and SSP are separate outputs with distinct sources of truth.
 - **INFO-007** [Round-trip and sync](round-trip-and-sync.md) — Sync reconciles SSD edits into SysML; preserved, normalized, and lost information is explicit.
+- **INFO-027** [Selection and plans](selection-and-plans.md) — An analysis authors its variant selection as pyssp_selection; the adapter canonicalizes it, evaluates constraints, and classifies the analysis as legal, violated, or invalid.
 <!-- pb:index:end -->

@@ -84,11 +84,9 @@ emits the SysML v2 text contract independently of the parser's serializer.
   `tests/test_parameter_sets.py`.
 - Parameter synthesis: `parameters/synthesis/`; `tests/test_generate_sysml.py`,
   `tests/test_roundtrip.py`.
-- Variation selection: `parameters/variation.py`; `tests/test_variation.py`.
-- Authored selections and analysis plans: `parameters/selection.py`;
-  `tests/test_selection.py`.
-- Constraint capture and evaluation: `model/parser.py`,
-  `parameters/constraints.py`; `tests/test_constraints*.py`.
+- Variation, selection, constraints: `parameters/variation.py`,
+  `parameters/selection.py`, `parameters/constraints.py`, `model/parser.py`;
+  `tests/test_variation.py`, `tests/test_selection.py`, `tests/test_constraints*.py`.
 - SSD, SSV, and SSM generation: `artifacts/ssd.py`, `artifacts/ssv.py`,
   `artifacts/ssm.py`; `tests/test_parameter_sets.py`.
 - FMI model descriptions: `artifacts/fmi.py`; `tests/test_parameter_sets.py`,

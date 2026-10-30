@@ -341,16 +341,19 @@ def _lookup(
     key: str,
     composition: PartDefinition,
 ) -> _Usage | _AttributeUsage:
-    """The usage a selection key names; bare keys must be unambiguous."""
+    """The usage a selection key names.
+
+    A key matches an exact path or a dotted suffix of one, so a selection
+    authored relative to the composed model (``path.inner_stage``) addresses the
+    same usage in an analysis (``sut.path.inner_stage``). A bare key is the
+    one-segment case. Ambiguous matches are an error.
+    """
     records: list[_Usage | _AttributeUsage] = [*part_records, *attribute_records]
-    if "." in key:
-        exact = [record for record in records if record.key == key]
-        if len(exact) > 1:
-            raise _ambiguous(key, composition, exact)
-        if exact:
-            return exact[0]
-        raise _unknown_key(key, composition)
-    matches = [record for record in records if record.path[-1] == key]
+    matches = [
+        record
+        for record in records
+        if record.key == key or record.key.endswith("." + key)
+    ]
     if not matches:
         raise _unknown_key(key, composition)
     if len(matches) > 1:

@@ -61,6 +61,9 @@ def test_analysis_selection_reads_the_control_attribute(tmp_path) -> None:
 def test_plans_classify_legal_violated_and_invalid(tmp_path) -> None:
     plans = _plans(tmp_path)
 
+    assert "Analysis" not in plans, "the role marker is not an analysis"
+    assert set(plans) == {"step_single", "sine_two", "broken", "missing"}
+
     assert plans["step_single"].status == "legal"
     assert plans["step_single"].legal is True
     assert plans["step_single"].canonical == {

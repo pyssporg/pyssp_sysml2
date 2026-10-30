@@ -171,6 +171,7 @@ def analysis_part_definitions(architecture: Architecture) -> list[PartDefinition
         definition
         for definition in architecture.part_definitions.values()
         if is_analysis(architecture, definition)
+        and _short_name(definition.name) != ANALYSIS_MARKER
     ]
 
 
