@@ -50,7 +50,10 @@ Rules:
   byte-identical `.ssp` files.
 - A non-empty selection mapping is recorded at
   `extra/org.pyssp/selection.json`: the composition name and the mapping sorted
-  by key, with no time-dependent content.
+  by key, with no time-dependent content. The record also carries
+  `"configuration"` naming the SysML configuration that produced the selection,
+  between `composition` and `selections`; the key is omitted when the build
+  composes the root, so non-configuration archives stay byte-identical.
 - A package built without selections carries no `extra/` entry.
 
 The variable-name check is intentionally strict: an SSD connector absent from

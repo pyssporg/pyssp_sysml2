@@ -67,6 +67,17 @@ def _parse_selections(values: list[str] | None) -> dict[str, str] | None:
     return selections
 
 
+def _parse_configuration(value: str | None) -> str | None:
+    """Return the optional configuration name, rejecting an empty value."""
+    if value is None:
+        return None
+    if not value.strip():
+        raise ValueError(
+            "Invalid --configuration value; expected a configuration name."
+        )
+    return value
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog="pyssp", description=__doc__)
     root_subparsers = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +165,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         "--skip_type_check",
         action="store_false",
         help="Avoid type checking during connection linking.",
+    )
+    ssp_parser.add_argument(
+        "--configuration",
+        default=None,
+        metavar="NAME",
+        help=(
+            "SysML configuration that produced the selection, recorded in "
+            "extra/org.pyssp/selection.json. Omit when the build composes the "
+            "root."
+        ),
     )
 
     ssv_parser = generate_subparsers.add_parser("ssv", help="Generate parameter .ssv")
@@ -277,6 +298,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     try:
         selections = _parse_selections(getattr(args, "select", None))
         if args.command == "generate" and args.artifact == "ssp":
+            configuration = _parse_configuration(args.configuration)
             output = args.output or (GENERATED_DIR / f"{args.composition}.ssp")
             output = generate_ssp(
                 args.architecture,
@@ -288,6 +310,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 validate_fmus=args.validate_fmus,
                 allow_missing_fmus=args.allow_missing_fmus,
                 selections=selections,
+                configuration=configuration,
             )
             print(f"SSP written to {output}")
             return 0

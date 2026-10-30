@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD
 
+from pyssp_sysml2 import cli
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from tests.fixture_files import render_fixture
@@ -242,3 +243,69 @@ def test_pyssp_generate_ssp_cli_exports_design_without_fmu_source(
     assert code == 0
     with zipfile.ZipFile(output, "r") as archive:
         assert set(archive.namelist()) == {"SystemStructure.ssd"}
+
+
+def test_pyssp_generate_ssp_cli_passes_the_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI generate ssp forwards --configuration to the generator."""
+    seen: dict[str, object] = {}
+
+    def fake_generate_ssp(architecture, output, composition, **kwargs):
+        seen.update(kwargs)
+        seen["composition"] = composition
+        return output
+
+    monkeypatch.setattr(cli, "generate_ssp", fake_generate_ssp)
+
+    code = main(
+        [
+            "generate",
+            "ssp",
+            "--architecture",
+            str(tmp_path / "arch"),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output",
+            str(tmp_path / "model.ssp"),
+            "--configuration",
+            "StepSystem",
+        ]
+    )
+
+    assert code == 0
+    assert seen["configuration"] == "StepSystem"
+    assert seen["composition"] == COMPOSITION_NAME
+
+
+def test_pyssp_generate_ssp_cli_rejects_an_empty_configuration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+) -> None:
+    """An empty --configuration is an error, not an unnamed configuration."""
+    called: list[object] = []
+
+    def fake_generate_ssp(*args, **kwargs):
+        called.append(args)
+
+    monkeypatch.setattr(cli, "generate_ssp", fake_generate_ssp)
+
+    code = main(
+        [
+            "generate",
+            "ssp",
+            "--architecture",
+            str(tmp_path / "arch"),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output",
+            str(tmp_path / "model.ssp"),
+            "--configuration",
+            "  ",
+        ]
+    )
+
+    assert code == 1
+    assert called == []
+    assert "--configuration" in capsys.readouterr().out

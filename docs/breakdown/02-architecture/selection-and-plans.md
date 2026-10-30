@@ -62,6 +62,8 @@ a silently unselected artifact.
   constraint could not be evaluated.
 
 `configuration` names the composed configuration, or is `None` for the root.
+`generate ssp` records that name as `configuration` in the model SSP's
+`extra/org.pyssp/selection.json`, and omits the key when it is absent.
 A fixture pins the expected `legal` and `violated` names; the adapter computes
 the partition, so the fixture keeps only its claim. Constraints come from the
 effective members of a part definition, so a configuration is judged by the

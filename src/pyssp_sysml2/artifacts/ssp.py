@@ -210,19 +210,20 @@ def _normalise_parameter_set_prefix(prefix: str) -> str:
 
 
 def _selection_document(
-    composition: str, selections: Mapping[str, str]
+    composition: str,
+    selections: Mapping[str, str],
+    configuration: str | None = None,
 ) -> str:
-    """Deterministic JSON record of one build's variant selection."""
-    return (
-        json.dumps(
-            {
-                "composition": composition,
-                "selections": dict(sorted(selections.items())),
-            },
-            indent=2,
-        )
-        + "\n"
-    )
+    """Deterministic JSON record of one build's variant selection.
+
+    ``configuration`` names the SysML configuration that produced the selection
+    and is omitted when the build composes the root.
+    """
+    document: dict[str, object] = {"composition": composition}
+    if configuration:
+        document["configuration"] = configuration
+    document["selections"] = dict(sorted(selections.items()))
+    return json.dumps(document, indent=2) + "\n"
 
 
 def generate_ssp(
@@ -236,6 +237,7 @@ def generate_ssp(
     validate_fmus: bool = True,
     allow_missing_fmus: bool = False,
     selections: Mapping[str, str] | None = None,
+    configuration: str | None = None,
 ) -> Path:
     """Build an ``.ssp`` archive from a SysML architecture and its built FMUs.
 
@@ -258,7 +260,9 @@ def generate_ssp(
 
     ``selections`` resolves variation points before generation; see
     :func:`pyssp_sysml2.parameters.variation.resolve`. A non-empty mapping is also
-    recorded in the archive at ``extra/org.pyssp/selection.json``.
+    recorded in the archive at ``extra/org.pyssp/selection.json``; the record
+    names the configuration that produced the selection via ``configuration``,
+    and omits it when the build composes the root.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
     architecture = load(architecture_path)
@@ -327,7 +331,7 @@ def generate_ssp(
             if selections:
                 selection_path = temp_path / "selection.json"
                 selection_path.write_text(
-                    _selection_document(composition, selections),
+                    _selection_document(composition, selections, configuration),
                     encoding="utf-8",
                 )
                 archive.runtime.add_file(

@@ -731,6 +731,54 @@ def test_generate_ssp_records_selection_deterministically(tmp_path: Path) -> Non
     assert first.read_bytes() == second.read_bytes()
 
 
+def test_generate_ssp_records_the_configuration_that_produced_the_selection(
+    tmp_path: Path,
+) -> None:
+    """The provenance names the configuration and stays byte-identical."""
+    path, _ = _load_architecture(tmp_path, DEFINITION_VARIATION)
+    arguments = {
+        "selections": {"source": "stepImplementation"},
+        "configuration": "StepSystem",
+    }
+
+    first = generate_ssp(path, tmp_path / "one.ssp", "System", **arguments)
+    second = generate_ssp(path, tmp_path / "two.ssp", "System", **arguments)
+
+    with zipfile.ZipFile(first) as archive:
+        assert json.loads(
+            archive.read("extra/org.pyssp/selection.json")
+        ) == {
+            "composition": "System",
+            "configuration": "StepSystem",
+            "selections": {"source": "stepImplementation"},
+        }
+    assert first.read_bytes() == second.read_bytes()
+
+
+def test_generate_ssp_omits_an_absent_or_empty_configuration(
+    tmp_path: Path,
+) -> None:
+    """No configuration and an empty one write the same record as before."""
+    path, _ = _load_architecture(tmp_path, DEFINITION_VARIATION)
+
+    for index, configuration in enumerate((None, "")):
+        output = generate_ssp(
+            path,
+            tmp_path / f"{index}.ssp",
+            "System",
+            selections={"source": "stepImplementation"},
+            configuration=configuration,
+        )
+        with zipfile.ZipFile(output) as archive:
+            record = json.loads(
+                archive.read("extra/org.pyssp/selection.json")
+            )
+        assert record == {
+            "composition": "System",
+            "selections": {"source": "stepImplementation"},
+        }
+
+
 def test_generate_ssp_without_selection_adds_no_provenance(
     tmp_path: Path,
 ) -> None:
