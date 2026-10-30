@@ -34,6 +34,10 @@ only when exactly one reachable usage carries it. Attribute usages are
 collected on the composition and on any analysis that composes it, so an
 analysis scenario stays selectable when its model is generated.
 
+A configuration usage has no type of its own but a redefinition and a feature
+value (``part :>> source = SourceChoice::step;``); its binding names the point,
+so it resolves like the usage it redefines.
+
 A variation usage inside a selected body is itself a point. After an outer
 selection is applied, inner points are resolved by their full dotted path. An
 unselected inner point fails with that path. A third level of nesting raises a
@@ -184,6 +188,33 @@ def refuse_variation_erasure(
     )
 
 
+def _configuration_variation(
+    architecture: Architecture, owner: PartDefinition, usage: PartUsage
+) -> PartDefinition | None:
+    """The variation definition a configuration binding redefines, or ``None``.
+
+    A configuration usage carries no type of its own
+    (``part :>> source = SourceChoice::step;``). Its feature value names the
+    point: a qualified ``Type::variant``, or a local usage that specialises one
+    (``part :>> path = nestedGainPath;`` with
+    ``part nestedGainPath :> PathChoice::nestedPath``).
+    """
+    if usage.type_name is not None or not usage.redefines or usage.value is None:
+        return None
+    value = usage.value
+    if "::" in value:
+        name = value.split("::")[0]
+    else:
+        local = owner.parts.get(value)
+        if local is None or len(local.subsets) != 1:
+            return None
+        name = local.subsets[0].split("::")[0]
+    definition = architecture.part_definitions.get(name.strip())
+    if definition is None or not definition.is_variation:
+        return None
+    return definition
+
+
 def _usage_records(
     architecture: Architecture, composition: PartDefinition
 ) -> list[_Usage]:
@@ -202,7 +233,7 @@ def _usage_records(
             variation = (
                 definition
                 if definition is not None and definition.is_variation
-                else None
+                else _configuration_variation(architecture, part_def, usage)
             )
             records.append(
                 _Usage(
@@ -811,5 +842,22 @@ def _apply(
         record.usage.type_name = definition.name
     else:
         record.usage.type_name = variant.type_name
+    _drop_configuration_helper(record)
     record.usage.is_variation = False
     return False
+
+
+def _drop_configuration_helper(record: _Usage) -> None:
+    """Remove the local usage a configuration binding only pointed at.
+
+    ``part :>> path = nestedGainPath;`` is resolved to the variant's type, so
+    ``nestedGainPath`` (an untyped usage that only specialises that variant)
+    would otherwise stay behind as an unresolved part and fail every consumer.
+    """
+    usage = record.usage
+    value = usage.value
+    if not usage.redefines or value is None or "::" in value:
+        return
+    local = record.owner.parts.get(value)
+    if local is not None and local.subsets:
+        del record.owner.parts[value]

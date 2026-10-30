@@ -25,7 +25,23 @@ from pyssp_sysml2.model.model import (
 from pyssp_sysml2.model.parser import connection_endpoint, parse_tree
 
 
-# -- variation points (raw parse tree; see IMP-006) --------------------------
+# -- raw parse tree facts (see IMP-006, IMP-106) ----------------------------
+
+
+@dataclass
+class UsageExtras:
+    """Raw-tree extras of one part or attribute usage (see IMP-106).
+
+    ``sysmlpy`` drops the redefinition target, the subsetting target, the
+    feature value, and a usage body. ``redefines`` and ``subsets`` keep the
+    qualified names as written; ``value`` keeps the feature value text without
+    its leading ``=``; ``body`` is the usage's anonymous body.
+    """
+
+    redefines: tuple[str, ...] = ()
+    subsets: tuple[str, ...] = ()
+    value: str | None = None
+    body: VariantBody | None = None
 
 
 @dataclass
@@ -39,6 +55,7 @@ class VariationFacts:
     )
     usage_points: dict[str, set[str]] = field(default_factory=dict)
     attribute_points: set[str] = field(default_factory=set)
+    usage_extras: dict[tuple[str, str], UsageExtras] = field(default_factory=dict)
 
 
 def variation_facts(source: str) -> VariationFacts:
@@ -54,17 +71,20 @@ def variation_facts(source: str) -> VariationFacts:
     facts = VariationFacts()
     for node in _tree_nodes(parse_tree(source)):
         try:
-            if type(node).__name__ == "VariantUsageElementContext":
+            kind = type(node).__name__
+            if kind == "VariantUsageElementContext":
                 _capture_variant(node, facts)
-            elif type(node).__name__ == "PartUsageContext" and _has_variation_prefix(
-                node
-            ):
-                _capture_usage_point(node, facts)
+            elif kind == "PartUsageContext":
+                if _has_variation_prefix(node):
+                    _capture_usage_point(node, facts)
+                _capture_usage_extras(node, facts)
             elif (
-                type(node).__name__ == "AttributeDefinitionContext"
+                kind == "AttributeDefinitionContext"
                 and _has_attribute_variation_prefix(node)
             ):
                 _capture_attribute_point(node, facts)
+            elif kind == "AttributeUsageContext":
+                _capture_usage_extras(node, facts)
         except (AttributeError, IndexError, TypeError):
             continue
     return facts
@@ -349,6 +369,207 @@ def _variant_body(usage) -> VariantBody | None:
     ):
         return None
     return captured
+
+
+# -- configuration bodies and usage extras (raw parse tree; see IMP-106) -----
+
+
+def _capture_usage_extras(node, facts: VariationFacts) -> None:
+    """Record one part or attribute usage's extras under its owning definition.
+
+    The key is ``(owning part definition, usage display name)``. A variant
+    member is already carried by its variant body and is skipped; a usage whose
+    name can be neither identified nor taken from a single redefinition target
+    is skipped rather than guessed.
+    """
+    if _inside_variant_body(node):
+        return
+    definition = _enclosing_part_definition(node)
+    owner = _definition_name(definition) if definition is not None else None
+    name = _usage_display_name(node)
+    if owner is None or name is None:
+        return
+    facts.usage_extras[(owner, name)] = _usage_extras(node)
+
+
+def _usage_display_name(ctx) -> str | None:
+    """True name of a raw part or attribute usage.
+
+    An anonymous redefinition (``part :>> source = ...``) has no identification;
+    its name is the last segment of the single redefinition target. Multiple or
+    zero targets with no identification identify nothing, so ``None``.
+    """
+    usage = ctx.usage()
+    declaration = usage.usageDeclaration() if usage is not None else None
+    identification = (
+        declaration.identification() if declaration is not None else None
+    )
+    if identification is not None:
+        return identification.getText()
+    targets = _redefinition_targets(ctx)
+    if len(targets) == 1:
+        return targets[0].split("::")[-1].strip()
+    return None
+
+
+def _feature_specializations(ctx) -> list:
+    """The ``featureSpecialization`` alternatives of a usage declaration."""
+    usage = ctx.usage()
+    declaration = usage.usageDeclaration() if usage is not None else None
+    part = (
+        declaration.featureSpecializationPart()
+        if declaration is not None
+        else None
+    )
+    return _as_list(part.featureSpecialization()) if part is not None else []
+
+
+def _redefinition_targets(ctx) -> tuple[str, ...]:
+    """Qualified names after ``:>>`` on one usage, in source order."""
+    return tuple(
+        target.getText()
+        for feature in _feature_specializations(ctx)
+        for redefinitions in _descendants(feature, "RedefinitionsContext")
+        for target in _descendants(redefinitions, "OwnedRedefinitionContext")
+    )
+
+
+def _subsetting_targets(ctx) -> tuple[str, ...]:
+    """Qualified names after ``:>`` on one usage, in source order."""
+    return tuple(
+        target.getText()
+        for feature in _feature_specializations(ctx)
+        for subsettings in _descendants(feature, "SubsettingsContext")
+        for target in _descendants(subsettings, "OwnedSubsettingContext")
+    )
+
+
+def _feature_value_text(ctx) -> str | None:
+    """Feature value text of one usage without its leading ``=``, or ``None``.
+
+    Only the usage's own ``UsageCompletionContext`` is read, so a value inside
+    a body member is never mistaken for the enclosing usage's value.
+    """
+    usage = ctx.usage()
+    completion = usage.usageCompletion() if usage is not None else None
+    value_part = _first_child(completion, "ValuePartContext")
+    value = _first_child(value_part, "FeatureValueContext")
+    if value is None:
+        return None
+    text = value.getText().strip()
+    return text[1:].strip() if text.startswith("=") else None
+
+
+def _usage_extras(ctx) -> UsageExtras:
+    """Repo UsageExtras for one raw part or attribute usage."""
+    return UsageExtras(
+        redefines=_redefinition_targets(ctx),
+        subsets=_subsetting_targets(ctx),
+        value=_feature_value_text(ctx),
+        body=_usage_body(ctx),
+    )
+
+
+def _usage_body(ctx) -> VariantBody | None:
+    """Members declared inside a usage's ``{ ... }`` body, or ``None``.
+
+    Mirrors :func:`_variant_body` for a body on a non-variant usage: its direct
+    members are part usages (recursively bodied), connections, bindings, and
+    attribute usages. A ``variation part`` body holds variant declarations and
+    is carried by the variation walk instead, so it yields ``None`` here. A
+    member this walk cannot carry raises ``ValueError`` instead of being
+    dropped.
+    """
+    if type(ctx).__name__ == "PartUsageContext" and _has_variation_prefix(ctx):
+        return None
+    usage = ctx.usage()
+    completion = usage.usageCompletion() if usage is not None else None
+    body = completion.usageBody() if completion is not None else None
+    definition_body = body.definitionBody() if body is not None else None
+    if definition_body is None:
+        return None
+
+    captured = VariantBody()
+    for item in _as_list(definition_body.children):
+        if type(item).__name__ != "DefinitionBodyItemContext":
+            continue
+        if _is_variant_member_item(item) or _is_comment_item(item):
+            continue
+        part = _first_descendant(item, "PartUsageContext")
+        if part is not None:
+            name = _usage_display_name(part)
+            if name is None:
+                raise ValueError(
+                    "A part usage in a configuration body must be named or "
+                    "redefine exactly one feature"
+                )
+            extras = _usage_extras(part)
+            captured.parts[name] = PartUsage(
+                name=name,
+                type_name=_usage_type(part),
+                is_variation=_has_variation_prefix(part),
+                variants=_nested_variants(part),
+                redefines=extras.redefines,
+                subsets=extras.subsets,
+                value=extras.value,
+                body=extras.body,
+            )
+            continue
+        connect = _first_descendant(item, "ConnectionUsageContext")
+        if connect is not None:
+            connection = _raw_connection(connect)
+            captured.connections[connection.key] = connection
+            continue
+        bind = _first_descendant(item, "BindingConnectorAsUsageContext")
+        if bind is not None:
+            captured.bindings.append(_raw_binding(bind))
+            continue
+        attribute = _first_descendant(item, "AttributeUsageContext")
+        if attribute is not None:
+            name = _usage_display_name(attribute)
+            if name is None:
+                raise ValueError(
+                    "An attribute usage in a configuration body must be named "
+                    "or redefine exactly one feature"
+                )
+            extras = _usage_extras(attribute)
+            captured.attributes[name] = Attribute(
+                name=name,
+                type_name=_usage_type(attribute),
+                value=extras.value,
+                redefines=extras.redefines,
+            )
+            continue
+        if _has_content(item):
+            raise ValueError(
+                "Unsupported member in a configuration body: "
+                f"'{item.getText().strip()}'. A body carries parts, "
+                "connections, bindings, and attribute usages."
+            )
+    if not (
+        captured.parts
+        or captured.connections
+        or captured.bindings
+        or captured.attributes
+    ):
+        return None
+    return captured
+
+
+def _first_child(node, kind: str):
+    """First direct child context of *kind* below *node*, or ``None``."""
+    for child in getattr(node, "children", None) or []:
+        if type(child).__name__ == kind:
+            return child
+    return None
+
+
+def _descendants(node, kind: str) -> Iterator:
+    """Every descendant context of *kind* below *node*, pre-order."""
+    for child in getattr(node, "children", None) or []:
+        if type(child).__name__ == kind:
+            yield child
+        yield from _descendants(child, kind)
 
 
 def _is_variant_member_item(item) -> bool:

@@ -71,10 +71,11 @@ def generate_analysis(
 
     ``selections`` resolves variation points in the analysis before generation;
     see :func:`pyssp_sysml2.parameters.variation.resolve`. When it is ``None``,
-    the analysis's authored ``pyssp_selection`` is used. An explicit map wins,
-    so a caller can still force an illegal combination and have the constraints
-    reject it. An analysis that carries an unselected variation point fails
-    instead of emitting a flat scenario.
+    the analysis's model-level configuration binds the selection, via
+    :func:`pyssp_sysml2.parameters.configuration.derived_selection`. An explicit
+    map wins, so a caller can still force an illegal combination and have the
+    constraints reject it. An analysis that carries an unselected variation
+    point fails instead of emitting a flat scenario.
     """
     architecture = load(architecture_path)
     if selections is None:

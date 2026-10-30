@@ -200,7 +200,13 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
     )
     variation_usages = variation.usage_points.get(element.name, ())
     for attribute in element.attributes:
-        part_def.attributes[attribute.name] = _attribute(attribute)
+        # A redefining attribute (``attribute :>> scenario = ...;``) gets a UUID
+        # as its parsed name; ``display_name`` keeps the inherited name.
+        name = getattr(attribute, "display_name", None) or attribute.name
+        extras = variation.usage_extras.get((element.name, name))
+        part_def.attributes[name] = _attribute(
+            attribute, extras.redefines if extras is not None else ()
+        )
     for port in element.ports:
         # A redefining port (``out port :>> y : T;``) gets a UUID as its parsed
         # name; ``display_name`` keeps the name the composition connects to.
@@ -211,13 +217,19 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
             type_name=port.typed_by_name,
         )
     for part in element.parts:
-        part_def.parts[part.name] = PartUsage(
-            name=part.name,
+        # A redefining part usage (``part :>> source = ...;``) gets a UUID as
+        # its parsed name; ``display_name`` keeps the inherited name.
+        name = getattr(part, "display_name", None) or part.name
+        extras = variation.usage_extras.get((element.name, name))
+        part_def.parts[name] = PartUsage(
+            name=name,
             type_name=part.typed_by_name,
-            is_variation=part.name in variation_usages,
-            variants=list(
-                variation.usage_variants.get((element.name, part.name), ())
-            ),
+            is_variation=name in variation_usages,
+            variants=list(variation.usage_variants.get((element.name, name), ())),
+            redefines=extras.redefines if extras is not None else (),
+            subsets=extras.subsets if extras is not None else (),
+            value=extras.value if extras is not None else None,
+            body=extras.body if extras is not None else None,
         )
     for connect in element.connections:
         connection = _connection(connect, file)
@@ -375,11 +387,12 @@ def _binding(bind, file: Path) -> Binding:
 # -- attribute usages -------------------------------------------------------
 
 
-def _attribute(element) -> Attribute:
+def _attribute(element, redefines: tuple[str, ...] = ()) -> Attribute:
     """Repo Attribute from a sysmlpy attribute usage."""
     return Attribute(
-        name=element.name,
+        name=getattr(element, "display_name", None) or element.name,
         type_name=element.typed_by_name,
         value=normalize_value(element),
         multiplicity=multiplicity(element),
+        redefines=redefines,
     )

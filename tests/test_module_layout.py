@@ -31,6 +31,9 @@ SYMLPY_IMPORT = re.compile(r"\s*(?:import|from)\s+sysmlpy\b")
 MAX_MODULE_LINES = 600
 
 LARGE_MODULES: dict[str, str] = {
+    "model/variation.py": (
+        "one raw-tree pass: variation points, configuration bodies, usage extras"
+    ),
     "parameters/variation.py": (
         "one variation pass: inventory, discovery, validation, body materialisation, driver"
     ),

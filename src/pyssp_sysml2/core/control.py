@@ -12,7 +12,6 @@ CONTROL_PREFIX = "pyssp_"
 DEFAULT_START_ATTR = f"{CONTROL_PREFIX}default_start_time"
 DEFAULT_STOP_ATTR = f"{CONTROL_PREFIX}default_stop_time"
 FLAT_CONNECTOR_ATTR = f"{CONTROL_PREFIX}flat_connector"
-SELECTION_ATTR = f"{CONTROL_PREFIX}selection"
 
 # Removed control attributes. They still match the pyssp_ prefix, so
 # generators would otherwise skip them silently; validation turns them into

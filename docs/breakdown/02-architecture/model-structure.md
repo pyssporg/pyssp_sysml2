@@ -77,12 +77,12 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
   variation usage, and the usage is removed on selection, so no empty component
   reaches the SSD.
 - A variation usage inside a selected body is a point of its own, selected by
-  the dotted path (`path.inner=variant`). Only two levels are supported; a
-  third level is rejected, never flattened.
+  the dotted path (`path.inner=variant`); a third level is rejected, never
+  flattened.
 - Bodies, usage-level members, and nested points inside a body are recovered
-  from the raw parse tree, because sysmlpy drops them; the model exposes them as
-  repo-owned dataclasses.
-- Authored selections and legality plans: `INFO-027`.
+  from the raw parse tree and exposed as repo-owned dataclasses.
+- A model-level configuration is captured on `PartUsage` and `Attribute`
+  (`redefines`, `subsets`, `value`, body); selection and plans: `INFO-027`.
 
 ## Constraints
 

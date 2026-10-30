@@ -922,7 +922,10 @@ def test_generate_analysis_rejects_an_unselected_attribute_point(tmp_path: Path)
 
     with pytest.raises(
         ValueError,
-        match="Attribute variation point 'ScenarioChoice' at 'scenario'",
+        match=(
+            "variation point 'ScenarioChoice' at 'scenario' is not selected; "
+            "bind it in analysis 'test_selected_scenario'"
+        ),
     ):
         generate_analysis(
             path,

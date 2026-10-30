@@ -25,6 +25,7 @@ from pyssp_sysml2.model import (
     ConstraintDefinition,
     ConstraintUsage,
     PartDefinition,
+    PartUsage,
 )
 
 __all__ = [
@@ -115,6 +116,39 @@ def _join(owner: str, name: str) -> str:
     return f"{owner}.{name}" if owner else name
 
 
+def _effective_members(
+    architecture: Architecture,
+    definition: PartDefinition,
+    seen: frozenset[str] | None = None,
+) -> tuple[dict[object, ConstraintUsage], dict[str, PartUsage]]:
+    """Effective constraints and parts, inherited root-first by name.
+
+    A configuration specializes the family and inherits its asserted
+    constraints, but the parsed definition does not merge them. A derived
+    member with the same name replaces its ancestor's and keeps the ancestor's
+    position; an unnamed constraint is never overridden.
+    """
+    seen = frozenset() if seen is None else seen
+    if definition.name in seen:
+        return {}, {}
+    seen = seen | {definition.name}
+    constraints: dict[object, ConstraintUsage] = {}
+    parts: dict[str, PartUsage] = {}
+    for supertype in definition.specializes:
+        base = architecture.part_definitions.get(supertype.split("::")[-1])
+        if base is None:
+            continue
+        inherited_constraints, inherited_parts = _effective_members(
+            architecture, base, seen
+        )
+        constraints.update(inherited_constraints)
+        parts.update(inherited_parts)
+    for usage in definition.constraints:
+        constraints[usage.name if usage.name is not None else id(usage)] = usage
+    parts.update(definition.parts)
+    return constraints, parts
+
+
 def _walk(
     architecture: Architecture,
     definition: PartDefinition,
@@ -123,9 +157,10 @@ def _walk(
     results: list[ConstraintResult],
     stack: frozenset[str],
 ) -> None:
-    for usage in definition.constraints:
+    constraints, parts = _effective_members(architecture, definition)
+    for usage in constraints.values():
         results.append(_evaluate_usage(architecture, usage, owner, selections))
-    for part_usage in definition.parts.values():
+    for part_usage in parts.values():
         child = architecture.resolve_part(part_usage)
         if child is None or child.name in stack:
             continue

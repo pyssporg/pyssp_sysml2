@@ -89,11 +89,25 @@ def _multiplicity_suffix(attribute: Attribute) -> str:
     return f"[{attribute.multiplicity}]" if attribute.multiplicity else ""
 
 
+def _feature_value_text(value) -> str:
+    """Feature-value text: a string is already an expression as written."""
+    return value if isinstance(value, str) else _format_value(value)
+
+
 def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list[str]:
     lines = _doc_line(attribute.doc, indent)
     type_name = attribute.effective_type_name
     multiplicity = _multiplicity_suffix(attribute)
-    if attribute.value is not None:
+    if attribute.redefines:
+        # A redefinition keeps the inherited feature name (``:>> scenario``) and
+        # its value is a feature-value expression, not necessarily a literal.
+        declaration = f"{indent}attribute :>> {', '.join(attribute.redefines)}"
+        if attribute.type_name:
+            declaration += f" : {attribute.type_name}"
+        if attribute.value is not None:
+            declaration += f" = {_feature_value_text(attribute.value)}"
+        lines.append(declaration + ";")
+    elif attribute.value is not None:
         value = _format_value(attribute.value)
         lines.append(
             f"{indent}attribute {attribute.name} : {type_name}{multiplicity} = {value};"
@@ -114,6 +128,21 @@ def _port_usage_lines(port: PortUsage, indent: str = _MEMBER_INDENT) -> list[str
     ]
 
 
+def _part_usage_text(part) -> str:
+    """One part usage declaration, including its specialization and value."""
+    if part.redefines:
+        text = f"part :>> {', '.join(part.redefines)}"
+    else:
+        text = f"part {part.name}"
+    if part.type_name:
+        text += f" : {part.type_name}"
+    if part.subsets:
+        text += f" :> {', '.join(part.subsets)}"
+    if part.value is not None:
+        text += f" = {part.value}"
+    return text + ";"
+
+
 def _part_definition_lines(part_def: PartDefinition) -> list[str]:
     suffix = ""
     if part_def.specializes:
@@ -129,7 +158,7 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
             yield from _port_usage_lines(port)
         for part in sorted(part_def.parts.values(), key=lambda p: p.name):
             yield from _doc_line(part.doc)
-            yield f"{_MEMBER_INDENT}part {part.name} : {part.type_name};"
+            yield f"{_MEMBER_INDENT}{_part_usage_text(part)}"
         for connection in part_def.connections.values():  # insertion order
             yield from _doc_line(connection.doc)
             yield (

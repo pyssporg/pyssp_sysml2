@@ -81,6 +81,9 @@ class Attribute:
 
     ``multiplicity`` is the declared range as written (``"3"``, ``"0..*"``,
     ``"2..4"``) or ``None`` when the attribute is scalar/undeclared.
+
+    ``redefines`` keeps the features redefined by ``:>>`` (``("scenario",)``);
+    the usage keeps the inherited feature name in ``name``.
     """
 
     name: str
@@ -88,6 +91,7 @@ class Attribute:
     value: object = None
     doc: str | None = None
     multiplicity: str | None = None
+    redefines: tuple[str, ...] = ()
 
     @property
     def is_list(self) -> bool:
@@ -145,13 +149,24 @@ class PartUsage:
     ``is_variation`` marks a usage-level variation point
     (``variation part source : SignalSource;``): the usage is the point, and its
     alternatives live in ``variants``.
+
+    A redefinition (``part :>> source = SourceChoice::step;``) keeps the
+    inherited name in ``name`` and the redefined feature in ``redefines``. A
+    specialization (``part path :> PathChoice::nestedPath;``) stores the
+    subsetting target in ``subsets`` and inherits its type, so ``type_name`` may
+    be ``None``. ``value`` is the feature value as written (``"SourceChoice::step"``)
+    and ``body`` the usage's anonymous body, if it declares one.
     """
 
     name: str
-    type_name: str
+    type_name: str | None
     doc: str | None = None
     is_variation: bool = False
     variants: list[VariantMember] = field(default_factory=list)
+    redefines: tuple[str, ...] = ()
+    subsets: tuple[str, ...] = ()
+    value: str | None = None
+    body: VariantBody | None = None
 
 
 def endpoint_text(part: str | None, port: str) -> str:
@@ -214,13 +229,20 @@ class Binding:
 
 @dataclass
 class VariantBody:
-    """The members a ``variant part name { ... }`` declares for itself.
+    """The members a usage's anonymous body (``name { ... }``) declares.
 
-    A body is the implicit anonymous definition of that variant usage. It
-    carries its own subparts, connections, attribute usages, and the bindings
-    it would apply. On selection, attributes and bindings are merged into the
-    definition that owns the variation usage, so ``values.height``-style
-    references resolve there; see :func:`pyssp_sysml2.parameters.variation.resolve`.
+    It carries the body's own subparts, connections, attribute usages, and the
+    bindings it would apply. It is reused for two shapes:
+
+    - a variant body (``variant part name { ... }``), the implicit anonymous
+      definition of that variant usage; on selection, attributes and bindings
+      are merged into the definition that owns the variation usage, so
+      ``values.height``-style references resolve there; see
+      :func:`pyssp_sysml2.parameters.variation.resolve`.
+    - a configuration body on a non-variant part usage
+      (``part path :> PathChoice::nestedPath { ... }``); it is the usage's own
+      definition holding nested usages, connections, and bindings. It is not
+      selectable and is captured as model structure only.
 
     ``connections`` is keyed by :attr:`Connection.key`, ``parts`` and
     ``attributes`` by name, all in declaration order.
