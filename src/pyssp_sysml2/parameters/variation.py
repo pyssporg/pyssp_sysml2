@@ -216,6 +216,37 @@ def _configuration_variation(
     return definition
 
 
+def _configuration_attribute_variation(
+    architecture: Architecture, owner: PartDefinition, attribute: Attribute
+) -> AttributeDefinition | None:
+    """The attribute variation definition a configuration binding redefines.
+
+    The attribute counterpart of :func:`_configuration_variation`: a redefining
+    usage has no type of its own
+    (``attribute :>> scenario = ScenarioChoice::nominalK3;``), and its feature
+    value names the point. Only the forms the derivation accepts are read: a
+    qualified ``Type::variant``, or a local usage that specialises one.
+    """
+    value = attribute.value
+    if (
+        attribute.type_name is not None
+        or not attribute.redefines
+        or not isinstance(value, str)
+    ):
+        return None
+    if "::" in value:
+        name = value.split("::")[0]
+    else:
+        local = owner.parts.get(value)
+        if local is None or len(local.subsets) != 1:
+            return None
+        name = local.subsets[0].split("::")[0]
+    definition = architecture.attribute_definitions.get(name.strip())
+    if definition is None or not definition.is_variation:
+        return None
+    return definition
+
+
 def _usage_records(
     architecture: Architecture, composition: PartDefinition
 ) -> list[_Usage]:
@@ -288,18 +319,27 @@ def _composes_root(
 def _attribute_records(
     architecture: Architecture, composition: PartDefinition
 ) -> list[_AttributeUsage]:
-    """Every attribute usage reachable from the composition or a composing analysis.
+    """Every attribute usage a selection may address, in acceptance order.
 
-    This is the *accepted* set: a caller may address any of these usages, so a
-    selection map authored for one analysis can be handed to the model build
-    unchanged. Required points are scoped by :func:`_target_attribute_records`.
+    The composition's subtree is accepted by its own paths. A composing
+    analysis contributes only its **own** attribute usages, at bare keys: the
+    composed model already appears through the composition walk, so descending
+    into the analysis would add a duplicate ``sut.<name>`` candidate and make a
+    bare model key ambiguous. Required points are scoped by
+    :func:`_target_attribute_records`.
     """
     records: list[_AttributeUsage] = []
     seen_usages: set[tuple[str, str]] = set()
+    _walk_attribute_records(
+        architecture, composition, (), frozenset(), seen_usages, records
+    )
     for root in _analysis_roots(architecture, composition):
-        _walk_attribute_records(
-            architecture, root, (), frozenset(), seen_usages, records
-        )
+        if root is composition:
+            continue
+        for name, attribute in root.attributes.items():
+            _append_attribute_record(
+                architecture, root, (), name, attribute, seen_usages, records
+            )
     return records
 
 
@@ -331,24 +371,8 @@ def _walk_attribute_records(
         return
     seen = seen | {part_def.name}
     for name, attribute in part_def.attributes.items():
-        identity = (part_def.name, name)
-        if identity in seen_usages:
-            continue
-        seen_usages.add(identity)
-        definition = architecture.resolve_attribute_def(attribute)
-        records.append(
-            _AttributeUsage(
-                owner_name=part_def.name,
-                path=prefix + (name,),
-                name=name,
-                usage=attribute,
-                definition=definition,
-                variation=(
-                    definition
-                    if definition is not None and definition.is_variation
-                    else None
-                ),
-            )
+        _append_attribute_record(
+            architecture, part_def, prefix, name, attribute, seen_usages, records
         )
     for part_name, usage in part_def.parts.items():
         definition = architecture.resolve_part(usage)
@@ -361,6 +385,37 @@ def _walk_attribute_records(
                 seen_usages,
                 records,
             )
+
+
+def _append_attribute_record(
+    architecture: Architecture,
+    part_def: PartDefinition,
+    prefix: tuple[str, ...],
+    name: str,
+    attribute: Attribute,
+    seen_usages: set[tuple[str, str]],
+    records: list[_AttributeUsage],
+) -> None:
+    identity = (part_def.name, name)
+    if identity in seen_usages:
+        return
+    seen_usages.add(identity)
+    definition = architecture.resolve_attribute_def(attribute)
+    variation = (
+        definition
+        if definition is not None and definition.is_variation
+        else _configuration_attribute_variation(architecture, part_def, attribute)
+    )
+    records.append(
+        _AttributeUsage(
+            owner_name=part_def.name,
+            path=prefix + (name,),
+            name=name,
+            usage=attribute,
+            definition=definition,
+            variation=variation,
+        )
+    )
 
 
 def _unknown_key(key: str, composition: PartDefinition) -> ValueError:

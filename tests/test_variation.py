@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import zipfile
 from pathlib import Path
 
@@ -14,7 +15,11 @@ from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
 from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
 from pyssp_sysml2.model import load
-from pyssp_sysml2.parameters.variation import has_variation, resolve
+from pyssp_sysml2.parameters.variation import (
+    has_variation,
+    resolve,
+    resolve_selected,
+)
 from tests.fixture_files import fixture_text
 from tests.testhelpers import write_bootstrap_ssd, write_model
 
@@ -1068,3 +1073,365 @@ def test_cli_generate_analysis_selects_an_attribute_variant(tmp_path: Path) -> N
 
     assert code == 0
     assert _ssv_values(output / "HighGainScenario.ssv")["k"] == 9.0
+
+
+# -- nested selection key ambiguity --
+
+AMBIGUOUS_NESTED = fixture_text("variation/ambiguous-nested.sysml")
+
+
+def test_resolve_rejects_a_nested_suffix_matching_two_paths(
+    tmp_path: Path,
+) -> None:
+    """A suffix that ends both 'a.inner.x' and 'b.inner.x' is ambiguous."""
+    _, architecture = _load_architecture(tmp_path, AMBIGUOUS_NESTED)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selection key 'inner.x' is ambiguous in composition 'System'; "
+            "it names 'a.inner.x', 'b.inner.x'. Write the full dotted path."
+        ),
+    ):
+        resolve(architecture, "System", {"inner.x": "anything"})
+
+
+def test_resolve_accepts_one_full_nested_path(tmp_path: Path) -> None:
+    """The full dotted path disambiguates the two nested usages."""
+    _, architecture = _load_architecture(tmp_path, AMBIGUOUS_NESTED)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selection key 'a.inner.x' names part usage 'a.inner.x', which is "
+            "not a variation point; select a variation point instead."
+        ),
+    ):
+        resolve(architecture, "System", {"a.inner.x": "x"})
+
+
+# -- selection resolution order and canonical keys --
+
+RESOLUTION_ORDER = fixture_text("variation/resolution-order.sysml")
+
+
+def test_resolution_is_independent_of_input_order(tmp_path: Path) -> None:
+    """Keys apply shallowest-first, so the map order does not matter."""
+    _, architecture = _load_architecture(tmp_path, RESOLUTION_ORDER)
+
+    first, first_map = resolve_selected(
+        architecture, "System", {"x": "a", "inner.y": "b"}
+    )
+    second, second_map = resolve_selected(
+        architecture, "System", {"inner.y": "b", "x": "a"}
+    )
+
+    assert first_map == second_map == {"x": "a", "inner.y": "b"}
+    assert first.part_definitions["System"].parts["x"].type_name == "A"
+    assert first.part_definitions["Inner"].parts["y"].type_name == "B"
+    assert second.part_definitions["Inner"].parts["y"].type_name == "B"
+
+
+def test_canonical_map_records_the_resolved_path_not_the_user_key(
+    tmp_path: Path,
+) -> None:
+    """A suffix key is canonicalised to the path it resolved to."""
+    _, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
+
+    _, canonical = resolve_selected(
+        architecture,
+        "System",
+        {"path": "nestedPath", "stage": "attenuateStage"},
+    )
+
+    assert canonical == {"path": "nestedPath", "path.stage": "attenuateStage"}
+
+
+def test_canonical_map_keeps_both_paths_for_a_bare_and_an_inner_key(
+    tmp_path: Path,
+) -> None:
+    """A top-level and a nested key are both recorded under their own path."""
+    _, architecture = _load_architecture(tmp_path, RESOLUTION_ORDER)
+
+    _, canonical = resolve_selected(
+        architecture, "System", {"x": "a", "y": "b"}
+    )
+
+    assert canonical == {"x": "a", "inner.y": "b"}
+
+
+# -- variation points removed or replaced by another selection --
+
+NESTED_UNDER_REPLACED = fixture_text("variation/nested-under-replaced.sysml")
+
+
+def test_resolve_rejects_a_key_removed_by_another_selection(
+    tmp_path: Path,
+) -> None:
+    """'zpath' is replaced by a body without 'astage', so that key is gone."""
+    _, architecture = _load_architecture(tmp_path, NESTED_UNDER_REPLACED)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selection key 'zpath.astage' is nested under another selected "
+            "variation point and no longer exists after resolution; select "
+            "one variation point per path."
+        ),
+    ):
+        resolve(architecture, "System", {"astage": "a", "zpath": "plain"})
+
+
+NESTED_UNKNOWN = fixture_text("variation/nested-unknown.sysml")
+
+
+def test_nested_point_reports_an_unknown_variant(tmp_path: Path) -> None:
+    """An unknown variant under a resolved outer point names the inner point."""
+    _, architecture = _load_architecture(tmp_path, NESTED_UNKNOWN)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Unknown variant 'nope' for variation point 'InnerChoice'; "
+            "expected one of a, b."
+        ),
+    ):
+        resolve(architecture, "System", {"outer": "chosen", "outer.inner": "nope"})
+
+
+# -- variant body checks against the point and its owner --
+
+BODY_CHECKS = fixture_text("variation/body-checks.sysml")
+
+
+def test_resolve_rejects_a_body_part_the_body_does_not_declare(
+    tmp_path: Path,
+) -> None:
+    """A connection end naming a part the body does not declare is refused."""
+    _, architecture = _load_architecture(tmp_path, BODY_CHECKS)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Variant 'directPath' of variation point 'GhostChoice' connects to "
+            "part 'ghost', which its body does not declare."
+        ),
+    ):
+        resolve(architecture, "GhostSystem", {"path": "directPath"})
+
+
+def test_resolve_rejects_a_synthesized_definition_name_collision(
+    tmp_path: Path,
+) -> None:
+    """The deterministic name '<Point>__<variant>' must not already exist."""
+    _, architecture = _load_architecture(tmp_path, BODY_CHECKS)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Synthesized variant definition 'Collision__directPath' for "
+            "variation point 'Collision' collides with an existing part "
+            "definition; rename the variant."
+        ),
+    ):
+        resolve(architecture, "CollisionSystem", {"path": "directPath"})
+
+
+def test_resolve_rejects_a_body_attribute_the_owner_already_declares(
+    tmp_path: Path,
+) -> None:
+    """Merging a body attribute must not shadow the owning definition's own."""
+    _, architecture = _load_architecture(tmp_path, BODY_CHECKS)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Variant 'withValues' of variation point 'AttributeChoice' "
+            "declares attribute 'pyssp_default_start_time', which definition "
+            "'AttributeSystem' already declares; rename it."
+        ),
+    ):
+        resolve(architecture, "AttributeSystem", {"path": "withValues"})
+
+
+# -- usage-level variant member rules --
+
+MEMBER_RULES = fixture_text("variation/member-rules.sysml")
+
+
+def test_resolve_rejects_a_variant_with_a_type_and_a_body(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, MEMBER_RULES)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selected variant 'both' of variation point 'BothChoice' declares "
+            "both type 'Gain' and a body; use one."
+        ),
+    ):
+        resolve(architecture, "BothSystem", {"point": "both"})
+
+
+def test_resolve_rejects_a_variant_with_neither_type_nor_body(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, MEMBER_RULES)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selected variant 'empty' of variation point 'EmptyChoice' has no "
+            "resolvable type and no body; write 'variant part empty : "
+            "<PartDef>;' or give it a body."
+        ),
+    ):
+        resolve(architecture, "EmptySystem", {"point": "empty"})
+
+
+def test_resolve_rejects_a_variant_typed_by_a_non_part_definition(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, MEMBER_RULES)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Selected variant 'wrong' of variation point 'WrongTypeChoice' has "
+            "type 'Weight', which is not a part definition; only part "
+            "variants are supported."
+        ),
+    ):
+        resolve(architecture, "WrongTypeSystem", {"point": "wrong"})
+
+
+def test_resolve_rejects_a_point_with_no_captured_part_variants(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, MEMBER_RULES)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Variation point 'point' has no captured part variants; only "
+            "'variant part <name> : <PartDef>;' members are supported."
+        ),
+    ):
+        resolve(architecture, "NoVariantsSystem", {"point": "anything"})
+
+
+def test_resolve_rejects_a_point_with_no_captured_attribute_variants(
+    tmp_path: Path,
+) -> None:
+    _, architecture = _load_architecture(tmp_path, MEMBER_RULES)
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Attribute variation point 'EmptyScale' has no captured attribute "
+            "variants; only 'variant attribute <name> : <AttributeDef>;' "
+            "members are supported."
+        ),
+    ):
+        resolve(architecture, "AttributeSystem", {"gain": "anything"})
+
+
+# -- configuration and variant body capture errors --
+
+CONFIG_BODY_UNNAMED_PART = fixture_text("variation/config-body-unnamed-part.sysml")
+
+
+def test_configuration_body_rejects_an_unnamed_part(tmp_path: Path) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "A part usage in a configuration body must be named or redefine "
+            "exactly one feature"
+        ),
+    ):
+        _load_architecture(tmp_path, CONFIG_BODY_UNNAMED_PART)
+
+
+CONFIG_BODY_UNNAMED_ATTRIBUTE = fixture_text(
+    "variation/config-body-unnamed-attribute.sysml"
+)
+
+
+def test_configuration_body_rejects_an_unnamed_attribute(tmp_path: Path) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "An attribute usage in a configuration body must be named or "
+            "redefine exactly one feature"
+        ),
+    ):
+        _load_architecture(tmp_path, CONFIG_BODY_UNNAMED_ATTRIBUTE)
+
+
+CONFIG_BODY_UNSUPPORTED = fixture_text(
+    "variation/config-body-unsupported-member.sysml"
+)
+
+
+def test_configuration_body_rejects_a_member_it_cannot_carry(
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Unsupported member in a configuration body: 'portp:RealSignal;'."),
+    ):
+        _load_architecture(tmp_path, CONFIG_BODY_UNSUPPORTED)
+
+
+VARIANT_BODY_UNNAMED_PART = fixture_text(
+    "variation/variant-body-unnamed-part.sysml"
+)
+
+
+def test_variant_body_rejects_an_unnamed_part(tmp_path: Path) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape("A part usage in a variant body must be named"),
+    ):
+        _load_architecture(tmp_path, VARIANT_BODY_UNNAMED_PART)
+
+
+VARIANT_BODY_UNNAMED_ATTRIBUTE = fixture_text(
+    "variation/variant-body-unnamed-attribute.sysml"
+)
+
+
+def test_variant_body_rejects_an_unnamed_attribute(tmp_path: Path) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape("An attribute usage in a variant body must be named"),
+    ):
+        _load_architecture(tmp_path, VARIANT_BODY_UNNAMED_ATTRIBUTE)
+
+
+VARIANT_BODY_UNSUPPORTED = fixture_text(
+    "variation/variant-body-unsupported-member.sysml"
+)
+
+
+def test_variant_body_rejects_a_member_it_cannot_carry(tmp_path: Path) -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape("Unsupported member in a variant body: 'portp:RealSignal;'."),
+    ):
+        _load_architecture(tmp_path, VARIANT_BODY_UNSUPPORTED)
+
+
+# -- resolution clears the variation flag --
+
+def test_a_resolved_usage_is_no_longer_a_variation_point(tmp_path: Path) -> None:
+    """Resolving twice must not report the already substituted usage."""
+    _, architecture = _load_architecture(tmp_path, USAGE_VARIATION)
+
+    resolved = resolve(architecture, "System", {"source": "stepSource"})
+    source = resolved.part_definitions["System"].parts["source"]
+    assert source.is_variation is False
+
+    again = resolve(resolved, "System", {})
+    assert again.part_definitions["System"].parts["source"].type_name == "Step"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -16,10 +17,13 @@ from pyssp_sysml2.parameters.configuration import (
     model_root,
 )
 from pyssp_sysml2.parameters.selection import (
+    AnalysisPlan,
     analysis_plans,
     analysis_selection,
+    analysis_selections,
     parse_selection,
 )
+from pyssp_sysml2.parameters.variation import resolve_selected
 from tests.fixture_files import fixture_text
 from tests.testhelpers import write_model
 
@@ -292,3 +296,303 @@ def test_an_explicit_selection_overrides_the_derived_one(tmp_path: Path) -> None
             model_name="selection",
             selections={"source": "sineImplementation", "gain": "twoStages"},
         )
+
+
+# ---------------------------------------------------------------------------
+# Configuration chain shape
+# ---------------------------------------------------------------------------
+
+
+def test_a_definition_specialising_two_ssp_models_is_rejected(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(tmp_path, fixture_text("selection/chain-errors.sysml"))
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Definition 'Linear' specialises more than one SspModel definition "
+            "(FirstRoot, SecondRoot); a configuration chain must be linear."
+        ),
+    ):
+        derived_selection(architecture, "linear")
+
+
+def test_a_definition_whose_supertype_is_not_ssp_model_is_rejected(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(tmp_path, fixture_text("selection/chain-errors.sysml"))
+    orphan = architecture.part_definitions["Orphan"]
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Definition 'Orphan' specialises 'Helper', which is not marked "
+            "SspModel; a configuration chain must specialise the root "
+            "composition."
+        ),
+    ):
+        model_root(architecture, orphan)
+
+
+# ---------------------------------------------------------------------------
+# One binding per usage
+# ---------------------------------------------------------------------------
+
+
+def test_a_usage_redefining_two_features_is_rejected(tmp_path: Path) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/multi-redefine.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "usage 'both' in configuration 'BadSystem' redefines more than one "
+            "feature (source, gain); bind exactly one variation point."
+        ),
+    ):
+        derived_selection(architecture, "bad")
+
+
+# ---------------------------------------------------------------------------
+# A binding value must name one variant of the point
+# ---------------------------------------------------------------------------
+
+
+def test_a_qualified_binding_must_name_the_points_definition(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/binding-errors.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "binding 'OtherChoice::thing' for variation point 'SourceChoice' at "
+            "'source' names type 'OtherChoice'; expected 'SourceChoice'"
+        ),
+    ):
+        derived_selection(architecture, "wrong_type")
+
+
+def test_an_unqualified_binding_must_name_a_local_usage(tmp_path: Path) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/binding-errors.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "binding 'missingUsage' for variation point 'SourceChoice' at "
+            "'source' names no part usage in configuration 'NoLocalSystem'"
+        ),
+    ):
+        derived_selection(architecture, "no_local")
+
+
+def test_a_local_usage_must_specialise_one_variant(tmp_path: Path) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/binding-errors.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "part usage 'local' in configuration 'NoSubsetSystem' must specialise "
+            "exactly one variant of 'SourceChoice'; found 0"
+        ),
+    ):
+        derived_selection(architecture, "no_subset")
+
+
+def test_a_local_usage_specialising_two_variants_is_rejected(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/binding-errors.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "part usage 'local' in configuration 'TwoSubsetSystem' must "
+            "specialise exactly one variant of 'SourceChoice'; found 2"
+        ),
+    ):
+        derived_selection(architecture, "two_subsets")
+
+
+def test_a_local_usage_must_specialise_a_variant_of_the_point(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/binding-errors.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "part usage 'local' in configuration 'NotVariantSystem' specialises "
+            "'OtherChoice::thing', which is not a variant of 'SourceChoice'"
+        ),
+    ):
+        derived_selection(architecture, "not_variant")
+
+
+# ---------------------------------------------------------------------------
+# Unknown variants and rebinding
+# ---------------------------------------------------------------------------
+
+
+def test_an_unknown_variant_is_rejected_in_a_nested_scope(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/nested-unknown-variant.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Unknown variant 'missing' for variation point 'BChoice' at "
+            "'top.inner' in configuration 'Config'; expected one of b1."
+        ),
+    ):
+        derived_selection(architecture, "conf")
+
+
+def test_a_more_derived_configuration_overrides_an_inherited_binding(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(tmp_path, fixture_text("selection/rebinding.sysml"))
+
+    assert derived_selection(architecture, "direct") == {"path": "directPath"}
+
+
+# ---------------------------------------------------------------------------
+# Attribute points bound by a configuration
+# ---------------------------------------------------------------------------
+
+
+def test_a_configuration_binds_an_attribute_point_structurally(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "attribute-binding.sysml"
+    write_model(path, fixture_text("selection/attribute-binding.sysml"))
+    architecture = load(path)
+
+    assert derived_selection(architecture, "configured") == {
+        "scenario": "nominalK3"
+    }
+    plan = next(
+        plan for plan in analysis_plans(architecture) if plan.name == "configured"
+    )
+    assert plan.status == "legal"
+    assert plan.configuration == "Configured"
+    assert plan.selection == {"scenario": "nominalK3"}
+
+    artifacts = generate_analysis(
+        path,
+        tmp_path / "analysis",
+        "configured",
+        model_name="attribute-binding",
+    )
+    descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
+    assert descriptor["composition"] == "Root"
+
+
+def test_an_attribute_configuration_rejects_an_unknown_variant(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/attribute-binding.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match=(
+            "Unknown variant 'missing' for variation point 'ScenarioChoice' at "
+            "'scenario' in configuration 'BadConfigured'"
+        ),
+    ):
+        derived_selection(architecture, "bad")
+
+
+def test_a_model_attribute_binding_resolves_on_the_root(tmp_path: Path) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/attribute-binding.sysml")
+    )
+
+    resolved, canonical = resolve_selected(
+        architecture, "Root", {"scenario": "nominalK3"}
+    )
+
+    assert canonical == {"scenario": "nominalK3"}
+    assert (
+        resolved.part_definitions["Root"].attributes["scenario"].type_name
+        == "ScenarioK3"
+    )
+
+
+def test_attribute_ambiguity_still_fires_for_distinct_usages(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/attribute-ambiguous.sysml")
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="Selection key 'mode' is ambiguous.*'mode', 'inner.x.mode'",
+    ):
+        resolve_selected(architecture, "System", {"mode": "anything"})
+
+
+# ---------------------------------------------------------------------------
+# Per-analysis maps and plan classification
+# ---------------------------------------------------------------------------
+
+
+def test_analysis_selections_keeps_declaration_order(tmp_path: Path) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/analysis-order.sysml")
+    )
+
+    selections = analysis_selections(architecture)
+
+    assert list(selections) == ["one", "second", "plain"]
+    assert selections == {
+        "one": {"source": "step"},
+        "second": {"source": "sine"},
+        "plain": {},
+    }
+
+
+def test_an_analysis_plan_rejects_an_unknown_status() -> None:
+    with pytest.raises(
+        ValueError,
+        match=re.escape(
+            "Unknown analysis plan status 'bogus'; expected one of legal, "
+            "violated, invalid"
+        ),
+    ):
+        AnalysisPlan("analysis", {}, "bogus")
+
+
+def test_a_plan_marks_a_resolution_failure_invalid_and_keeps_the_selection(
+    tmp_path: Path,
+) -> None:
+    architecture = _load_text(
+        tmp_path, fixture_text("selection/unresolvable-variant.sysml")
+    )
+    plan = next(plan for plan in analysis_plans(architecture) if plan.name == "bad")
+
+    assert plan.status == "invalid"
+    assert plan.selection == {"source": "step"}
+    assert plan.canonical is None
+    assert (
+        "Selected variant 'step' of variation point 'SourceChoice' has type "
+        "'MissingType', which is not a part definition"
+    ) in (plan.detail or "")

@@ -21,8 +21,14 @@ from them, so the tree holds inputs only.
   `ambiguous-names.sysml`, `no-variation.sysml`,
   `undeclared-body-port.sysml`, `three-levels.sysml`,
   `valued-body-attribute.sysml`, `attribute-variation.sysml`,
-  `attribute-set-variation.sysml`, and `untyped-attribute-variant.sysml` were
-  authored here for these tests. `usage-level.sysml`, `connection.sysml`,
+  `attribute-set-variation.sysml`, `untyped-attribute-variant.sysml`,
+  `ambiguous-nested.sysml`, `resolution-order.sysml`, `nested-unknown.sysml`,
+  `nested-under-replaced.sysml`, `body-checks.sysml`, `member-rules.sysml`,
+  `config-body-unnamed-part.sysml`, `config-body-unnamed-attribute.sysml`,
+  `config-body-unsupported-member.sysml`, `variant-body-unnamed-part.sysml`,
+  `variant-body-unnamed-attribute.sysml`, and
+  `variant-body-unsupported-member.sysml` were authored here for these tests.
+  `usage-level.sysml`, `connection.sysml`,
   `parameter-binding.sysml`, and `nested-body.sysml` are the variation-point
   examples from the product repository
   (`docs/breakdown/06-evolution/selected/examples/variation-points/`), moved
@@ -66,6 +72,18 @@ Inputs, relative to this directory. None is generated.
 | `attribute-variation.sysml` | `variation attribute def` marker |
 | `attribute-set-variation.sysml` | attribute variation over parameter sets, resolved through an analysis |
 | `untyped-attribute-variant.sysml` | attribute variant without a resolvable type |
+| `ambiguous-nested.sysml` | nested suffix key that matches two dotted paths |
+| `resolution-order.sysml` | shallow and nested variation points selected together |
+| `nested-unknown.sysml` | unknown variant under an already resolved outer point |
+| `nested-under-replaced.sysml` | inner key removed by the outer body selection |
+| `body-checks.sysml` | body connection to an undeclared part, name collision, attribute clash |
+| `member-rules.sysml` | variant member shapes and points without captured variants |
+| `config-body-unnamed-part.sysml` | configuration body part with no name and no single redefinition |
+| `config-body-unnamed-attribute.sysml` | configuration body attribute with no name and no single redefinition |
+| `config-body-unsupported-member.sysml` | configuration body member the walk cannot carry |
+| `variant-body-unnamed-part.sysml` | variant body part with no name |
+| `variant-body-unnamed-attribute.sysml` | variant body attribute with no name |
+| `variant-body-unsupported-member.sysml` | variant body member the walk cannot carry |
 | `usage-level.sysml` | example 03: usage-level point, SSD name stays `source` |
 | `connection.sysml` | example 08: two path variants with different decompositions |
 | `parameter-binding.sysml` | example 09: variation over parameter bindings inside an analysis |
@@ -83,3 +101,4 @@ bytes cannot serve both the accepted and the rejected shape.
 | Date | Change | Reason |
 | --- | --- | --- |
 | 2026-10-28 | Case record added; documents moved out of the test modules | Test inputs were Python string literals, not reviewable SysML files |
+| 2026-10-30 | Added nested ambiguity, resolution-order, replaced-point, body-check, member-rule, and body-capture documents | The resolver's error paths and ordering were only half covered |

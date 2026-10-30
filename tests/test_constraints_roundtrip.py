@@ -45,3 +45,24 @@ def test_export_preserves_constraint_definitions_and_usages(tmp_path) -> None:
         assert reloaded_usages[name].type_name == usage.type_name
         assert reloaded_usages[name].bindings == usage.bindings
         assert reloaded_usages[name].asserted == usage.asserted
+        assert reloaded_usages[name].negated == usage.negated
+
+
+def test_export_preserves_negated_assert(tmp_path) -> None:
+    source = tmp_path / "negated.sysml"
+    write_model(source, fixture_text("constraints/negated.sysml"))
+    architecture = load(source)
+
+    exported = architecture.export_declared()["negated.sysml"]
+
+    assert "assert not mustBeOff;" in exported
+    assert "assert mustBeOff;" not in exported
+
+    reloaded_path = tmp_path / "round-trip.sysml"
+    write_model(reloaded_path, exported)
+    reloaded = load(reloaded_path)
+
+    usage = reloaded.get_part_def("NegatedComposition").constraints[0]
+    assert usage.name == "mustBeOff"
+    assert usage.asserted is True
+    assert usage.negated is True

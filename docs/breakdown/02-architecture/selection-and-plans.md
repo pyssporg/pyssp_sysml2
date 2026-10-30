@@ -92,5 +92,8 @@ match is an error.
 
 Required variation points are scoped to the target: a model build requires only
 its own composition's points, while an analysis build requires its own and its
-model's points. Keys accepted from a composing analysis are allowed but not
-required, so one per-analysis selection map reaches both generators unchanged.
+model's points. From a composing analysis, only the usages the analysis declares
+itself are accepted, at bare keys; its `sut` subtree is the composed model and is
+already accepted unprefixed, so it contributes no second candidate. Accepted
+keys are allowed but not required, so one per-analysis selection map reaches both
+generators unchanged.

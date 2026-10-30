@@ -244,11 +244,12 @@ def _evaluate_usage(
             value = not value
         if value:
             return ConstraintResult(name=name, owner=owner, status="pass")
+        asserted_value = "true" if usage.negated else "false"
         return ConstraintResult(
             name=name,
             owner=owner,
             status="fail",
-            detail=f"'{expression}' is false",
+            detail=f"'{expression}' is {asserted_value}",
         )
     except _Invalid as error:
         return ConstraintResult(
@@ -409,27 +410,38 @@ class _Expression:
 
     def _implies(self):
         left = self._or()
-        if self._accept_word("implies"):
-            right = self._implies()
-            return (not _as_bool(left, "implies")) or _as_bool(right, "implies")
-        return left
+        if not self._accept_word("implies"):
+            return left
+        right = self._implies()
+        left_value = _as_bool(left, "implies")
+        right_value = _as_bool(right, "implies")
+        return (not left_value) or right_value
 
     def _or(self):
         left = self._xor()
         while self._accept_word("or"):
-            left = _as_bool(left, "or") or _as_bool(self._xor(), "or")
+            right = self._xor()
+            left_value = _as_bool(left, "or")
+            right_value = _as_bool(right, "or")
+            left = left_value or right_value
         return left
 
     def _xor(self):
         left = self._and()
         while self._accept_word("xor"):
-            left = _as_bool(left, "xor") != _as_bool(self._and(), "xor")
+            right = self._and()
+            left_value = _as_bool(left, "xor")
+            right_value = _as_bool(right, "xor")
+            left = left_value != right_value
         return left
 
     def _and(self):
         left = self._equality()
         while self._accept_word("and"):
-            left = _as_bool(left, "and") and _as_bool(self._equality(), "and")
+            right = self._equality()
+            left_value = _as_bool(left, "and")
+            right_value = _as_bool(right, "and")
+            left = left_value and right_value
         return left
 
     def _equality(self):
