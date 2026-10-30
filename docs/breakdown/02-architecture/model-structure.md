@@ -84,6 +84,11 @@ empty system from an FMU leaf; this is a documented round-trip limitation.
   from the raw parse tree, because sysmlpy drops them; the model exposes them as
   repo-owned dataclasses.
 
+## Constraints
+
+Constraint capture is repo-owned; `sysmlpy.check_constraints` is unused. A package-level `constraint def` becomes a `ConstraintDefinition` with typed parameters and one source-scanned expression (sysmlpy garbles a definition's grammar dump). A `constraint name : Type { in p = ref; }` becomes a `ConstraintUsage` on its owning part def, bindings in source order; `assert [not] name;` sets `asserted`/`negated`, and an unknown name is rejected. Each binding resolves to `owner path + "." + reference` in the variant selection.
+`parameters/constraints.py` walks reachable part usages and evaluates asserted usages after `variation.resolve` over `==`, `!=`, `implies`, `and`, `or`, `xor`, `not`, parentheses, and references (`Type::member` → `member`). Asserted fail/invalid raises before an SSD, SSP, or analysis write; non-asserted usages report `unasserted`; no selection is a no-op.
+
 ## Top-level composition
 
 The top composition is a structural container, not a parameter target.

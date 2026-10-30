@@ -18,7 +18,7 @@ src/pyssp_sysml2/
 ├── cli.py               # `pyssp` entrypoint
 ├── core/                # control.py, paths.py, fmi_helpers.py
 ├── model/               # model.py, parser.py, variation.py, loader.py, exporter.py
-├── parameters/          # dialect/, synthesis/, variation.py
+├── parameters/          # dialect/, synthesis/, variation.py, constraints.py
 ├── metadata/            # fmu_metadata.py, ssp_metadata.py, roles.py
 ├── artifacts/           # ssd.py, ssv.py, ssm.py, ssp.py, fmi.py, analysis.py
 └── sysml/               # generate.py, sync.py
@@ -54,7 +54,7 @@ maps `pyssp_sysml2.cli:main`.
   sets, `mapping` the SSP mapping expansion. `synthesis/` owns building that
   dialect from SSD inputs — `inputs`, `interfaces`, `application`, and
   `generation`, which holds `synthesize_parameter_dialect`. `variation.py`
-  selects one concrete architecture.
+  selects one concrete architecture; `constraints.py` evaluates post-selection.
 - `metadata/`: typed FMU/SSP metadata and role markers.
 - `artifacts/`: SSP/FMI artifact generation, one module per artifact: SSD, SSV,
   SSM, SSP, FMI model descriptions, and the analysis descriptor.
@@ -85,6 +85,8 @@ emits the SysML v2 text contract independently of the parser's serializer.
 - Parameter synthesis: `parameters/synthesis/`; `tests/test_generate_sysml.py`,
   `tests/test_roundtrip.py`.
 - Variation selection: `parameters/variation.py`; `tests/test_variation.py`.
+- Constraint capture and evaluation: `model/parser.py`,
+  `parameters/constraints.py`; `tests/test_constraints*.py`.
 - SSD, SSV, and SSM generation: `artifacts/ssd.py`, `artifacts/ssv.py`,
   `artifacts/ssm.py`; `tests/test_parameter_sets.py`.
 - FMI model descriptions: `artifacts/fmi.py`; `tests/test_parameter_sets.py`,

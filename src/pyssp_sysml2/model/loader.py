@@ -24,6 +24,8 @@ from pyssp_sysml2.model.model import (
     AttributeDefinition,
     Binding,
     Connection,
+    ConstraintDefinition,
+    ConstraintUsage,
     PartDefinition,
     PartUsage,
     PortDefinition,
@@ -33,12 +35,16 @@ from pyssp_sysml2.model.model import (
 )
 from pyssp_sysml2.model.parser import (
     UUID_PATTERN,
+    assert_constraint,
     binding_endpoints,
     connection_endpoint,
     connection_endpoints,
+    constraint_definitions_from_source,
+    constraint_usage,
     is_definition_variation,
     multiplicity,
     normalize_value,
+    parse_constraint_body,
     port_direction,
     specializes,
     parse_packages,
@@ -89,32 +95,32 @@ def _resolve_files(path: Path) -> list[Path]:
 
 def _architecture_from(file: Path) -> Architecture:
     """Build a fresh Architecture from the first file of a load."""
-    packages, variation = _parse_file(file)
+    packages, variation, source = _parse_file(file)
     architecture = Architecture(package_name=packages[0].name)
-    _merge_packages(architecture, packages, file, variation)
+    _merge_packages(architecture, packages, file, variation, source)
     return architecture
 
 
 def _merge_file(architecture: Architecture, file: Path) -> None:
     """Merge one more file into ``architecture`` (package names must match)."""
-    packages, variation = _parse_file(file)
+    packages, variation, source = _parse_file(file)
     name = packages[0].name
     if name != architecture.package_name:
         raise ValueError(
             f"Mismatched package names: {architecture.package_name} vs {name} in {file}"
         )
-    _merge_packages(architecture, packages, file, variation)
+    _merge_packages(architecture, packages, file, variation, source)
 
 
-def _parse_file(file: Path) -> tuple[list, VariationFacts]:
-    """Parse one file: its package(s), plus variation facts from the raw tree.
+def _parse_file(file: Path) -> tuple[list, VariationFacts, str]:
+    """Parse one file: its package(s), variation facts, and source text.
 
-    The source text is read once here: ``parse_packages`` takes the path, and
-    the raw-tree walk takes the text, so variation capture adds a parse pass but
-    no second read.
+    The source text is read once here: ``parse_packages`` takes the path, the
+    raw-tree walk takes the text, and constraint-definition bodies are scanned
+    from the same text, so capture adds no second read.
     """
     source = file.read_text(encoding="utf-8")
-    return parse_packages(file), variation_facts(source)
+    return parse_packages(file), variation_facts(source), source
 
 
 def _merge_packages(
@@ -122,14 +128,15 @@ def _merge_packages(
     packages: list,
     file: Path,
     variation: VariationFacts,
+    source: str,
 ) -> None:
     """Add every definition of one file's package(s) to the architecture.
 
     Top-level usages and other non-definition children are skipped silently
     (legacy parity). Definitions are added parts first, then ports, then
-    attribute definitions, then requirements — the retired parser's assembly
-    order extended with value types.
+    attribute definitions, then requirements, then constraint definitions.
     """
+    constraint_bodies = constraint_definitions_from_source(source)
     for package in packages:
         for element in package.parts:
             if element.is_definition:
@@ -150,6 +157,14 @@ def _merge_packages(
                 requirement_def = _requirement_definition(element, file)
                 _add_definition(
                     architecture, architecture.add_requirement_def, requirement_def, file
+                )
+        for element in package.constraints:
+            if element.is_definition:
+                constraint_def = _constraint_definition(
+                    element, file, constraint_bodies
+                )
+                _add_definition(
+                    architecture, architecture.add_constraint_def, constraint_def, file
                 )
 
 
@@ -213,7 +228,40 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
     for child in element.children:
         if type(child).__name__ == "Binding":
             part_def.bindings.append(_binding(child, file))
+    _attach_constraints(part_def, element, file)
     return part_def
+
+
+def _attach_constraints(
+    part_def: PartDefinition, element, file: Path
+) -> None:
+    """Append constraint usages and apply their ``assert`` statements.
+
+    A constraint definition nested in a part def is not a usage and is skipped;
+    ``assert`` statements are resolved to the usage they name after every usage
+    has been collected.
+    """
+    asserts: list[tuple[str, bool]] = []
+    for child in element.constraints:
+        if getattr(child, "is_definition", False):
+            continue
+        if type(child.grammar).__name__ == "AssertConstraintUsage":
+            asserts.append(assert_constraint(child))
+            continue
+        usage = constraint_usage(child)
+        usage.source_file = file.name
+        part_def.constraints.append(usage)
+    for name, negated in asserts:
+        for usage in part_def.constraints:
+            if usage.name == name:
+                usage.asserted = True
+                usage.negated = negated
+                break
+        else:
+            raise ValueError(
+                f"assert names unknown constraint usage '{name}' in "
+                f"'{part_def.name}' ({file})"
+            )
 
 
 def _port_definition(element, file: Path) -> PortDefinition:
@@ -249,6 +297,24 @@ def _attribute_definition(
 def _requirement_definition(element, file: Path) -> RequirementDefinition:
     """Repo RequirementDefinition; the doc comment is the requirement text."""
     return RequirementDefinition(name=element.name, text=element.doc, source_file=file.name)
+
+
+def _constraint_definition(
+    element, file: Path, bodies: dict[str, str]
+) -> ConstraintDefinition:
+    """Repo ConstraintDefinition from the source-scanned authored body.
+
+    ``sysmlpy`` garbles the expression of a constraint definition in its
+    grammar dump, so the body is read from the authored source text instead.
+    """
+    parameters, expression = parse_constraint_body(bodies.get(element.name, ""))
+    return ConstraintDefinition(
+        name=element.name,
+        doc=element.doc,
+        source_file=file.name,
+        parameters=parameters,
+        expression=expression,
+    )
 
 
 def _connection(connect, file: Path) -> Connection:

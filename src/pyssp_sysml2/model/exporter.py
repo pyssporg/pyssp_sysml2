@@ -40,6 +40,7 @@ from pyssp_sysml2.model.model import (
     Architecture,
     Attribute,
     AttributeDefinition,
+    ConstraintDefinition,
     Definition,
     PartDefinition,
     PortDefinition,
@@ -141,6 +142,8 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
                 f"{_MEMBER_INDENT}bind {'.'.join(binding.source)}"
                 f" = {'.'.join(binding.target)};"
             )
+        for constraint in part_def.constraints:  # insertion order
+            yield from _constraint_usage_lines(constraint)
 
     lines.extend(member_lines())
     lines.append(f"{_DEFINITION_INDENT}}}")
@@ -189,6 +192,52 @@ def _requirement_definition_lines(
     return lines
 
 
+def _constraint_definition_lines(
+    constraint_def: ConstraintDefinition,
+) -> list[str]:
+    lines = [f"{_DEFINITION_INDENT}constraint def {constraint_def.name} {{"]
+    if constraint_def.doc:
+        lines.extend(_doc_line(constraint_def.doc, _MEMBER_INDENT))
+    for parameter in constraint_def.parameters.values():
+        if parameter.value is not None:
+            lines.append(
+                f"{_MEMBER_INDENT}in {parameter.name} = {parameter.value};"
+            )
+        elif parameter.type_name:
+            lines.append(
+                f"{_MEMBER_INDENT}in {parameter.name} : {parameter.type_name};"
+            )
+        else:
+            lines.append(f"{_MEMBER_INDENT}in {parameter.name};")
+    if constraint_def.expression:
+        lines.append(f"{_MEMBER_INDENT}{constraint_def.expression}")
+    lines.append(f"{_DEFINITION_INDENT}}}")
+    return lines
+
+
+def _constraint_usage_lines(constraint) -> list[str]:
+    """Usage declaration plus its ``assert`` statement when asserted."""
+    lines: list[str] = []
+    if constraint.name and constraint.type_name:
+        lines.append(
+            f"{_MEMBER_INDENT}constraint {constraint.name}"
+            f" : {constraint.type_name} {{"
+        )
+        for parameter, reference in constraint.bindings.items():
+            lines.append(f"{_MEMBER_INDENT}  in {parameter} = {reference};")
+        if constraint.expression:
+            lines.append(f"{_MEMBER_INDENT}  {constraint.expression}")
+        lines.append(f"{_MEMBER_INDENT}}}")
+    elif constraint.name and constraint.expression:
+        lines.append(f"{_MEMBER_INDENT}constraint {constraint.name} {{")
+        lines.append(f"{_MEMBER_INDENT}  {constraint.expression}")
+        lines.append(f"{_MEMBER_INDENT}}}")
+    if constraint.asserted and constraint.name:
+        negation = "not " if constraint.negated else ""
+        lines.append(f"{_MEMBER_INDENT}assert {negation}{constraint.name};")
+    return lines
+
+
 def _definition_lines(definition: Definition) -> list[str]:
     if isinstance(definition, PartDefinition):
         return _part_definition_lines(definition)
@@ -198,6 +247,8 @@ def _definition_lines(definition: Definition) -> list[str]:
         return _attribute_definition_lines(definition)
     if isinstance(definition, RequirementDefinition):
         return _requirement_definition_lines(definition)
+    if isinstance(definition, ConstraintDefinition):
+        return _constraint_definition_lines(definition)
     raise TypeError(f"Unsupported definition type for export: {type(definition)!r}")
 
 
@@ -216,6 +267,7 @@ def export_declared(architecture: Architecture) -> dict[str, str]:
     collect(architecture.requirement_definitions.values())
     collect(architecture.port_definitions.values())
     collect(architecture.attribute_definitions.values())
+    collect(architecture.constraint_definitions.values())
     collect(architecture.part_definitions.values())
 
     files: dict[str, str] = {}

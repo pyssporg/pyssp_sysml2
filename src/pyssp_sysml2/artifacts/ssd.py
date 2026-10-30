@@ -48,6 +48,7 @@ from pyssp_sysml2.sysml.generate import (
     FLAT_CONNECTOR_ATTR,
 )
 from pyssp_sysml2.model import Architecture, PartDefinition, load
+from pyssp_sysml2.parameters.constraints import enforce_constraints
 from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve,
@@ -344,6 +345,7 @@ def generate_ssd(
     if selections:
         architecture = resolve(architecture, system, selections)
         system = architecture.get_part_def(composition)
+    enforce_constraints(architecture, composition, selections)
     require_resolved_variation(architecture, system)
     require_resolved_attribute_variation(architecture, system)
     ensure_parent_dir(output_path)

@@ -37,6 +37,8 @@ from pathlib import Path
 
 import sysmlpy
 
+from pyssp_sysml2.model.model import ConstraintParameter, ConstraintUsage
+
 
 # sysmlpy tries to persist its ANTLR DFA cache on the first parse of a
 # process; on this machine (Python 3.10) that pickling hits a RecursionError,
@@ -370,3 +372,229 @@ def _literal_is_negative(element) -> bool:
     except (AttributeError, IndexError, TypeError):
         return False
     return getattr(unary, "operator", None) == "-"
+
+
+# -- constraint bodies ------------------------------------------------------
+#
+# ``grammar.dump()`` is reliable for constraint *usages* but garbles the
+# expression of a constraint *definition*. Definitions are therefore read from
+# the authored source text, once per file, by scanning the matching braces.
+
+_CONSTRAINT_DEF = re.compile(r"\bconstraint\s+def\s+([A-Za-z_]\w*)\s*\{")
+_IN_PARAMETER = re.compile(r"^in\s+([A-Za-z_]\w*)\s*:\s*([\w:]+)$")
+_IN_BINDING = re.compile(r"^in\s+([A-Za-z_]\w*)\s*=\s*(.+)$")
+_DOC_STRING = re.compile(r'\bdoc\s*"(?:\\.|[^"\\])*"')
+
+
+def _mask_ignored(text: str) -> str:
+    """Blank comments and string literals, preserving offsets and newlines."""
+    chars = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            end = length if end == -1 else end
+            for position in range(index, end):
+                chars[position] = " "
+            index = end
+        elif text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            end = length if end == -1 else end + 2
+            for position in range(index, end):
+                if chars[position] != "\n":
+                    chars[position] = " "
+            index = end
+        elif text[index] == '"':
+            end = index + 1
+            escaped = False
+            while end < length:
+                if escaped:
+                    escaped = False
+                elif text[end] == "\\":
+                    escaped = True
+                elif text[end] == '"':
+                    end += 1
+                    break
+                end += 1
+            for position in range(index, end):
+                if chars[position] != "\n":
+                    chars[position] = " "
+            index = end
+        else:
+            index += 1
+    return "".join(chars)
+
+
+def _matching_brace(text: str, opening: int) -> int:
+    """Index of the ``}`` matching the ``{`` at *opening* in masked text."""
+    depth = 0
+    for index in range(opening, len(text)):
+        char = text[index]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return index
+    raise ValueError("Unbalanced '{' in constraint body")
+
+
+def constraint_definitions_from_source(source: str) -> dict[str, str]:
+    """Authored body text of every ``constraint def Name { ... }``, keyed by name."""
+    masked = _mask_ignored(source)
+    bodies: dict[str, str] = {}
+    for match in _CONSTRAINT_DEF.finditer(masked):
+        opening = match.end() - 1
+        closing = _matching_brace(masked, opening)
+        bodies[match.group(1)] = source[opening + 1 : closing]
+    return bodies
+
+
+def constraint_definition_body(source: str, name: str) -> str | None:
+    """Authored body of the named constraint definition, or ``None``."""
+    return constraint_definitions_from_source(source).get(name)
+
+
+def _remove_comments(text: str) -> str:
+    """Drop ``//`` and ``/* ... */`` comments, keeping everything else."""
+    chars = list(text)
+    index = 0
+    length = len(text)
+    while index < length:
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            end = length if end == -1 else end
+            for position in range(index, end):
+                chars[position] = " "
+            index = end
+        elif text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            end = length if end == -1 else end + 2
+            for position in range(index, end):
+                if chars[position] != "\n":
+                    chars[position] = " "
+            index = end
+        elif text[index] == '"':
+            end = index + 1
+            escaped = False
+            while end < length:
+                if escaped:
+                    escaped = False
+                elif text[end] == "\\":
+                    escaped = True
+                elif text[end] == '"':
+                    end += 1
+                    break
+                end += 1
+            index = end
+        else:
+            index += 1
+    return "".join(chars)
+
+
+def _split_statements(text: str) -> list[str]:
+    """Split a body on top-level ``;``, respecting parentheses and strings."""
+    statements: list[str] = []
+    current: list[str] = []
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in text:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if quoted and char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if char == '"':
+            quoted = not quoted
+            current.append(char)
+            continue
+        if not quoted:
+            if char in "([{":
+                depth += 1
+            elif char in ")]}":
+                depth = max(depth - 1, 0)
+            elif char == ";" and depth == 0:
+                statements.append("".join(current).strip())
+                current = []
+                continue
+        current.append(char)
+    tail = "".join(current).strip()
+    if tail:
+        statements.append(tail)
+    return [statement for statement in statements if statement]
+
+
+def parse_constraint_body(
+    text: str,
+) -> tuple[dict[str, ConstraintParameter], str | None]:
+    """Turn authored constraint body text into parameters plus expression.
+
+    ``in name : Type`` becomes a typed definition parameter; ``in name = ref``
+    becomes a usage binding stored in ``ConstraintParameter.value``. Any other
+    statement is the boolean expression.
+    """
+    cleaned = _DOC_STRING.sub("", _remove_comments(text))
+    cleaned = re.sub(r"\bdoc\b", "", cleaned)
+    parameters: dict[str, ConstraintParameter] = {}
+    expressions: list[str] = []
+    for statement in _split_statements(cleaned):
+        parameter_match = _IN_PARAMETER.match(statement)
+        if parameter_match:
+            name, type_name = parameter_match.groups()
+            parameters[name] = ConstraintParameter(name=name, type_name=type_name)
+            continue
+        binding_match = _IN_BINDING.match(statement)
+        if binding_match:
+            name, reference = binding_match.groups()
+            parameters[name] = ConstraintParameter(
+                name=name, value=reference.strip()
+            )
+            continue
+        expressions.append(statement)
+    expression = " ".join(expressions).strip() or None
+    return parameters, expression
+
+
+def _body_text(dump: str) -> str:
+    """Body between the first ``{`` and its matching ``}`` of a grammar dump."""
+    masked = _mask_ignored(dump)
+    opening = masked.find("{")
+    if opening == -1:
+        return ""
+    closing = _matching_brace(masked, opening)
+    return dump[opening + 1 : closing]
+
+
+def constraint_usage(element) -> ConstraintUsage:
+    """Repo ConstraintUsage from a parsed constraint usage element."""
+    parameters, expression = parse_constraint_body(_body_text(element.grammar.dump()))
+    bindings = {
+        parameter.name: parameter.value
+        for parameter in parameters.values()
+        if parameter.value is not None
+    }
+    return ConstraintUsage(
+        name=element.name,
+        type_name=element.typed_by_name,
+        bindings=bindings,
+        expression=expression,
+    )
+
+
+def assert_constraint(element) -> tuple[str, bool]:
+    """Target usage name and negation flag of an ``assert [not] name;``."""
+    grammar = element.grammar
+    for child in getattr(grammar, "children", []) or []:
+        if type(child).__name__ != "OwnedReferenceSubsetting":
+            continue
+        name = child.dump().strip()
+        if len(name) >= 2 and name[0] == name[-1] and name[0] in "'\"":
+            name = name[1:-1]
+        return name, bool(getattr(grammar, "isNegated", False))
+    raise ValueError("assert constraint does not name a constraint usage")
+

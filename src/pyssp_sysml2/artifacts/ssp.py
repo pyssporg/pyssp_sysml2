@@ -49,6 +49,7 @@ from pyssp_sysml2.artifacts.ssd import build_ssd
 from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
 from pyssp_sysml2.artifacts.ssv import write_parameter_set
 from pyssp_sysml2.model import Architecture, PartDefinition, load
+from pyssp_sysml2.parameters.constraints import enforce_constraints
 from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve,
@@ -265,6 +266,7 @@ def generate_ssp(
     if selections:
         architecture = resolve(architecture, system, selections)
         system = architecture.get_part_def(composition)
+    enforce_constraints(architecture, composition, selections)
     require_resolved_variation(architecture, system)
     require_resolved_attribute_variation(architecture, system)
     validate_role_markers(architecture)

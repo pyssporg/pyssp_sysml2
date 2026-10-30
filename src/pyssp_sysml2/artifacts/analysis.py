@@ -38,6 +38,7 @@ from pyssp_sysml2.metadata.roles import (
 from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
 from pyssp_sysml2.artifacts.ssv import write_parameter_set
 from pyssp_sysml2.model import load
+from pyssp_sysml2.parameters.constraints import enforce_constraints
 from pyssp_sysml2.parameters.variation import resolve
 
 
@@ -74,6 +75,7 @@ def generate_analysis(
     """
     architecture = load(architecture_path)
     architecture = resolve(architecture, composition, selections or {})
+    enforce_constraints(architecture, composition, selections)
     analysis = architecture.get_part_def(composition)
     validate_role_markers(architecture)
     if not is_analysis(architecture, analysis):

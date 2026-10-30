@@ -28,6 +28,9 @@ __all__ = [
     "AttributeDefinition",
     "Binding",
     "Connection",
+    "ConstraintDefinition",
+    "ConstraintParameter",
+    "ConstraintUsage",
     "Definition",
     "PartDefinition",
     "PartUsage",
@@ -256,6 +259,47 @@ class Definition:
 
 
 @dataclass
+class ConstraintParameter:
+    """One ``in`` parameter of a constraint def or constraint usage.
+
+    On a definition, ``type_name`` is the declared parameter type and ``value``
+    is ``None``. On a usage, ``value`` is the bound reference (``in chosenSource
+    = source``) and ``type_name`` is ``None``; the reference resolves against
+    the usage's owner path at evaluation time.
+    """
+
+    name: str
+    type_name: str | None = None
+    value: str | None = None
+
+
+@dataclass
+class ConstraintDefinition(Definition):
+    """A ``constraint def`` with typed parameters and a boolean expression."""
+
+    parameters: dict[str, ConstraintParameter] = field(default_factory=dict)
+    expression: str | None = None
+
+
+@dataclass
+class ConstraintUsage:
+    """A ``constraint`` usage, optionally asserted.
+
+    ``name`` is the usage name (``None`` for an anonymous assert target), and
+    ``type_name`` the constraint definition it is typed by. ``bindings`` maps
+    each ``in`` parameter to the reference it is bound to, in source order.
+    """
+
+    name: str | None
+    type_name: str | None = None
+    bindings: dict[str, str] = field(default_factory=dict)
+    expression: str | None = None
+    asserted: bool = False
+    negated: bool = False
+    source_file: str | None = None
+
+
+@dataclass
 class PortDefinition(Definition):
     """A ``port def`` with ordered attributes and optional supertypes."""
 
@@ -302,6 +346,7 @@ class PartDefinition(Definition):
     specializes: tuple[str, ...] = ()
     is_variation: bool = False
     variants: list[VariantMember] = field(default_factory=list)
+    constraints: list[ConstraintUsage] = field(default_factory=list)
 
 
 @dataclass
@@ -326,6 +371,9 @@ class Architecture:
     requirement_definitions: dict[str, RequirementDefinition] = field(
         default_factory=dict
     )
+    constraint_definitions: dict[str, ConstraintDefinition] = field(
+        default_factory=dict
+    )
 
     # -- lookups -----------------------------------------------------------
 
@@ -344,6 +392,12 @@ class Architecture:
     def get_attribute_def(self, name: str) -> AttributeDefinition:
         try:
             return self.attribute_definitions[name]
+        except KeyError:
+            raise KeyError(f"Definition not found in namespace: Key:{name}") from None
+
+    def get_constraint_def(self, name: str) -> ConstraintDefinition:
+        try:
+            return self.constraint_definitions[name]
         except KeyError:
             raise KeyError(f"Definition not found in namespace: Key:{name}") from None
 
@@ -380,6 +434,16 @@ class Architecture:
             )
         self.requirement_definitions[requirement_def.name] = requirement_def
         return requirement_def
+
+    def add_constraint_def(
+        self, constraint_def: ConstraintDefinition
+    ) -> ConstraintDefinition:
+        if constraint_def.name in self.constraint_definitions:
+            raise ValueError(
+                f"Duplicate constraint definition for {constraint_def.name}"
+            )
+        self.constraint_definitions[constraint_def.name] = constraint_def
+        return constraint_def
 
     # -- usage resolution ----------------------------------------------------
 
