@@ -653,3 +653,28 @@ def test_generate_ssv_decodes_string_escapes(tmp_path) -> None:
     assert parameter.name == "text"
     assert parameter.type_name == "String"
     assert parameter.attributes["value"] == "one\ntwo"
+
+
+def test_generate_ssv_preserves_real_precision(tmp_path) -> None:
+    """A full-precision Real set value is written without rounding."""
+    model = _model(
+        interface_members="attribute length : Real;",
+        sets="""
+        attribute def LengthSet :> ParameterSet {
+          attribute length = 0.976535328081166;
+        }
+        """,
+        composition="""
+        attribute lengths : LengthSet;
+        bind autopilot.parameters.length = lengths.length;
+        """,
+    )
+    architecture_dir = _write(tmp_path, model)
+
+    written = generate_parameter_sets(
+        architecture_dir, tmp_path / "sets", COMPOSITION_NAME
+    )
+
+    with SSV(written[0], mode="r") as ssv:
+        [parameter] = ssv.xml.parameters
+    assert parameter.attributes["value"] == "0.976535328081166"

@@ -57,6 +57,18 @@ explicitly.
 
 ## Naming rules
 
+- A declared name is either a simple SysML identifier or a single-quoted name.
+  A quoted name may contain dots, brackets, spaces, and leading digits. The
+  model stores the name without its quotes; generators write it verbatim into
+  SSD, SSV, and FMI artifacts, and the exporter re-quotes it.
+- An SSD connector name is `port.attribute` for a grouped port and the port name
+  alone for a flat port. A flat port named `'consumerFeed.X[1]'` produces the
+  connector `consumerFeed.X[1]`, so an FMU variable that is not a SysML
+  identifier can be one flat port.
+- A quoted parameter name maps to the same name in the SSV and to
+  `<Component>.<name>` as its SSP target. For example,
+  `bind sut.ECS_HW.parameters.'pipeA.L' = scenario.'pipeA.L';` maps `pipeA.L`
+  to `ECS_HW.pipeA.L`.
 - The parameter port is named `parameters`. Only this name is recognized. A
   part definition may have at most one such port.
 - A `parameters` port on the composition root is rejected. Attach interfaces to
@@ -84,4 +96,5 @@ explicitly.
 - SSM transformations or unit conversion: only identity and plain
   source-to-target mapping are generated.
 - Multiple `parameters` ports: the port name is fixed and unique per part.
-- Dotted parameter names: not representable as SysML feature names.
+- Reserved SysML keywords as synthesized parameter names: a name recovered from
+  an SSV is rejected when it is a keyword.

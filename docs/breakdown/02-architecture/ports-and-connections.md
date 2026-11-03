@@ -39,6 +39,18 @@ port with one attribute named `value`.
 The reverse direction uses the `pyssp_flat_connector` control attribute. With
 it, `generate ssd` emits the connector name `signal` instead of `signal.value`.
 
+A flat port usage name may be quoted, so one FMU variable that is not a SysML
+identifier can be its own port:
+
+```sysml
+in port 'consumerFeed.X[1]' : RealSignal;
+```
+
+`generate ssd` emits the connector `consumerFeed.X[1]` with that port usage's
+own direction. This is the way to model a variable namespace with dots or array
+brackets, and it is the way to give variables under one prefix independent
+input/output directions.
+
 `sync ssd` still requires `port.attribute` endpoints. Scalar SSD connections
 are not syncable.
 

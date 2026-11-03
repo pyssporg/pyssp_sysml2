@@ -19,53 +19,13 @@ from pyssp_sysml2.core.control import (
     is_control_attribute,
 )
 from pyssp_sysml2.model import AttributeDefinition
+from pyssp_sysml2.model.names import RESERVED_IDENTIFIERS
 from pyssp_sysml2.parameters.dialect.declarations import (
     coerce_parameter_value,
 )
 
 
 SSP_TYPES = {"Real", "Integer", "Boolean", "String"}
-
-# SysML keywords that cannot be used as feature/definition names by sysmlpy.
-# Parameter names using one of these are rejected rather than emitting a file
-# that the loader cannot read back.
-RESERVED_IDENTIFIERS = {
-    "action",
-    "alias",
-    "allocate",
-    "analysis",
-    "attribute",
-    "bind",
-    "calc",
-    "comment",
-    "concern",
-    "connection",
-    "constraint",
-    "def",
-    "dependency",
-    "doc",
-    "expose",
-    "flow",
-    "import",
-    "interface",
-    "item",
-    "metadata",
-    "occurrence",
-    "package",
-    "part",
-    "perform",
-    "port",
-    "ref",
-    "rendering",
-    "requirement",
-    "satisfy",
-    "stakeholder",
-    "state",
-    "typed",
-    "verification",
-    "view",
-    "viewpoint",
-}
 
 
 @dataclass(frozen=True)

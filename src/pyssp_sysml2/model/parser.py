@@ -38,6 +38,7 @@ from pathlib import Path
 import sysmlpy
 
 from pyssp_sysml2.model.model import ConstraintParameter, ConstraintUsage
+from pyssp_sysml2.model.names import unquote_name
 
 
 # sysmlpy tries to persist its ANTLR DFA cache on the first parse of a
@@ -280,7 +281,7 @@ def _end_names(end_member) -> list[str]:
             for chain in subsetting.elements:  # OwnedFeatureChain
                 for chaining in chain.feature.children:  # OwnedFeatureChaining
                     names.extend(chaining.chainingFeature.names)
-    return names
+    return [unquote_name(name) for name in names]
 
 
 def connection_endpoints(connect) -> list[list[str]]:
@@ -316,7 +317,7 @@ def specializes(element) -> tuple[str, ...]:
     for subclassification in getattr(part, "children", []):
         qualified = getattr(subclassification, "name", None)
         if qualified is not None:
-            names.extend(qualified.names)
+            names.extend(unquote_name(name) for name in qualified.names)
     return tuple(names)
 
 
@@ -579,7 +580,7 @@ def constraint_usage(element) -> ConstraintUsage:
         if parameter.value is not None
     }
     return ConstraintUsage(
-        name=element.name,
+        name=unquote_name(element.name) if element.name else None,
         type_name=element.typed_by_name,
         bindings=bindings,
         expression=expression,
@@ -592,9 +593,7 @@ def assert_constraint(element) -> tuple[str, bool]:
     for child in getattr(grammar, "children", []) or []:
         if type(child).__name__ != "OwnedReferenceSubsetting":
             continue
-        name = child.dump().strip()
-        if len(name) >= 2 and name[0] == name[-1] and name[0] in "'\"":
-            name = name[1:-1]
+        name = unquote_name(child.dump().strip())
         return name, bool(getattr(grammar, "isNegated", False))
     raise ValueError("assert constraint does not name a constraint usage")
 

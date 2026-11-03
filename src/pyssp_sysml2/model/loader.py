@@ -32,6 +32,7 @@ from pyssp_sysml2.model.model import (
     RequirementDefinition,
     endpoint_text,
 )
+from pyssp_sysml2.model.names import unquote_name
 from pyssp_sysml2.model.parser import (
     UUID_PATTERN,
     assert_constraint,
@@ -190,27 +191,28 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
     usage-level flags come from the raw-tree walk, keyed by this definition's
     name.
     """
+    definition_name = unquote_name(element.name)
     part_def = PartDefinition(
-        name=element.name,
+        name=definition_name,
         doc=element.doc,
         source_file=file.name,
         specializes=specializes(element),
         is_variation=is_definition_variation(element),
-        variants=list(variation.variants.get(element.name, ())),
+        variants=list(variation.variants.get(definition_name, ())),
     )
-    variation_usages = variation.usage_points.get(element.name, ())
+    variation_usages = variation.usage_points.get(definition_name, ())
     for attribute in element.attributes:
         # A redefining attribute (``attribute :>> scenario = ...;``) gets a UUID
         # as its parsed name; ``display_name`` keeps the inherited name.
-        name = getattr(attribute, "display_name", None) or attribute.name
-        extras = variation.usage_extras.get((element.name, name))
+        name = unquote_name(getattr(attribute, "display_name", None) or attribute.name)
+        extras = variation.usage_extras.get((definition_name, name))
         part_def.attributes[name] = _attribute(
             attribute, extras.redefines if extras is not None else ()
         )
     for port in element.ports:
         # A redefining port (``out port :>> y : T;``) gets a UUID as its parsed
         # name; ``display_name`` keeps the name the composition connects to.
-        name = getattr(port, "display_name", None) or port.name
+        name = unquote_name(getattr(port, "display_name", None) or port.name)
         part_def.ports[name] = PortUsage(
             name=name,
             direction=port_direction(port),
@@ -219,8 +221,8 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
     for part in element.parts:
         # A redefining part usage (``part :>> source = ...;``) gets a UUID as
         # its parsed name; ``display_name`` keeps the inherited name.
-        name = getattr(part, "display_name", None) or part.name
-        extras = variation.usage_extras.get((element.name, name))
+        name = unquote_name(getattr(part, "display_name", None) or part.name)
+        extras = variation.usage_extras.get((definition_name, name))
         part_def.parts[name] = PartUsage(
             name=name,
             type_name=part.typed_by_name,
@@ -278,13 +280,14 @@ def _attach_constraints(
 def _port_definition(element, file: Path) -> PortDefinition:
     """Repo PortDefinition from a sysmlpy port definition."""
     port_def = PortDefinition(
-        name=element.name,
+        name=unquote_name(element.name),
         doc=element.doc,
         source_file=file.name,
         specializes=specializes(element),
     )
     for attribute in element.attributes:
-        port_def.attributes[attribute.name] = _attribute(attribute)
+        name = unquote_name(attribute.name)
+        port_def.attributes[name] = _attribute(attribute)
     return port_def
 
 
@@ -292,22 +295,25 @@ def _attribute_definition(
     element, file: Path, variation: VariationFacts
 ) -> AttributeDefinition:
     """Repo AttributeDefinition from a sysmlpy attribute definition."""
+    definition_name = unquote_name(element.name)
     attribute_def = AttributeDefinition(
-        name=element.name,
+        name=definition_name,
         doc=element.doc,
         source_file=file.name,
         specializes=specializes(element),
-        is_variation=element.name in variation.attribute_points,
-        variants=list(variation.attribute_variants.get(element.name, ())),
+        is_variation=definition_name in variation.attribute_points,
+        variants=list(variation.attribute_variants.get(definition_name, ())),
     )
     for attribute in element.attributes:
-        attribute_def.attributes[attribute.name] = _attribute(attribute)
+        attribute_def.attributes[unquote_name(attribute.name)] = _attribute(attribute)
     return attribute_def
 
 
 def _requirement_definition(element, file: Path) -> RequirementDefinition:
     """Repo RequirementDefinition; the doc comment is the requirement text."""
-    return RequirementDefinition(name=element.name, text=element.doc, source_file=file.name)
+    return RequirementDefinition(
+        name=unquote_name(element.name), text=element.doc, source_file=file.name
+    )
 
 
 def _constraint_definition(
@@ -320,7 +326,7 @@ def _constraint_definition(
     """
     parameters, expression = parse_constraint_body(bodies.get(element.name, ""))
     return ConstraintDefinition(
-        name=element.name,
+        name=unquote_name(element.name),
         doc=element.doc,
         source_file=file.name,
         parameters=parameters,
@@ -352,6 +358,8 @@ def _connection(connect, file: Path) -> Connection:
             f"{endpoint_text(source_part, source_port)}"
             f"_to_{endpoint_text(destination_part, destination_port)}"
         )
+    else:
+        name = unquote_name(name)
     return Connection(
         name=name,
         source_part=source_part,
@@ -381,6 +389,8 @@ def _binding(bind, file: Path) -> Binding:
     name = bind.name
     if name is None or UUID_PATTERN.match(name):
         name = None
+    else:
+        name = unquote_name(name)
     return Binding(source=tuple(source), target=tuple(target), name=name)
 
 
@@ -390,7 +400,7 @@ def _binding(bind, file: Path) -> Binding:
 def _attribute(element, redefines: tuple[str, ...] = ()) -> Attribute:
     """Repo Attribute from a sysmlpy attribute usage."""
     return Attribute(
-        name=getattr(element, "display_name", None) or element.name,
+        name=unquote_name(getattr(element, "display_name", None) or element.name),
         type_name=element.typed_by_name,
         value=normalize_value(element),
         multiplicity=multiplicity(element),

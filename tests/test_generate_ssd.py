@@ -204,3 +204,29 @@ def test_generate_ssd_rejects_boundary_to_boundary_connection(tmp_path: Path) ->
         generate_ssd(
             architecture_dir, tmp_path / "SystemStructure.ssd", COMPOSITION_NAME
         )
+
+
+def test_quoted_attribute_names_become_plain_ssd_connectors(tmp_path) -> None:
+    """Quoted SysML names keep their characters in the SSD connector name."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "quoted.sysml",
+        fixture_text("quoted-names/composition.sysml"),
+    )
+
+    output_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, output_path, "System")
+
+    assert _ssd_summary(output_path) == [
+        "component sink",
+        "  input:feed.X[1]:Real",
+        "  input:feed.X[2]:Real",
+        "  input:feed.p:Real",
+        "component source",
+        "  output:feed.X[1]:Real",
+        "  output:feed.X[2]:Real",
+        "  output:feed.p:Real",
+        "connection source.feed.X[1] -> sink.feed.X[1]",
+        "connection source.feed.X[2] -> sink.feed.X[2]",
+        "connection source.feed.p -> sink.feed.p",
+    ]

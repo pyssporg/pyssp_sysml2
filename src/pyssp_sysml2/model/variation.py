@@ -23,6 +23,7 @@ from pyssp_sysml2.model.model import (
     endpoint_text,
 )
 from pyssp_sysml2.model.parser import connection_endpoint, parse_tree
+from pyssp_sysml2.model.names import unquote_name
 
 
 # -- raw parse tree facts (see IMP-006, IMP-106) ----------------------------
@@ -239,7 +240,7 @@ def _definition_name(ctx) -> str | None:
     definition = ctx.definition()
     declaration = definition.definitionDeclaration() if definition is not None else None
     identification = declaration.identification() if declaration is not None else None
-    return identification.getText() if identification is not None else None
+    return unquote_name(identification.getText()) if identification is not None else None
 
 
 def _usage_name(ctx) -> str | None:
@@ -247,7 +248,7 @@ def _usage_name(ctx) -> str | None:
     usage = ctx.usage()
     declaration = usage.usageDeclaration() if usage is not None else None
     identification = declaration.identification() if declaration is not None else None
-    return identification.getText() if identification is not None else None
+    return unquote_name(identification.getText()) if identification is not None else None
 
 
 def _has_variation_prefix(ctx) -> bool:
@@ -405,7 +406,7 @@ def _usage_display_name(ctx) -> str | None:
         declaration.identification() if declaration is not None else None
     )
     if identification is not None:
-        return identification.getText()
+        return unquote_name(identification.getText())
     targets = _redefinition_targets(ctx)
     if len(targets) == 1:
         return targets[0].split("::")[-1].strip()
@@ -427,7 +428,7 @@ def _feature_specializations(ctx) -> list:
 def _redefinition_targets(ctx) -> tuple[str, ...]:
     """Qualified names after ``:>>`` on one usage, in source order."""
     return tuple(
-        target.getText()
+        unquote_name(target.getText())
         for feature in _feature_specializations(ctx)
         for redefinitions in _descendants(feature, "RedefinitionsContext")
         for target in _descendants(redefinitions, "OwnedRedefinitionContext")
@@ -437,7 +438,7 @@ def _redefinition_targets(ctx) -> tuple[str, ...]:
 def _subsetting_targets(ctx) -> tuple[str, ...]:
     """Qualified names after ``:>`` on one usage, in source order."""
     return tuple(
-        target.getText()
+        unquote_name(target.getText())
         for feature in _feature_specializations(ctx)
         for subsettings in _descendants(feature, "SubsettingsContext")
         for target in _descendants(subsettings, "OwnedSubsettingContext")
@@ -707,7 +708,7 @@ def _raw_end_names(end_member) -> list[str]:
             if type(subsetting).__name__ != "OwnedReferenceSubsettingContext":
                 continue
             for qualified in _as_list(subsetting.qualifiedName()):
-                names.append(qualified.getText())
+                names.append(unquote_name(qualified.getText()))
     return names
 
 
@@ -726,7 +727,7 @@ def _usage_type(ctx) -> str | None:
         for typing in _as_list(
             typed_by.featureTyping() if typed_by is not None else None
         ):
-            return typing.getText()
+            return unquote_name(typing.getText())
     return None
 
 

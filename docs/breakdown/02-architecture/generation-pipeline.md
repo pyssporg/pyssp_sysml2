@@ -23,7 +23,9 @@ parameter values; it references an SSV and optionally inlines a mapping.
 ## Artifact responsibilities
 
 - **SSV**: source is the parameter set definition. Contains parameter values,
-  flat names, and list indices.
+  flat names, and list indices. A `Real` value is written with the shortest
+  representation that round-trips to the authored float, so a full-precision
+  value is not rounded.
 - **SSM**: source is explicit binds. Contains source-to-target name mappings.
 - **SSD**: source is composition, parts, interfaces, binds, and FMU metadata.
   Contains structure, connectors, connections, `ParameterBinding`s, and

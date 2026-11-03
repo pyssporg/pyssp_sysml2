@@ -552,3 +552,41 @@ def test_export_round_trip(tmp_path) -> None:
     assert reloaded.port_definitions["Signal"].doc == "A signal."
     assert reloaded.part_definitions["Source"].doc == "Source doc."
     assert reloaded.requirement_definitions["Connected"].text == "src must connect to dst"
+
+
+def test_quoted_names_load_unquoted_and_round_trip(tmp_path) -> None:
+    """A quoted SysML name keeps its characters but loses its quotes in the model."""
+    source = tmp_path / "model.sysml"
+    write_model(source, fixture_text("quoted-names/names.sysml"))
+
+    architecture = load(source)
+
+    assert list(architecture.port_definitions["Fluid"].attributes) == [
+        "X[1]",
+        "part",
+        "p",
+    ]
+    assert "System.Top" in architecture.part_definitions
+
+    exported = architecture.export_declared()["model.sysml"]
+    assert "attribute 'X[1]' : Real;" in exported
+    assert "attribute 'part' : Real;" in exported
+    assert "part def 'System.Top' {" in exported
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "model.sysml").write_text(exported, encoding="utf-8")
+    assert _architecture_summary(load(output_dir)) == _architecture_summary(architecture)
+
+
+def test_quoted_bind_endpoints_load_unquoted(tmp_path) -> None:
+    """Feature chains keep quoted segments while the model stores declared names."""
+    source = tmp_path / "model.sysml"
+    write_model(source, fixture_text("quoted-names/bind.sysml"))
+
+    architecture = load(source)
+    system = architecture.part_definitions["System"]
+
+    [binding] = system.bindings
+    assert binding.source == ("block", "parameters", "pipeA.L")
+    assert binding.target == ("nominal", "pipeA.L")

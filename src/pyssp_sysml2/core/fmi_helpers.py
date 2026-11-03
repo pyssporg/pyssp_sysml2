@@ -46,7 +46,12 @@ def format_value(tag: str, literal):
     if literal is None:
         return ""
     if tag == "Real":
-        return f"{float(literal):g}"
+        number = float(literal)
+        if number.is_integer():
+            return f"{number:g}"
+        # Shortest representation that round-trips to the same float: a scenario
+        # value authored at full precision must reach the SSV unchanged.
+        return repr(number)
     if tag == "Integer":
         return str(int(literal))
     if tag == "Boolean":

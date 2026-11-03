@@ -46,8 +46,8 @@ from pyssp_sysml2.model.model import (
     PortDefinition,
     PortUsage,
     RequirementDefinition,
-    endpoint_text,
 )
+from pyssp_sysml2.model.names import quote_name
 
 DEFAULT_SOURCE_FILE = "architecture.sysml"
 
@@ -94,6 +94,17 @@ def _feature_value_text(value) -> str:
     return value if isinstance(value, str) else _format_value(value)
 
 
+def _endpoint(part: str | None, port: str) -> str:
+    """Emit one connection endpoint with each name token quoted as needed."""
+    port_text = quote_name(port)
+    return port_text if part is None else f"{quote_name(part)}.{port_text}"
+
+
+def _qualified_name(text: str) -> str:
+    """Emit a possibly qualified name, quoting each ``::`` segment as needed."""
+    return "::".join(quote_name(segment) for segment in text.split("::"))
+
+
 def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list[str]:
     lines = _doc_line(attribute.doc, indent)
     type_name = attribute.effective_type_name
@@ -101,7 +112,8 @@ def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list
     if attribute.redefines:
         # A redefinition keeps the inherited feature name (``:>> scenario``) and
         # its value is a feature-value expression, not necessarily a literal.
-        declaration = f"{indent}attribute :>> {', '.join(attribute.redefines)}"
+        targets = ", ".join(_qualified_name(target) for target in attribute.redefines)
+        declaration = f"{indent}attribute :>> {targets}"
         if attribute.type_name:
             declaration += f" : {attribute.type_name}"
         if attribute.value is not None:
@@ -110,34 +122,37 @@ def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list
     elif attribute.value is not None:
         value = _format_value(attribute.value)
         lines.append(
-            f"{indent}attribute {attribute.name} : {type_name}{multiplicity} = {value};"
+            f"{indent}attribute {quote_name(attribute.name)}"
+            f" : {type_name}{multiplicity} = {value};"
         )
     elif type_name:
         lines.append(
-            f"{indent}attribute {attribute.name} : {type_name}{multiplicity};"
+            f"{indent}attribute {quote_name(attribute.name)}"
+            f" : {type_name}{multiplicity};"
         )
     else:
-        lines.append(f"{indent}attribute {attribute.name}{multiplicity};")
+        lines.append(f"{indent}attribute {quote_name(attribute.name)}{multiplicity};")
     return lines
 
 
 def _port_usage_lines(port: PortUsage, indent: str = _MEMBER_INDENT) -> list[str]:
     direction = f"{port.direction} " if port.direction else ""
     return _doc_line(port.doc, indent) + [
-        f"{indent}{direction}port {port.name} : {port.type_name};"
+        f"{indent}{direction}port {quote_name(port.name)} : {port.type_name};"
     ]
 
 
 def _part_usage_text(part) -> str:
     """One part usage declaration, including its specialization and value."""
     if part.redefines:
-        text = f"part :>> {', '.join(part.redefines)}"
+        targets = ", ".join(_qualified_name(target) for target in part.redefines)
+        text = f"part :>> {targets}"
     else:
-        text = f"part {part.name}"
+        text = f"part {quote_name(part.name)}"
     if part.type_name:
         text += f" : {part.type_name}"
     if part.subsets:
-        text += f" :> {', '.join(part.subsets)}"
+        text += f" :> {', '.join(_qualified_name(target) for target in part.subsets)}"
     if part.value is not None:
         text += f" = {part.value}"
     return text + ";"
@@ -146,8 +161,8 @@ def _part_usage_text(part) -> str:
 def _part_definition_lines(part_def: PartDefinition) -> list[str]:
     suffix = ""
     if part_def.specializes:
-        suffix = f" :> {', '.join(part_def.specializes)}"
-    lines = [f"{_DEFINITION_INDENT}part def {part_def.name}{suffix} {{"]
+        suffix = f" :> {', '.join(_qualified_name(target) for target in part_def.specializes)}"
+    lines = [f"{_DEFINITION_INDENT}part def {quote_name(part_def.name)}{suffix} {{"]
     if part_def.doc:
         lines.extend(_doc_line(part_def.doc, _MEMBER_INDENT))
 
@@ -163,14 +178,13 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
             yield from _doc_line(connection.doc)
             yield (
                 f"{_MEMBER_INDENT}connect"
-                f" {endpoint_text(connection.source_part, connection.source_port)}"
-                f" to {endpoint_text(connection.destination_part, connection.destination_port)};"
+                f" {_endpoint(connection.source_part, connection.source_port)}"
+                f" to {_endpoint(connection.destination_part, connection.destination_port)};"
             )
         for binding in part_def.bindings:  # insertion order
-            yield (
-                f"{_MEMBER_INDENT}bind {'.'.join(binding.source)}"
-                f" = {'.'.join(binding.target)};"
-            )
+            source = ".".join(quote_name(name) for name in binding.source)
+            target = ".".join(quote_name(name) for name in binding.target)
+            yield f"{_MEMBER_INDENT}bind {source} = {target};"
         for constraint in part_def.constraints:  # insertion order
             yield from _constraint_usage_lines(constraint)
 
@@ -182,11 +196,11 @@ def _part_definition_lines(part_def: PartDefinition) -> list[str]:
 def _port_definition_lines(port_def: PortDefinition) -> list[str]:
     suffix = ""
     if port_def.specializes:
-        suffix = f" :> {', '.join(port_def.specializes)}"
+        suffix = f" :> {', '.join(_qualified_name(target) for target in port_def.specializes)}"
     if not port_def.doc and not port_def.attributes:
-        return [f"{_DEFINITION_INDENT}port def {port_def.name}{suffix};"]
+        return [f"{_DEFINITION_INDENT}port def {quote_name(port_def.name)}{suffix};"]
 
-    lines = [f"{_DEFINITION_INDENT}port def {port_def.name}{suffix} {{"]
+    lines = [f"{_DEFINITION_INDENT}port def {quote_name(port_def.name)}{suffix} {{"]
     if port_def.doc:
         lines.extend(_doc_line(port_def.doc, _MEMBER_INDENT))
     for attribute in sorted(port_def.attributes.values(), key=lambda a: a.name):
@@ -198,11 +212,15 @@ def _port_definition_lines(port_def: PortDefinition) -> list[str]:
 def _attribute_definition_lines(attribute_def: AttributeDefinition) -> list[str]:
     suffix = ""
     if attribute_def.specializes:
-        suffix = f" :> {', '.join(attribute_def.specializes)}"
+        suffix = f" :> {', '.join(_qualified_name(target) for target in attribute_def.specializes)}"
     if not attribute_def.doc and not attribute_def.attributes:
-        return [f"{_DEFINITION_INDENT}attribute def {attribute_def.name}{suffix};"]
+        return [
+            f"{_DEFINITION_INDENT}attribute def {quote_name(attribute_def.name)}{suffix};"
+        ]
 
-    lines = [f"{_DEFINITION_INDENT}attribute def {attribute_def.name}{suffix} {{"]
+    lines = [
+        f"{_DEFINITION_INDENT}attribute def {quote_name(attribute_def.name)}{suffix} {{"
+    ]
     if attribute_def.doc:
         lines.extend(_doc_line(attribute_def.doc, _MEMBER_INDENT))
     for attribute in sorted(attribute_def.attributes.values(), key=lambda a: a.name):
@@ -214,7 +232,7 @@ def _attribute_definition_lines(attribute_def: AttributeDefinition) -> list[str]
 def _requirement_definition_lines(
     requirement_def: RequirementDefinition,
 ) -> list[str]:
-    lines = [f"{_DEFINITION_INDENT}requirement def {requirement_def.name} {{"]
+    lines = [f"{_DEFINITION_INDENT}requirement def {quote_name(requirement_def.name)} {{"]
     if requirement_def.text:
         lines.extend(_doc_line(requirement_def.text, _MEMBER_INDENT))
     lines.append(f"{_DEFINITION_INDENT}}}")
@@ -224,20 +242,20 @@ def _requirement_definition_lines(
 def _constraint_definition_lines(
     constraint_def: ConstraintDefinition,
 ) -> list[str]:
-    lines = [f"{_DEFINITION_INDENT}constraint def {constraint_def.name} {{"]
+    lines = [f"{_DEFINITION_INDENT}constraint def {quote_name(constraint_def.name)} {{"]
     if constraint_def.doc:
         lines.extend(_doc_line(constraint_def.doc, _MEMBER_INDENT))
     for parameter in constraint_def.parameters.values():
         if parameter.value is not None:
             lines.append(
-                f"{_MEMBER_INDENT}in {parameter.name} = {parameter.value};"
+                f"{_MEMBER_INDENT}in {quote_name(parameter.name)} = {parameter.value};"
             )
         elif parameter.type_name:
             lines.append(
-                f"{_MEMBER_INDENT}in {parameter.name} : {parameter.type_name};"
+                f"{_MEMBER_INDENT}in {quote_name(parameter.name)} : {parameter.type_name};"
             )
         else:
-            lines.append(f"{_MEMBER_INDENT}in {parameter.name};")
+            lines.append(f"{_MEMBER_INDENT}in {quote_name(parameter.name)};")
     if constraint_def.expression:
         lines.append(f"{_MEMBER_INDENT}{constraint_def.expression}")
     lines.append(f"{_DEFINITION_INDENT}}}")
@@ -249,21 +267,23 @@ def _constraint_usage_lines(constraint) -> list[str]:
     lines: list[str] = []
     if constraint.name and constraint.type_name:
         lines.append(
-            f"{_MEMBER_INDENT}constraint {constraint.name}"
+            f"{_MEMBER_INDENT}constraint {quote_name(constraint.name)}"
             f" : {constraint.type_name} {{"
         )
         for parameter, reference in constraint.bindings.items():
-            lines.append(f"{_MEMBER_INDENT}  in {parameter} = {reference};")
+            lines.append(
+                f"{_MEMBER_INDENT}  in {quote_name(parameter)} = {reference};"
+            )
         if constraint.expression:
             lines.append(f"{_MEMBER_INDENT}  {constraint.expression}")
         lines.append(f"{_MEMBER_INDENT}}}")
     elif constraint.name and constraint.expression:
-        lines.append(f"{_MEMBER_INDENT}constraint {constraint.name} {{")
+        lines.append(f"{_MEMBER_INDENT}constraint {quote_name(constraint.name)} {{")
         lines.append(f"{_MEMBER_INDENT}  {constraint.expression}")
         lines.append(f"{_MEMBER_INDENT}}}")
     if constraint.asserted and constraint.name:
         negation = "not " if constraint.negated else ""
-        lines.append(f"{_MEMBER_INDENT}assert {negation}{constraint.name};")
+        lines.append(f"{_MEMBER_INDENT}assert {negation}{quote_name(constraint.name)};")
     return lines
 
 
@@ -301,7 +321,7 @@ def export_declared(architecture: Architecture) -> dict[str, str]:
 
     files: dict[str, str] = {}
     for file_name in sorted(groups):
-        lines = [f"package {architecture.package_name} {{"]
+        lines = [f"package {quote_name(architecture.package_name)} {{"]
         for index, definition in enumerate(groups[file_name]):
             if index:
                 lines.append("")
