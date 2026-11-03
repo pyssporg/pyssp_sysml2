@@ -26,6 +26,7 @@ from pyssp_sysml2.parameters.dialect.composition import (
     validate_parameter_dialect,
 )
 from pyssp_sysml2.parameters.dialect.declarations import (
+    fixed_count,
     parameter_declarations,
     parameter_interface,
     parameter_items,
@@ -47,7 +48,7 @@ from pyssp_sysml2.sysml.generate import (
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
 )
-from pyssp_sysml2.model import Architecture, PartDefinition, load
+from pyssp_sysml2.model import Architecture, PartDefinition, PortUsage, load
 from pyssp_sysml2.parameters.constraints import enforce_constraints
 from pyssp_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
@@ -61,7 +62,7 @@ def _endpoint_port_def(
     part_name: str | None,
     port_name: str,
 ):
-    """Resolve a connection endpoint to its port definition.
+    """Resolve a connection endpoint to its port definition and usage.
 
     ``part_name is None`` is a port of the enclosing system itself, i.e. the
     system boundary; the SSD connection omits the element for that end.
@@ -81,7 +82,7 @@ def _endpoint_port_def(
                 f"Parameter port '{port_name}' cannot be connected; "
                 "apply a parameter set with 'bind'"
             )
-        return port_def
+        return port_def, port_usage
 
     part_usage = system.parts.get(part_name)
     if part_usage is None:
@@ -100,7 +101,29 @@ def _endpoint_port_def(
             f"Parameter port '{part_name}.{port_name}' cannot be connected; "
             "apply a parameter set with 'bind'"
         )
-    return port_def
+    return port_def, port_usage
+
+
+def _port_indices(port_usage: PortUsage) -> tuple[int | None, ...]:
+    """Connector indices for one port usage; 1-based to match FMI arrays."""
+    if not port_usage.multiplicity:
+        return (None,)
+    count = fixed_count(port_usage.multiplicity, port_usage.name)
+    return tuple(range(1, count + 1))
+
+
+def _multiplicity_text(port_usage: PortUsage) -> str:
+    return f"[{port_usage.multiplicity}]" if port_usage.multiplicity else ""
+
+
+def _connector_name(
+    port_usage: PortUsage,
+    attribute_name: str,
+    flat: bool,
+    index: int | None,
+) -> str:
+    port = port_usage.name if index is None else f"{port_usage.name}[{index}]"
+    return port if flat else f"{port}.{attribute_name}"
 
 
 def _check_boundary_direction(
@@ -160,19 +183,18 @@ def _add_part_connectors(
             # Emitted by the parameter branch below, flattened to member names.
             continue
         flat = bool(port_def.attributes.get(FLAT_CONNECTOR_ATTR))
-        for attribute in port_def.attributes.values():
-            if is_control_attribute(attribute.name):
-                continue
-            connector_name = (
-                port_usage.name
-                if flat
-                else f"{port_usage.name}.{attribute.name}"
-            )
-            element.add_connector(
-                name=connector_name,
-                kind=to_fmi_direction_definition(port_usage.direction),
-                type_name=attribute.effective_type_name,
-            )
+        for index in _port_indices(port_usage):
+            for attribute in port_def.attributes.values():
+                if is_control_attribute(attribute.name):
+                    continue
+                connector_name = _connector_name(
+                    port_usage, attribute.name, flat, index
+                )
+                element.add_connector(
+                    name=connector_name,
+                    kind=to_fmi_direction_definition(port_usage.direction),
+                    type_name=attribute.effective_type_name,
+                )
 
     has_interface = parameter_interface(architecture, part_def) is not None
     if parameter_model and has_interface:
@@ -198,10 +220,10 @@ def _add_connections(
                 f"Connection '{conn.key}' links two boundary ports of "
                 f"'{part_def.name}'; a connection must cross into a subpart"
             )
-        src_port_def = _endpoint_port_def(
+        src_port_def, src_port_usage = _endpoint_port_def(
             part_def, architecture, conn.source_part, conn.source_port
         )
-        dst_port_def = _endpoint_port_def(
+        dst_port_def, dst_port_usage = _endpoint_port_def(
             part_def, architecture, conn.destination_part, conn.destination_port
         )
         _check_boundary_direction(part_def, conn.source_part, conn.source_port, "in")
@@ -216,23 +238,29 @@ def _add_connections(
 
         src_flat = bool(src_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
         dst_flat = bool(dst_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
-        for attribute_name in src_port_def.attributes.keys():
-            if is_control_attribute(attribute_name):
-                continue
-            target_system.add_connection(
-                start_element=conn.source_part,
-                start_connector=(
-                    conn.source_port
-                    if src_flat
-                    else f"{conn.source_port}.{attribute_name}"
-                ),
-                end_element=conn.destination_part,
-                end_connector=(
-                    conn.destination_port
-                    if dst_flat
-                    else f"{conn.destination_port}.{attribute_name}"
-                ),
+        src_indices = _port_indices(src_port_usage)
+        dst_indices = _port_indices(dst_port_usage)
+        if src_indices != dst_indices:
+            raise ValueError(
+                f"Connection '{conn.key}' joins ports with different "
+                f"multiplicity: {src_port_usage.name}"
+                f"{_multiplicity_text(src_port_usage)} and "
+                f"{dst_port_usage.name}{_multiplicity_text(dst_port_usage)}"
             )
+        for index in src_indices:
+            for attribute_name in src_port_def.attributes.keys():
+                if is_control_attribute(attribute_name):
+                    continue
+                target_system.add_connection(
+                    start_element=conn.source_part,
+                    start_connector=_connector_name(
+                        src_port_usage, attribute_name, src_flat, index
+                    ),
+                    end_element=conn.destination_part,
+                    end_connector=_connector_name(
+                        dst_port_usage, attribute_name, dst_flat, index
+                    ),
+                )
 
 
 def _write_elements(

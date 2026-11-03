@@ -134,12 +134,17 @@ class Attribute:
 
 @dataclass
 class PortUsage:
-    """A port usage inside a part definition (``in port sig : Signal;``)."""
+    """A port usage inside a part definition (``in port sig : Signal;``).
+
+    ``multiplicity`` is the declared occurrence range as written (``"3"``); a
+    fixed multiplicity expands the port's connectors to indexed names.
+    """
 
     name: str
     direction: str | None  # "in" | "out" | "inout" | None (undirected)
     type_name: str
     doc: str | None = None
+    multiplicity: str | None = None
 
 
 @dataclass

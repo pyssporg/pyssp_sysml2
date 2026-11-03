@@ -217,6 +217,7 @@ def _part_definition(element, file: Path, variation: VariationFacts) -> PartDefi
             name=name,
             direction=port_direction(port),
             type_name=port.typed_by_name,
+            multiplicity=multiplicity(port),
         )
     for part in element.parts:
         # A redefining part usage (``part :>> source = ...;``) gets a UUID as

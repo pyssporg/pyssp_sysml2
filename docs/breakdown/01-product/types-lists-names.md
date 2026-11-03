@@ -65,6 +65,10 @@ explicitly.
   alone for a flat port. A flat port named `'consumerFeed.X[1]'` produces the
   connector `consumerFeed.X[1]`, so an FMU variable that is not a SysML
   identifier can be one flat port.
+- A fixed port multiplicity expands to indexed connectors and connections:
+  `port 'feed.X' : RealSignal[3]` produces `feed.X[1]`, `feed.X[2]`, and
+  `feed.X[3]`. Signal indices are 1-based to match FMI array variable names;
+  parameter list indices stay 0-based.
 - A quoted parameter name maps to the same name in the SSV and to
   `<Component>.<name>` as its SSP target. For example,
   `bind sut.ECS_HW.parameters.'pipeA.L' = scenario.'pipeA.L';` maps `pipeA.L`

@@ -137,8 +137,10 @@ def _attribute_lines(attribute: Attribute, indent: str = _MEMBER_INDENT) -> list
 
 def _port_usage_lines(port: PortUsage, indent: str = _MEMBER_INDENT) -> list[str]:
     direction = f"{port.direction} " if port.direction else ""
+    multiplicity = f"[{port.multiplicity}]" if port.multiplicity else ""
     return _doc_line(port.doc, indent) + [
-        f"{indent}{direction}port {quote_name(port.name)} : {port.type_name};"
+        f"{indent}{direction}port {quote_name(port.name)}"
+        f" : {port.type_name}{multiplicity};"
     ]
 
 

@@ -51,6 +51,22 @@ own direction. This is the way to model a variable namespace with dots or array
 brackets, and it is the way to give variables under one prefix independent
 input/output directions.
 
+## Fixed port multiplicity
+
+A port usage may declare a fixed multiplicity. It is one port in SysML and one
+connector per occurrence in the SSD:
+
+```sysml
+out port 'feed.X' : RealSignal[3];
+connect source.'feed.X' to sink.'feed.X';
+```
+
+`generate ssd` emits `feed.X[1]`, `feed.X[2]`, and `feed.X[3]`, and one
+connection per index. Signal indices start at 1 to match FMI array variable
+names; parameter lists keep the 0-based SSV convention.
+
+A connection between ports of different fixed multiplicity is rejected.
+
 `sync ssd` still requires `port.attribute` endpoints. Scalar SSD connections
 are not syncable.
 

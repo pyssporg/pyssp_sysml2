@@ -502,7 +502,7 @@ def _architecture_summary(architecture: Architecture) -> dict:
                     for attribute in part_def.attributes.values()
                 },
                 "ports": {
-                    port.name: (port.direction, port.type_name)
+                    port.name: (port.direction, port.type_name, port.multiplicity)
                     for port in part_def.ports.values()
                 },
                 "parts": {part.name: part.type_name for part in part_def.parts.values()},
@@ -590,3 +590,22 @@ def test_quoted_bind_endpoints_load_unquoted(tmp_path) -> None:
     [binding] = system.bindings
     assert binding.source == ("block", "parameters", "pipeA.L")
     assert binding.target == ("nominal", "pipeA.L")
+
+
+def test_port_multiplicity_loads_and_round_trips(tmp_path) -> None:
+    """A fixed port multiplicity is kept on the usage and re-emitted."""
+    source = tmp_path / "model.sysml"
+    write_model(source, fixture_text("arrays/ports.sysml"))
+
+    architecture = load(source)
+    ports = architecture.part_definitions["Source"].ports
+
+    assert ports["feed.X"].multiplicity == "3"
+
+    exported = architecture.export_declared()["model.sysml"]
+    assert "out port 'feed.X' : RealSignal[3];" in exported
+
+    output_dir = tmp_path / "output"
+    output_dir.mkdir()
+    (output_dir / "model.sysml").write_text(exported, encoding="utf-8")
+    assert _architecture_summary(load(output_dir)) == _architecture_summary(architecture)

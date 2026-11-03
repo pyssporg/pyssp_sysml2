@@ -230,3 +230,40 @@ def test_quoted_attribute_names_become_plain_ssd_connectors(tmp_path) -> None:
         "connection source.feed.X[2] -> sink.feed.X[2]",
         "connection source.feed.p -> sink.feed.p",
     ]
+
+
+def test_port_multiplicity_expands_connectors_and_connections(tmp_path) -> None:
+    """One fixed-multiplicity port expands to one indexed connector per element."""
+    architecture_dir = tmp_path / "arch"
+    write_model(
+        architecture_dir / "arrays.sysml",
+        fixture_text("arrays/ports.sysml"),
+    )
+
+    output_path = tmp_path / "SystemStructure.ssd"
+    generate_ssd(architecture_dir, output_path, "System")
+
+    assert _ssd_summary(output_path) == [
+        "component sink",
+        "  input:feed.X[1]:Real",
+        "  input:feed.X[2]:Real",
+        "  input:feed.X[3]:Real",
+        "component source",
+        "  output:feed.X[1]:Real",
+        "  output:feed.X[2]:Real",
+        "  output:feed.X[3]:Real",
+        "connection source.feed.X[1] -> sink.feed.X[1]",
+        "connection source.feed.X[2] -> sink.feed.X[2]",
+        "connection source.feed.X[3] -> sink.feed.X[3]",
+    ]
+
+
+def test_connection_with_mismatched_multiplicity_is_rejected(tmp_path) -> None:
+    architecture_dir = tmp_path / "mismatch"
+    write_model(
+        architecture_dir / "model.sysml",
+        fixture_text("arrays/mismatch.sysml"),
+    )
+
+    with pytest.raises(ValueError, match="different multiplicity"):
+        generate_ssd(architecture_dir, tmp_path / "out.ssd", "System")
