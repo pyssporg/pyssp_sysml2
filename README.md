@@ -46,9 +46,9 @@ pip install -e .
 This version targets the refactored `pyssp_standard` model API
 (`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
 `common_content_ssc` type objects. Install the refactored
-`pyssp_standard` checkout before installing this package.
+`experimental_pyssp_standard` checkout before installing this package.
 
-If you are working in the `ssp_references` workspace and want to use its vendored `pyssp_standard` checkout instead of a package index:
+If you are working in the `ssp_references` workspace and want to use its vendored `experimental_pyssp_standard` checkout instead of a package index:
 
 ```bash
 python3 -m venv venv

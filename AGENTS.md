@@ -87,6 +87,6 @@ is the public surface for other projects.
 - Python >= 3.10.
 - Development: `python3 -m venv venv`, then `pip install -r requirements.txt`
   and `pip install -e .`; use `requirements_local.txt` when working against the
-  bundled `pyssp_standard` checkout.
+  bundled `experimental_pyssp_standard` checkout.
 - Tests: `./venv/bin/python -m pytest -q`; inspect the implementation first and
   prefer `rg` for search.

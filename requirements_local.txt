@@ -1,6 +1,7 @@
 pytest
 coverage
 sysmlpy==0.96.4
-# Refactored pyssp_standard checkout (the vendored copy in ssp_references).
+# Refactored pyssp_standard checkout (pyssporg/experimental_pyssp_standard;
+# the vendored copy in ssp_references).
 # Adjust this path if your workspace layout differs.
--e ../pyssp_standard
+-e ../experimental_pyssp_standard

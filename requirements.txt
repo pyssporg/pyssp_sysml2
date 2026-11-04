@@ -1,3 +1,4 @@
 pytest
 sysmlpy==0.96.4
-pyssp_standard
+# Not on PyPI: fork pinned to the canonical checkout revision 676673b81fb1d5802d4728392c229ef412b01835.
+experimental-pyssp-standard @ git+https://github.com/pyssporg/experimental_pyssp_standard.git@676673b81fb1d5802d4728392c229ef412b01835

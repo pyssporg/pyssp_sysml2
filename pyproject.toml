@@ -14,7 +14,7 @@ authors = [
 ]
 dependencies = [
     "sysmlpy==0.96.4",
-    "pyssp_standard>=0.8.2"
+    "experimental-pyssp-standard>=0.8.2"
   ]
 
 
