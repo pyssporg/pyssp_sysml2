@@ -7,6 +7,8 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import pycps_sysml2
+
 from pyssp_sysml2.core.paths import (
     DEFAULT_ARCH_PATH,
     DEFAULT_COMPOSITION_NAME,
@@ -25,8 +27,12 @@ def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--architecture",
         type=Path,
-        default=DEFAULT_ARCH_PATH,
-        help="Path to SysML architecture directory or a file inside it.",
+        action="append",
+        default=None,
+        help=(
+            "Path to the SysML architecture; repeat to add definition roots "
+            "(first is the model)"
+        ),
     )
     parser.add_argument(
         "--composition",
@@ -42,6 +48,12 @@ def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
             "Select one variant for a variation point, keyed by part-usage path "
             "(repeatable), e.g. source=stepImplementation."
         ),
+    )
+    parser.add_argument(
+        "--core-definitions",
+        action="store_true",
+        default=False,
+        help="Merge the pycps_sysml2 dialect core definitions",
     )
 
 
@@ -298,11 +310,16 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     try:
         selections = _parse_selections(getattr(args, "select", None))
+        architectures = getattr(args, "architecture", None) or [DEFAULT_ARCH_PATH]
+        architecture_path = architectures[0]
+        includes: list[Path] = list(architectures[1:])
+        if getattr(args, "core_definitions", False):
+            includes.append(pycps_sysml2.core_definitions())
         if args.command == "generate" and args.artifact == "ssp":
             configuration = _parse_configuration(args.configuration)
             output = args.output or (GENERATED_DIR / f"{args.composition}.ssp")
             output = generate_ssp(
-                args.architecture,
+                architecture_path,
                 output,
                 args.composition,
                 parameter_set_prefix=args.parameter_set_prefix,
@@ -312,30 +329,33 @@ def main(argv: Optional[list[str]] = None) -> int:
                 allow_missing_fmus=args.allow_missing_fmus,
                 selections=selections,
                 configuration=configuration,
+                includes=includes,
             )
             print(f"SSP written to {output}")
             return 0
 
         if args.command == "generate" and args.artifact == "ssd":
             output = generate_ssd(
-                args.architecture,
+                architecture_path,
                 args.output,
                 args.composition,
                 args.skip_type_check,
                 parameter_set_prefix=args.parameter_set_prefix,
                 selections=selections,
+                includes=includes,
             )
             print(f"SSD written to {output}")
             return 0
 
         if args.command == "generate" and args.artifact == "ssv":
             written = generate_parameter_sets(
-                args.architecture,
+                architecture_path,
                 args.output_dir,
                 args.composition,
                 set_names=args.set,
                 all_sets=args.all_sets,
                 output_path=args.output,
+                includes=includes,
             )
             if not written:
                 print("No parameter sets matched.")
@@ -346,7 +366,10 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         if args.command == "generate" and args.artifact == "ssm":
             written = generate_parameter_mappings(
-                args.architecture, args.output_dir, args.composition
+                architecture_path,
+                args.output_dir,
+                args.composition,
+                includes=includes,
             )
             if not written:
                 print(
@@ -359,12 +382,13 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         if args.command == "generate" and args.artifact == "analysis":
             artifacts = generate_analysis(
-                args.architecture,
+                architecture_path,
                 args.output_dir,
                 args.composition,
                 model_name=args.model,
                 target_ssd=args.target_ssd,
                 selections=selections,
+                includes=includes,
             )
             if artifacts.ssv is not None:
                 print(f"SSV written to {artifacts.ssv}")
@@ -380,11 +404,12 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         if args.command == "sync" and args.artifact == "ssd":
             written = sync_sysml_from_ssd(
-                architecture_path=args.architecture,
+                architecture_path=architecture_path,
                 ssd_path=args.ssd,
                 composition=args.composition,
                 output_architecture_dir=args.output_architecture_dir,
                 synthesize_external_parts=args.synthesize_external_parts,
+                includes=includes,
             )
             for path in written:
                 print(f"Wrote {path}")

@@ -20,7 +20,7 @@ pipeline, and round-trip behavior.
 - **INFO-006** [Generation pipeline](generation-pipeline.md) — The pipeline starts at a loaded architecture and emits SSD, SSV, SSM, the analysis descriptor, and the packaged SSP.
 - **INFO-007** [Round-trip and sync](round-trip-and-sync.md) — Sync reconciles SSD edits into SysML; preserved, normalized, and lost information is explicit.
 - **INFO-027** [Selection and configuration](selection-and-plans.md) — An analysis composes a model-level SysML v2 configuration, and pycps_sysml2 derives the variant selection from its bindings.
-- **INFO-032** [Loading and files](loading-and-files.md) — The loader accepts one SysML file or a sorted directory of them and merges them into one non-validating architecture.
+- **INFO-032** [Loading and files](loading-and-files.md) — The loader merges the primary model root and any included definition roots into one non-validating architecture.
 - **INFO-033** [Variation points](variation-points.md) — Variation definitions and usages carry variants and bodies captured as pycps_sysml2 dataclasses.
 - **INFO-034** [Constraints](constraints.md) — Constraint definitions and usages are captured and evaluated by pycps_sysml2 during selection.
 - **INFO-035** [Boundary connections](boundary-connections.md) — A connection end without a part names a port of the enclosing definition and becomes a bare SSD endpoint.

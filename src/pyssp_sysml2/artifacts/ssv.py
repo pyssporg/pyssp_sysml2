@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Iterable
 
 from pyssp_standard import SSV
@@ -80,13 +81,19 @@ def generate_parameter_sets(
     set_names: Iterable[str] | None = None,
     all_sets: bool = False,
     output_path: Path | None = None,
+    includes: Sequence[Path | str] = (),
 ) -> list[Path]:
     """Generate one SSV per parameter-set definition.
 
     With ``output_path`` exactly one set may be selected. Otherwise files are
     written as ``<output_dir>/<SetName>.ssv``.
+
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
     """
-    architecture = load(architecture_path)
+    architecture = load(architecture_path, *includes)
     system = architecture.get_part_def(composition)
     validate_marker_definitions(architecture)
     validate_parameter_dialect(architecture, system, policy=SSP_POLICY)

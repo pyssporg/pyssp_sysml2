@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from pyssp_standard import SSM
@@ -14,14 +15,23 @@ from pyssp_sysml2.core.paths import ensure_directory
 
 
 def generate_parameter_mappings(
-    architecture_path: Path, output_dir: Path, composition: str
+    architecture_path: Path,
+    output_dir: Path,
+    composition: str,
+    *,
+    includes: Sequence[Path | str] = (),
 ) -> list[Path]:
     """Write one SSM file per (set, component usage) explicit mapping.
 
     Whole-object identity bindings need no SSM; they map to an SSP
     ``ParameterBinding`` with ``prefix="<component>."`` instead.
+
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
     """
-    architecture = load(architecture_path)
+    architecture = load(architecture_path, *includes)
     system = architecture.get_part_def(composition)
 
     written: list[Path] = []

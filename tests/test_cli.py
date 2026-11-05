@@ -6,10 +6,11 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD
 
+from pycps_sysml2 import core_definitions
 from pyssp_sysml2 import cli
 from pyssp_sysml2.cli import main
 from pyssp_sysml2.artifacts.ssd import generate_ssd
-from tests.fixture_files import render_fixture
+from tests.fixture_files import fixture_path, render_fixture
 from tests.test_generate_ssd import _ssd_summary
 from tests.testhelpers import COMPOSITION_NAME, write_bootstrap_ssd, write_model
 
@@ -228,6 +229,73 @@ def test_pyssp_generate_ssd_cli_parameter_set_prefix(tmp_path: Path) -> None:
     with SSD(output, mode="r") as ssd:
         [binding] = ssd.system.parameter_bindings
         assert binding.source == "custom_sets/NominalSet.ssv"
+
+
+def test_pyssp_generate_ssd_cli_forwards_core_definitions(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CLI --core-definitions is accepted and forwarded to the generator."""
+    seen: dict[str, object] = {}
+
+    def fake_generate_ssd(*args, **kwargs):
+        seen.update(kwargs)
+        return args[1]
+
+    monkeypatch.setattr(cli, "generate_ssd", fake_generate_ssd)
+
+    code = main(
+        [
+            "generate",
+            "ssd",
+            "--architecture",
+            str(tmp_path / "arch"),
+            "--composition",
+            COMPOSITION_NAME,
+            "--output",
+            str(tmp_path / "SystemStructure.ssd"),
+            "--core-definitions",
+        ]
+    )
+
+    assert code == 0
+    assert seen["includes"] == [core_definitions()]
+
+
+def test_pyssp_generate_ssd_cli_accepts_two_architecture_flags(
+    tmp_path: Path,
+) -> None:
+    """A repeated --architecture adds an included definition root."""
+    architecture = fixture_path("core-definitions/marker-user.sysml")
+    include_root = tmp_path / "common"
+    write_model(
+        include_root / "common.sysml",
+        "package CommonVocab { part def SspModel; }",
+    )
+    output = tmp_path / "SystemStructure.ssd"
+
+    code = main(
+        [
+            "generate",
+            "ssd",
+            "--architecture",
+            str(architecture),
+            "--architecture",
+            str(include_root),
+            "--composition",
+            "MarkerSystem",
+            "--output",
+            str(output),
+        ]
+    )
+
+    assert code == 0
+    assert _ssd_summary(output) == [
+        "component dst",
+        "  input:inSig.x:Real",
+        "component src",
+        "  output:outSig.x:Real",
+        "connection src.outSig.x -> dst.inSig.x",
+    ]
 
 
 def test_pyssp_generate_ssp_cli_exports_design_without_fmu_source(

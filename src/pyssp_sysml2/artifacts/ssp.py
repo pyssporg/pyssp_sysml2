@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import tempfile
 import warnings
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -240,6 +240,7 @@ def generate_ssp(
     allow_missing_fmus: bool = False,
     selections: Mapping[str, str] | None = None,
     configuration: str | None = None,
+    includes: Sequence[Path | str] = (),
 ) -> Path:
     """Build an ``.ssp`` archive from a SysML architecture and its built FMUs.
 
@@ -265,9 +266,14 @@ def generate_ssp(
     recorded in the archive at ``extra/org.pyssp/selection.json``; the record
     names the configuration that produced the selection via ``configuration``,
     and omits it when the build composes the root.
+
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
     """
     parameter_set_prefix = _normalise_parameter_set_prefix(parameter_set_prefix)
-    architecture = load(architecture_path)
+    architecture = load(architecture_path, *includes)
     system = architecture.get_part_def(composition)
     canonical = None
     if selections:

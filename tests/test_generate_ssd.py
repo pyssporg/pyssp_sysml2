@@ -5,9 +5,10 @@ from pathlib import Path
 import pytest
 from pyssp_standard import SSD, System
 
+from pycps_sysml2 import core_definitions
 from pyssp_sysml2.artifacts.ssd import build_ssd, generate_ssd
 from pyssp_sysml2.model import load
-from tests.fixture_files import fixture_text, render_fixture
+from tests.fixture_files import fixture_path, fixture_text, render_fixture
 from tests.testhelpers import COMPOSITION_NAME, write_model
 
 
@@ -267,3 +268,27 @@ def test_connection_with_mismatched_multiplicity_is_rejected(tmp_path) -> None:
 
     with pytest.raises(ValueError, match="different multiplicity"):
         generate_ssd(architecture_dir, tmp_path / "out.ssd", "System")
+
+
+def test_generate_ssd_merges_core_definitions_on_request(tmp_path: Path) -> None:
+    """A marker-free model fails by default and generates with the core defs."""
+    architecture = fixture_path("core-definitions/marker-user.sysml")
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    with pytest.raises(ValueError, match="SspModel"):
+        generate_ssd(architecture, output_path, "MarkerSystem")
+
+    generate_ssd(
+        architecture,
+        output_path,
+        "MarkerSystem",
+        includes=[core_definitions()],
+    )
+
+    assert _ssd_summary(output_path) == [
+        "component dst",
+        "  input:inSig.x:Real",
+        "component src",
+        "  output:outSig.x:Real",
+        "connection src.outSig.x -> dst.inSig.x",
+    ]

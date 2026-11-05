@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Dict, Iterable, Mapping, Tuple
 
 from pyssp_standard import Component, System
@@ -46,8 +47,12 @@ from pyssp_sysml2.sysml.generate import (
 INFERRED_PARTS_FILENAME = "inferred_external_parts.sysml"
 
 
-def _load_architecture(architecture_path: Path) -> Architecture:
-    return load(architecture_path)
+def _load_architecture(
+    architecture_path: Path,
+    *,
+    includes: Sequence[Path | str] = (),
+) -> Architecture:
+    return load(architecture_path, *includes)
 
 
 def _collect_component_ports(component: Component) -> tuple[dict[str, dict[str, str]], dict[str, str]]:
@@ -454,12 +459,22 @@ def sync_sysml_from_ssd(
     composition: str,
     output_architecture_dir: Path | None = None,
     synthesize_external_parts: bool = True,
+    *,
+    includes: Sequence[Path | str] = (),
 ) -> list[Path]:
-    """Apply SSD composition edits to a SysML architecture and write updated .sysml files."""
+    """Apply SSD composition edits to a SysML architecture and write updated .sysml files.
+
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
+    """
     ssd_system = load_ssd_system(ssd_path)
     loaded = True
     try:
-        architecture = _load_architecture(architecture_path)
+        architecture = _load_architecture(
+            architecture_path, includes=includes
+        )
         system = architecture.get_part_def(composition)
     except FileNotFoundError:
         architecture, system = build_architecture_from_ssd(

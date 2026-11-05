@@ -12,7 +12,7 @@ recorded as ``model_source``. It never writes an SSD or an SSP.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -70,6 +70,7 @@ def generate_analysis(
     model_name: str,
     target_ssd: str = "SystemStructure.ssd",
     selections: Mapping[str, str] | None = None,
+    includes: Sequence[Path | str] = (),
 ) -> AnalysisArtifacts:
     """Write ``analysis.json`` and, for one applied set, its SSV and SSM.
 
@@ -82,8 +83,13 @@ def generate_analysis(
     explicit map wins, so a caller can still force an illegal combination and
     have the constraints reject it. An analysis that carries an unselected
     variation point fails instead of emitting a flat scenario.
+
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
     """
-    architecture = load(architecture_path)
+    architecture = load(architecture_path, *includes)
     if selections is None:
         selections = analysis_selection(architecture, composition, roles=SSP_ROLES)
     scope_analysis_to_root(architecture, composition, roles=SSP_ROLES)

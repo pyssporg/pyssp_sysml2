@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from pyssp_standard import (
@@ -384,9 +384,17 @@ def generate_ssd(
     type_check=True,
     parameter_set_prefix: str = "parameter_sets",
     selections: Mapping[str, str] | None = None,
+    *,
+    includes: Sequence[Path | str] = (),
 ) -> Path:
+    """Write an SSD for one composition.
 
-    architecture = load(architecture_path)
+    ``includes`` names additional definition roots (files or directories)
+    merged into the loaded architecture; pass
+    :func:`pycps_sysml2.core_definitions` to supply the dialect core. Empty
+    (the default) loads only the model's own declarations.
+    """
+    architecture = load(architecture_path, *includes)
     system = architecture.get_part_def(composition)
     canonical = None
     if selections:

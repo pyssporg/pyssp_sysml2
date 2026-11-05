@@ -75,10 +75,18 @@ pyssp generate <ssp|ssd|ssv|ssm|analysis|sysml> [options]
 pyssp sync ssd [options]
 ```
 
-Common options for architecture-based generators (`ssp`, `ssd`, `ssv`, `ssm`):
+Common options for architecture-based subcommands (`ssp`, `ssd`, `ssv`, `ssm`,
+`analysis`, `sync ssd`):
 
-- `--architecture`: folder containing `.sysml` files (or a file inside that folder).
+- `--architecture`: path to the SysML architecture (a folder of `.sysml` files,
+  or a file inside it). Repeat to add definition roots: the first occurrence is
+  the model, later ones are included roots.
 - `--composition`: top-level part definition to generate from
+- `--core-definitions`: sugar for one include, adding
+  `pycps_sysml2.core_definitions()` to the definition roots (`SspModel`,
+  `Analysis`, `Experiment`, `ParameterInterface`, `ParameterSet`,
+  `FmuMetadata`, `SspMetadata`). Off by default; without it a model must
+  declare the markers it uses.
 
 ### SSD
 
@@ -252,7 +260,8 @@ Rules:
 
 - Mark interfaces with `:> ParameterInterface` (a `port def` marker) and sets
   with `:> ParameterSet` (an `attribute def` marker). The marker definitions
-  must exist in the same package.
+  load from the model package or an included root; never redeclare a core
+  definition.
 - A component or nested system has at most one
   `in port parameters : <Interface>;` declaration.
 - Write parameter binds with the parameter port on the left:
@@ -533,6 +542,28 @@ sync_sysml_from_ssd(
 into the SSD `ParameterBinding` source, for example
 `parameter_set_resource("parameter_sets", "NominalSet")` →
 `parameter_sets/NominalSet.ssv`.
+
+Every path-based generator (`generate_ssd`, `generate_parameter_sets`,
+`generate_parameter_mappings`, `generate_ssp`, `generate_analysis`, and
+`sync_sysml_from_ssd`) takes keyword-only `includes`, a sequence of definition
+roots merged into the loaded architecture:
+
+```python
+import pycps_sysml2
+
+generate_ssd(
+    architecture,
+    Path("build/generated/SystemStructure.ssd"),
+    composition,
+    includes=[pycps_sysml2.core_definitions()],
+)
+```
+
+Ordering is the loader's: the architecture path is the primary model root, the
+sequence elements are included roots in the order given. `includes` is empty by
+default (only the model's own declarations load), and the core definitions
+belong to `pycps_sysml2`. On the CLI, `--core-definitions` is sugar for adding
+that one include.
 
 ## Runnable Examples
 

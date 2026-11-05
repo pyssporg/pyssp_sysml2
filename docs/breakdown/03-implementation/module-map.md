@@ -46,4 +46,7 @@ imported here.
 
 Public functions: `build_ssd`, `generate_ssd`, `generate_parameter_sets`,
 `generate_parameter_mappings`, `generate_analysis`, `generate_ssp`,
-`generate_sysml_from_ssd`, and `sync_sysml_from_ssd`.
+`generate_sysml_from_ssd`, and `sync_sysml_from_ssd`. Each path-based generator
+takes keyword-only `includes` for `pycps_sysml2.load(model, *includes)`; an
+empty sequence is the default and `--core-definitions` is off (`INFO-032`,
+`INFO-021`).

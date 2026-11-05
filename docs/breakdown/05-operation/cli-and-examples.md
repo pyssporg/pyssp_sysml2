@@ -25,6 +25,16 @@ Subcommands:
 `--select KEY=VARIANT` values; `generate ssp` also accepts `--configuration`
 for the selection provenance.
 
+`ssp`, `ssd`, `ssv`, `ssm`, `analysis`, and `sync ssd` accept repeatable
+`--architecture` flags. The first occurrence is the model root; every later one
+is an included definition root forwarded as `includes`. `--core-definitions` is
+sugar for one such include, adding `pycps_sysml2.core_definitions()`
+(`SspModel`, `Analysis`, `Experiment`, `ParameterInterface`, `ParameterSet`,
+`FmuMetadata`, `SspMetadata`) after any repeated `--architecture` roots. It is
+off by default: without the flag a model must declare the markers it uses. The
+core definitions belong to `pycps_sysml2`; this package only passes the path to
+the loader.
+
 `generate fmi` is gone. It prints an error naming `pyfmi_sysml2` and exits 1:
 
 ```text
