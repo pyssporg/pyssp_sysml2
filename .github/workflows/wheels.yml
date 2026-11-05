@@ -5,6 +5,11 @@ on:
     branches: [main]
     tags: ["v*"]
 
+# Attaching the artifacts to a release needs a write-scoped token; the default
+# GITHUB_TOKEN is read-only, which failed every tagged run before this.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
