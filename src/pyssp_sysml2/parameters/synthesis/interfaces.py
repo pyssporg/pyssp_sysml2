@@ -9,9 +9,9 @@ from __future__ import annotations
 
 from pyssp_standard import Component, System
 
-from pyssp_sysml2.core.control import is_control_attribute
-from pyssp_sysml2.metadata.fmu_metadata import is_fmu_metadata_definition
-from pyssp_sysml2.model import (
+from pycps_sysml2.core.control import is_control_attribute
+from pycps_sysml2.metadata.fmu_metadata import is_fmu_metadata_definition
+from pycps_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,
@@ -19,7 +19,7 @@ from pyssp_sysml2.model import (
     PortDefinition,
     PortUsage,
 )
-from pyssp_sysml2.parameters.dialect.markers import (
+from pycps_sysml2.parameters.dialect.markers import (
     PARAMETER_INTERFACE_MARKER,
     PARAMETER_SET_MARKER,
     PARAMETERS_PORT_NAME,

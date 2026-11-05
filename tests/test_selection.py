@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pycps_sysml2.metadata.roles import SSP_ROLES
 import json
 import re
 from pathlib import Path
@@ -42,7 +43,7 @@ def _load_text(tmp_path: Path, content: str) -> Architecture:
 
 def _plans(tmp_path: Path):
     _, architecture = _load(tmp_path)
-    return {plan.name: plan for plan in analysis_plans(architecture)}
+    return {plan.name: plan for plan in analysis_plans(architecture, roles=SSP_ROLES)}
 
 
 def test_parse_selection_accepts_the_cli_language() -> None:
@@ -73,18 +74,18 @@ def test_model_root_is_the_outermost_composition(tmp_path: Path) -> None:
     root = architecture.part_definitions["System"]
     nested = architecture.part_definitions["NestedGainSystem"]
 
-    assert model_root(architecture, root) is root
-    assert model_root(architecture, nested) is architecture.part_definitions[
+    assert model_root(architecture, root, roles=SSP_ROLES) is root
+    assert model_root(architecture, nested, roles=SSP_ROLES) is architecture.part_definitions[
         "PathSystem"
     ]
-    assert configuration_name(architecture, "step_single") == "StepSingleSystem"
-    assert configuration_name(architecture, "plain") is None
+    assert configuration_name(architecture, "step_single", roles=SSP_ROLES) == "StepSingleSystem"
+    assert configuration_name(architecture, "plain", roles=SSP_ROLES) is None
 
 
 def test_derived_selection_reads_a_simple_configuration(tmp_path: Path) -> None:
     _, architecture = _load(tmp_path)
 
-    assert analysis_selection(architecture, "step_single") == {
+    assert analysis_selection(architecture, "step_single", roles=SSP_ROLES) == {
         "source": "stepImplementation",
         "gain": "singleStage",
     }
@@ -93,7 +94,7 @@ def test_derived_selection_reads_a_simple_configuration(tmp_path: Path) -> None:
 def test_derived_selection_descends_into_nested_points(tmp_path: Path) -> None:
     _, architecture = _load(tmp_path)
 
-    assert derived_selection(architecture, "nested_gain") == {
+    assert derived_selection(architecture, "nested_gain", roles=SSP_ROLES) == {
         "path": "nestedPath",
         "path.inner_stage": "gainStage",
     }
@@ -102,20 +103,20 @@ def test_derived_selection_descends_into_nested_points(tmp_path: Path) -> None:
 def test_derived_selection_reads_an_analysis_attribute_point(tmp_path: Path) -> None:
     _, architecture = _load(tmp_path)
 
-    assert derived_selection(architecture, "nominal") == {"scenario": "nominalK3"}
+    assert derived_selection(architecture, "nominal", roles=SSP_ROLES) == {"scenario": "nominalK3"}
 
 
 def test_derived_selection_is_empty_for_the_plain_root(tmp_path: Path) -> None:
     _, architecture = _load(tmp_path)
 
-    assert derived_selection(architecture, "plain") == {}
-    assert analysis_selection(architecture, "plain") == {}
+    assert derived_selection(architecture, "plain", roles=SSP_ROLES) == {}
+    assert analysis_selection(architecture, "plain", roles=SSP_ROLES) == {}
 
 
 def test_derived_selection_recurses_through_three_levels(tmp_path: Path) -> None:
     architecture = _load_text(tmp_path, fixture_text("selection/deep-nesting.sysml"))
 
-    assert derived_selection(architecture, "deep") == {
+    assert derived_selection(architecture, "deep", roles=SSP_ROLES) == {
         "top": "b",
         "top.inner": "b1",
         "top.inner.deeper": "c1",
@@ -132,7 +133,7 @@ def test_derived_selection_rejects_an_unbound_inner_point(tmp_path: Path) -> Non
             "bind it in configuration 'NestedUnboundSystem'"
         ),
     ):
-        derived_selection(architecture, "nested_unbound")
+        derived_selection(architecture, "nested_unbound", roles=SSP_ROLES)
 
 
 def test_derived_selection_rejects_an_unknown_variant(tmp_path: Path) -> None:
@@ -145,7 +146,7 @@ def test_derived_selection_rejects_an_unknown_variant(tmp_path: Path) -> None:
             "'source' in configuration 'BadSystem'; expected one of step"
         ),
     ):
-        derived_selection(architecture, "bad")
+        derived_selection(architecture, "bad", roles=SSP_ROLES)
 
 
 def test_derived_selection_rejects_a_non_point_redefinition(
@@ -160,7 +161,7 @@ def test_derived_selection_rejects_a_non_point_redefinition(
             "variation point in 'System'"
         ),
     ):
-        derived_selection(architecture, "bad")
+        derived_selection(architecture, "bad", roles=SSP_ROLES)
 
 
 def test_plans_classify_legal_violated_and_invalid(tmp_path: Path) -> None:
@@ -220,7 +221,7 @@ def test_a_configuration_is_judged_by_its_inherited_assert(
     tmp_path: Path,
 ) -> None:
     _, architecture = _load(tmp_path)
-    plans = {plan.name: plan for plan in analysis_plans(architecture)}
+    plans = {plan.name: plan for plan in analysis_plans(architecture, roles=SSP_ROLES)}
 
     for name in ("StepSingleSystem", "SineTwoSystem"):
         assert architecture.part_definitions[name].constraints == []
@@ -262,7 +263,7 @@ def test_generate_analysis_keeps_a_nested_selection(tmp_path: Path) -> None:
     descriptor = json.loads(artifacts.descriptor.read_text(encoding="utf-8"))
     assert descriptor["composition"] == "PathSystem"
     _, architecture = _load(tmp_path)
-    assert derived_selection(architecture, "nested_gain") == {
+    assert derived_selection(architecture, "nested_gain", roles=SSP_ROLES) == {
         "path": "nestedPath",
         "path.inner_stage": "gainStage",
     }
@@ -315,7 +316,7 @@ def test_a_definition_specialising_two_ssp_models_is_rejected(
             "(FirstRoot, SecondRoot); a configuration chain must be linear."
         ),
     ):
-        derived_selection(architecture, "linear")
+        derived_selection(architecture, "linear", roles=SSP_ROLES)
 
 
 def test_a_definition_whose_supertype_is_not_ssp_model_is_rejected(
@@ -332,7 +333,7 @@ def test_a_definition_whose_supertype_is_not_ssp_model_is_rejected(
             "composition."
         ),
     ):
-        model_root(architecture, orphan)
+        model_root(architecture, orphan, roles=SSP_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +353,7 @@ def test_a_usage_redefining_two_features_is_rejected(tmp_path: Path) -> None:
             "feature (source, gain); bind exactly one variation point."
         ),
     ):
-        derived_selection(architecture, "bad")
+        derived_selection(architecture, "bad", roles=SSP_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -374,7 +375,7 @@ def test_a_qualified_binding_must_name_the_points_definition(
             "'source' names type 'OtherChoice'; expected 'SourceChoice'"
         ),
     ):
-        derived_selection(architecture, "wrong_type")
+        derived_selection(architecture, "wrong_type", roles=SSP_ROLES)
 
 
 def test_an_unqualified_binding_must_name_a_local_usage(tmp_path: Path) -> None:
@@ -389,7 +390,7 @@ def test_an_unqualified_binding_must_name_a_local_usage(tmp_path: Path) -> None:
             "'source' names no part usage in configuration 'NoLocalSystem'"
         ),
     ):
-        derived_selection(architecture, "no_local")
+        derived_selection(architecture, "no_local", roles=SSP_ROLES)
 
 
 def test_a_local_usage_must_specialise_one_variant(tmp_path: Path) -> None:
@@ -404,7 +405,7 @@ def test_a_local_usage_must_specialise_one_variant(tmp_path: Path) -> None:
             "exactly one variant of 'SourceChoice'; found 0"
         ),
     ):
-        derived_selection(architecture, "no_subset")
+        derived_selection(architecture, "no_subset", roles=SSP_ROLES)
 
 
 def test_a_local_usage_specialising_two_variants_is_rejected(
@@ -421,7 +422,7 @@ def test_a_local_usage_specialising_two_variants_is_rejected(
             "specialise exactly one variant of 'SourceChoice'; found 2"
         ),
     ):
-        derived_selection(architecture, "two_subsets")
+        derived_selection(architecture, "two_subsets", roles=SSP_ROLES)
 
 
 def test_a_local_usage_must_specialise_a_variant_of_the_point(
@@ -438,7 +439,7 @@ def test_a_local_usage_must_specialise_a_variant_of_the_point(
             "'OtherChoice::thing', which is not a variant of 'SourceChoice'"
         ),
     ):
-        derived_selection(architecture, "not_variant")
+        derived_selection(architecture, "not_variant", roles=SSP_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +461,7 @@ def test_an_unknown_variant_is_rejected_in_a_nested_scope(
             "'top.inner' in configuration 'Config'; expected one of b1."
         ),
     ):
-        derived_selection(architecture, "conf")
+        derived_selection(architecture, "conf", roles=SSP_ROLES)
 
 
 def test_a_more_derived_configuration_overrides_an_inherited_binding(
@@ -468,7 +469,7 @@ def test_a_more_derived_configuration_overrides_an_inherited_binding(
 ) -> None:
     architecture = _load_text(tmp_path, fixture_text("selection/rebinding.sysml"))
 
-    assert derived_selection(architecture, "direct") == {"path": "directPath"}
+    assert derived_selection(architecture, "direct", roles=SSP_ROLES) == {"path": "directPath"}
 
 
 # ---------------------------------------------------------------------------
@@ -483,11 +484,11 @@ def test_a_configuration_binds_an_attribute_point_structurally(
     write_model(path, fixture_text("selection/attribute-binding.sysml"))
     architecture = load(path)
 
-    assert derived_selection(architecture, "configured") == {
+    assert derived_selection(architecture, "configured", roles=SSP_ROLES) == {
         "scenario": "nominalK3"
     }
     plan = next(
-        plan for plan in analysis_plans(architecture) if plan.name == "configured"
+        plan for plan in analysis_plans(architecture, roles=SSP_ROLES) if plan.name == "configured"
     )
     assert plan.status == "legal"
     assert plan.configuration == "Configured"
@@ -517,7 +518,7 @@ def test_an_attribute_configuration_rejects_an_unknown_variant(
             "'scenario' in configuration 'BadConfigured'"
         ),
     ):
-        derived_selection(architecture, "bad")
+        derived_selection(architecture, "bad", roles=SSP_ROLES)
 
 
 def test_a_model_attribute_binding_resolves_on_the_root(tmp_path: Path) -> None:
@@ -526,7 +527,7 @@ def test_a_model_attribute_binding_resolves_on_the_root(tmp_path: Path) -> None:
     )
 
     resolved, canonical = resolve_selected(
-        architecture, "Root", {"scenario": "nominalK3"}
+        architecture, "Root", {"scenario": "nominalK3"}, roles=SSP_ROLES
     )
 
     assert canonical == {"scenario": "nominalK3"}
@@ -547,7 +548,7 @@ def test_attribute_ambiguity_still_fires_for_distinct_usages(
         ValueError,
         match="Selection key 'mode' is ambiguous.*'mode', 'inner.x.mode'",
     ):
-        resolve_selected(architecture, "System", {"mode": "anything"})
+        resolve_selected(architecture, "System", {"mode": "anything"}, roles=SSP_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -560,7 +561,7 @@ def test_analysis_selections_keeps_declaration_order(tmp_path: Path) -> None:
         tmp_path, fixture_text("selection/analysis-order.sysml")
     )
 
-    selections = analysis_selections(architecture)
+    selections = analysis_selections(architecture, roles=SSP_ROLES)
 
     assert list(selections) == ["one", "second", "plain"]
     assert selections == {
@@ -587,7 +588,7 @@ def test_a_plan_marks_a_resolution_failure_invalid_and_keeps_the_selection(
     architecture = _load_text(
         tmp_path, fixture_text("selection/unresolvable-variant.sysml")
     )
-    plan = next(plan for plan in analysis_plans(architecture) if plan.name == "bad")
+    plan = next(plan for plan in analysis_plans(architecture, roles=SSP_ROLES) if plan.name == "bad")
 
     assert plan.status == "invalid"
     assert plan.selection == {"source": "step"}

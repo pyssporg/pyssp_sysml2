@@ -1,6 +1,6 @@
 pytest
 coverage
-sysmlpy==0.96.4
+pycps-sysml2 @ https://github.com/pyssporg/pycps_sysml2/releases/download/v0.1.0/pycps_sysml2-0.1.0-py3-none-any.whl
 # Refactored pyssp_standard checkout (pyssporg/experimental_pyssp_standard;
 # the vendored copy in ssp_references).
 # Adjust this path if your workspace layout differs.

@@ -1,18 +1,18 @@
 ---
 id: INFO-027
 type: info
-title: Selection and plans
-summary: An analysis composes a model-level SysML v2 configuration; the adapter derives the variant selection from its bindings, evaluates constraints, and classifies the analysis as legal, violated, or invalid.
-date: 2026-10-30
+title: Selection and configuration
+summary: An analysis composes a model-level SysML v2 configuration, and pycps_sysml2 derives the variant selection from its bindings.
+date: 2026-11-05
 status: current
 ---
 
-# Selection and plans
+# Selection and configuration
 
 ## Authored selection
 
 SysML v2 defines variation points and variants but no selection construct. The
-adapter uses the standard 100% configuration: a part definition specialises the
+dialect uses the standard 100% configuration: a part definition specialises the
 root composition and binds each variation usage with a redefinition and a
 feature value.
 
@@ -34,9 +34,7 @@ that local usage, and the local usage's body binds the inner point. An
 analysis-local attribute point carries its own value
 (`attribute scenario : ScenarioChoice = ScenarioChoice::nominalK3;`).
 
-## Derivation
-
-`parameters/configuration.py` derives the selection:
+`pycps_sysml2` derives the selection from the configuration (`INFO-031`):
 
 - `model_root` walks single-parent specialisation from the composed definition
   to the outermost composition before the `SspModel` marker.
@@ -55,45 +53,4 @@ a silently unselected artifact.
 Generation stays on the root composition. Analysis generation retypes its
 `sut` usage to the root before resolution, so inherited parts, ports,
 connections, and binds resolve; a configuration name is not a generation
-target.
-
-## Plans
-
-`parameters/selection.py` returns an `AnalysisPlan` per `Analysis`:
-
-- `legal`: the selection resolves and every asserted constraint passes;
-- `violated`: the selection resolves but an asserted constraint fails;
-- `invalid`: the configuration does not resolve, a point is unbound, or a
-  constraint could not be evaluated.
-
-`configuration` names the composed configuration, or is `None` for the root.
-`generate ssp` records that name as `configuration` in the model SSP's
-`extra/org.pyssp/selection.json`, and omits the key when it is absent.
-A fixture pins the expected `legal` and `violated` names; the adapter computes
-the partition, so the fixture keeps only its claim. Constraints come from the
-effective members of a part definition, so a configuration is judged by the
-asserted usages it inherits from its family, evaluated at the composed usage's
-path.
-
-## Canonical keys
-
-Derived keys are relative to the composed model (`path`, `path.inner_stage`) or
-bare for an analysis-local usage (`scenario`). `variation.resolve_selected`
-returns the resolved architecture and the canonical map keyed by the target
-composition's usage paths (`source` for a model, `sut.source` for an analysis).
-Generation passes that map to constraint evaluation, so variation and
-constraints share one key language (`AD-001`).
-
-A key matches an exact path or a dotted suffix of one, so a selection authored
-relative to the model addresses the same usage in an analysis. An ambiguous
-match is an error.
-
-## Scoped requirements
-
-Required variation points are scoped to the target: a model build requires only
-its own composition's points, while an analysis build requires its own and its
-model's points. From a composing analysis, only the usages the analysis declares
-itself are accepted, at bare keys; its `sut` subtree is the composed model and is
-already accepted unprefixed, so it contributes no second candidate. Accepted
-keys are allowed but not required, so one per-analysis selection map reaches both
-generators unchanged.
+target. Plans are `INFO-043`; key scoping is `INFO-044`.

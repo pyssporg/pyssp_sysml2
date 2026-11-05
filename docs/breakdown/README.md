@@ -6,13 +6,14 @@ and how it is verified and run.
 
 ## The Seven Layers
 
-- `00-intent/` — why the project exists and who it serves.
+- `00-intent/` — why the package exists, its scope, commitments, and roles.
 - `01-product/` — the parameter-set dialect and its promises.
-- `02-architecture/` — model structure, ports, pipeline, and round-trip design.
-- `03-implementation/` — modules, artifact writers, adapter, and parser pin.
+- `02-architecture/` — structure, ports, metadata, selection, pipeline, sync.
+- `03-implementation/` — modules, artifact writers, and the pycps_sysml2
+  dependency.
 - `04-verification/` — test strategy, validation rules, and diagnostics.
 - `05-operation/` — setup, CLI, examples, troubleshooting, authoring rules.
-- `06-evolution/` — reuse proposal and parser evaluation.
+- `06-evolution/` — reuse proposal and dependency evaluation.
 - the decision archive (`docs/archive/archive.zip`) — dated decision stream,
   history only, read via `pb archive`.
 

@@ -15,7 +15,7 @@ Two rules decide where a test belongs and what its green means.
 | --- | --- | --- |
 | `static` | source or files were inspected; the package was not executed | `python -m pytest -m static` |
 | `unit` | one object behaves; no generated artifact involved | `python -m pytest -m unit` |
-| `component` | a generated artifact (SSD, SSV, SSM, SSP, FMI, SysML) is the unit under test | `python -m pytest -m component` |
+| `component` | a generated artifact (SSD, SSV, SSM, SSP, SysML) is the unit under test | `python -m pytest -m component` |
 | `contract` | two directions agree (round-trip, SSD↔SysML sync) | `python -m pytest -m contract` |
 | `system` | the installed CLI was driven end to end | `python -m pytest -m system` |
 | `slow` | excluded from the default CI subset, run on purpose | `python -m pytest -m slow` |
@@ -31,7 +31,7 @@ in `MIXED_FILES`; no other combination is accepted.
   with `tests/fixture_files.py` (`fixture_text`, `render_fixture`,
   `assert_matches_fixture`). See `tests/fixtures/README.md`.
 - `tests/golden/<case>/` — one conversion case: the SysML input plus the
-  committed SSP/FMI artifacts generated from it.
+  committed SSP artifacts generated from it.
 - `tests/golden/<case>/case.md` — the provenance record for that case: what it
   converts, which oracle proves it, how it may be normalized, and the list of
   every artifact in the directory.
@@ -55,12 +55,11 @@ directory.
 1. Create `tests/golden/<case>/` and add `architecture.sysml`.
 2. Add `tests/golden/<case>/case.md` from
    `project-test-suites/templates/conversion-case.md`, adapted as the existing
-   records are: `Conversion` names `.sysml` → `.ssd`/`.ssv`/`.ssm`/
-   `modelDescription.xml`, `Input` states provenance, `Independent oracle` is
-   `pyssp_standard` `check_compliance()`, `Comparison` is exact bytes plus parsed
-   structure, `Update policy` is `UPDATE_GOLDENS=1` with a reviewed diff,
-   refused in CI, and the pinned `GENERATION_TIME` is named. List every
-   non-SysML artifact by relative path under `## Artifacts`.
+   records are: `Conversion` names `.sysml` → `.ssd`/`.ssv`/`.ssm`, `Input`
+   states provenance, `Independent oracle` is `pyssp_standard`
+   `check_compliance()`, `Comparison` is exact bytes plus parsed structure,
+   `Update policy` is `UPDATE_GOLDENS=1` with a reviewed diff, refused in CI.
+   List every non-SysML artifact by relative path under `## Artifacts`.
 3. Add one entry `<case>: "<CompositionName>"` to `CASES` in
    `tests/test_golden_artifacts.py`. This is a data row, not test logic; a case
    directory that is missing from it fails
@@ -80,8 +79,6 @@ a test fix: confirm it is intended (dialect, mapping rules, version, ordering),
 and never regenerate to silence a failure you have not explained. Commit the
 inputs and the outputs together.
 
-- `modelDescription.xml` carries `generationDateAndTime`; the test pins it to
-  `GENERATION_TIME` (`2026-01-01T00:00:00Z`). Do not make it clock-dependent.
 - Regeneration is a developer action. The test refuses to write when
   `UPDATE_GOLDENS=1` and `CI` is set (`refusing to update goldens in CI`), and
   CI itself never sets `UPDATE_GOLDENS`.

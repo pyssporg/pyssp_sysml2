@@ -9,9 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Iterable
 
-from pyssp_sysml2.core.control import is_control_attribute
-from pyssp_sysml2.model import PortDefinition
-from pyssp_sysml2.parameters.dialect.declarations import fixed_count
+from pycps_sysml2.core.control import is_control_attribute
+from pycps_sysml2.model import PortDefinition
+from pycps_sysml2.parameters.dialect.declarations import fixed_count
 
 from .inputs import (
     RESERVED_IDENTIFIERS,

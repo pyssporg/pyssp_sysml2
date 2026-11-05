@@ -27,18 +27,12 @@ pyssp generate ssd \
   --architecture examples/parameter-sets/identity \
   --composition IdentityComposition \
   --output build/parameter-sets/identity/SystemStructure.ssd
-
-pyssp generate fmi \
-  --architecture examples/parameter-sets/identity \
-  --composition IdentityComposition \
-  --output-dir build/parameter-sets/identity/model_descriptions
 ```
 
 Expected:
 
 - `build/parameter-sets/identity/parameter_sets/NominalSet.ssv`
 - an SSD `ParameterBinding` with `prefix="autopilot."` and no inline mapping;
-- FMI parameter variables `waypointCount`, `waypointX_km[0..2]`.
 
 ## Explicit
 

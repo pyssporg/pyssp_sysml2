@@ -3,15 +3,17 @@ id: INFO-007
 type: info
 title: Round-trip and sync
 summary: Sync reconciles SSD edits into SysML; preserved, normalized, and lost information is explicit.
-date: 2026-10-23
+date: 2026-11-05
 status: current
 ---
 
 # Round-trip and sync
 
+## Syncing an SSD into SysML
+
 `sync ssd` applies SSD composition edits back to SysML.
 
-## Existing architecture
+Existing architecture:
 
 - The existing model is loaded.
 - If it already uses the parameter dialect, the dialect is reconciled.
@@ -26,12 +28,8 @@ status: current
   layouts are preserved.
 - Unrelated definitions are preserved.
 
-## Missing architecture
-
-Sync bootstraps a model from the SSD using the same logic as `generate sysml`.
-It writes `architecture.sysml`.
-
-## Parameter reconciliation
+A missing architecture is bootstrapped from the SSD using the same logic as
+`generate sysml`; it writes `architecture.sysml` (`INFO-038`).
 
 If the existing model uses interfaces and sets, sync:
 
@@ -45,55 +43,6 @@ If the existing model uses interfaces and sets, sync:
 - removes a port when the SSD no longer has parameter connectors.
 
 Flat-attribute architectures are rejected: components must declare parameters
-through an interface and SysML-defined sets.
+through an interface and SysML-defined sets (`INFO-024`).
 
-## Limits
-
-- SSD connection endpoints must be in `port.attribute` form.
-- Partial attribute mappings on a connection are rejected.
-- Incompatible connected ports are rejected.
-- Unknown component sources are synthesized by default; `--no-synthesize`
-  fails instead.
-- A childless SSD `System` can regenerate as a leaf component.
-- Set inheritance and union are not implemented; see `IMP-001`.
-- Flat parameter attributes are retired.
-- `pyssp_implementation` and `pyssp_parameter_set` are retired.
-- `generate sysml` and `sync ssd` refuse to rewrite an architecture carrying
-  variation points; SysML export does not represent them and would erase them.
-
-## Preserved or semantically preserved
-
-- Parameter member names, except reserved or invalid names, which are rejected.
-- Parameter values: the SSV is the source of truth for set values.
-- Parameter types: primitive types and fixed multiplicities.
-- Interface defaults when sync reconciles an unchanged signature.
-- Binding intent: identity becomes prefix, explicit becomes mapping.
-- Nested system structure: nested SSD `System` and nested part definition.
-- Connections per system level, including bare-name boundary ends.
-- FMU metadata `implementation` and default-experiment control metadata.
-- Unrelated definitions and file layout when syncing; `generate sysml` starts
-  fresh.
-
-## Renamed or normalized
-
-- Port definition names become `Port_N`.
-- A single-attribute port attribute is canonicalized to `value`.
-- A scalar connector name maps between `signal` and `signal.value`.
-- A parameter interface name becomes `<PartDefinition>Parameters`.
-- A set usage name derives from the set name; `parameters` becomes
-  `parameters_set`, with a collision suffix.
-- Composition name is the SSD system name unless `--composition` overrides it.
-- Package name is `RecoveredFromSSD` for `generate sysml`.
-- SSM file name is `<Set>_<Component>.ssm`, with dots replaced by underscores.
-
-## Lost or not reconstructible
-
-- Original port definition names; the SSD stores only connector names.
-- Set inheritance and union; not implemented.
-- Original multi-file layout in `generate sysml`; it writes one synthesized
-  file.
-- The distinction between an empty SSD `System` and a leaf component; no
-  structural marker.
-- Built FMU path (`fmu_meta.source`); a recovered model has no source and
-  regenerated components export an empty `source`.
-- Exact source formatting and docs; synthesis produces a repo-owned model.
+Limits and fidelity are `INFO-041`; what survives is `INFO-042`.

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 from pyssp_standard import SSD
 
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.parameters.dialect.declarations import (
     parameter_declarations,
     parameter_interface,
@@ -134,30 +132,6 @@ def test_parameter_port_cannot_be_connected(tmp_path) -> None:
         generate_ssd(
             architecture_dir, tmp_path / "SystemStructure.ssd", COMPOSITION_NAME
         )
-
-
-def test_fmi_parameters_are_flat_with_parameter_causality(tmp_path) -> None:
-    """Names do not include the port; causality stays 'parameter'."""
-    architecture_dir, _ = _load(tmp_path, _model())
-
-    [path] = generate_model_descriptions(
-        architecture_dir, tmp_path / "model_descriptions", COMPOSITION_NAME
-    )
-    root = ET.parse(path).getroot()
-    variables = root.findall(".//ScalarVariable")
-
-    assert {variable.get("name") for variable in variables} == {
-        "gain",
-        "count",
-        "xs[0]",
-        "xs[1]",
-    }
-    assert {variable.get("causality") for variable in variables} == {"parameter"}
-    starts = {
-        variable.get("name"): next(iter(variable)).get("start")
-        for variable in variables
-    }
-    assert starts["gain"] == "2"
 
 
 def test_ssd_connectors_are_flat_parameter_connectors(tmp_path) -> None:

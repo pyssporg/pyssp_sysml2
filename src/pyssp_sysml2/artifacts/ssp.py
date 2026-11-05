@@ -31,29 +31,31 @@ from pyssp_standard import (
     validate_component_fmu,
 )
 
-from pyssp_sysml2.core.fmi_helpers import fmu_filename
-from pyssp_sysml2.metadata.fmu_metadata import fmu_metadata
-from pyssp_sysml2.parameters.dialect.composition import (
-    component_definitions,
-    validate_parameter_dialect,
-)
-from pyssp_sysml2.parameters.dialect.mapping import parameter_sets_for_generation
-from pyssp_sysml2.parameters.dialect.markers import parameter_set_resource
-from pyssp_sysml2.core.paths import ensure_parent_dir
-from pyssp_sysml2.metadata.roles import (
+from pycps_sysml2.core.fmi_helpers import fmu_filename
+from pycps_sysml2.metadata.fmu_metadata import fmu_metadata
+from pycps_sysml2.metadata.roles import (
+    SSP_ROLES,
     is_analysis,
     require_resolved_variation,
     validate_role_markers,
 )
-from pyssp_sysml2.artifacts.ssd import build_ssd
-from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
-from pyssp_sysml2.artifacts.ssv import write_parameter_set
-from pyssp_sysml2.model import Architecture, PartDefinition, load
-from pyssp_sysml2.parameters.constraints import enforce_constraints
-from pyssp_sysml2.parameters.variation import (
+from pycps_sysml2.metadata.ssp_metadata import ssp_metadata
+from pycps_sysml2.model import Architecture, PartDefinition, load
+from pycps_sysml2.parameters.constraints import enforce_constraints
+from pycps_sysml2.parameters.dialect.composition import (
+    component_definitions,
+    validate_parameter_dialect,
+)
+from pycps_sysml2.parameters.dialect.mapping import parameter_sets_for_generation
+from pycps_sysml2.parameters.policy import SSP_POLICY
+from pycps_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve_selected,
 )
+
+from pyssp_sysml2.artifacts.ssd import build_ssd
+from pyssp_sysml2.artifacts.ssv import parameter_set_resource, write_parameter_set
+from pyssp_sysml2.core.paths import ensure_parent_dir
 
 DEFAULT_PARAMETER_SET_PREFIX = "resources/parameter_sets"
 SELECTION_ENTRY = "extra/org.pyssp/selection.json"
@@ -269,7 +271,9 @@ def generate_ssp(
     system = architecture.get_part_def(composition)
     canonical = None
     if selections:
-        architecture, canonical = resolve_selected(architecture, system, selections)
+        architecture, canonical = resolve_selected(
+        architecture, system, selections, roles=SSP_ROLES
+    )
         system = architecture.get_part_def(composition)
     enforce_constraints(architecture, composition, canonical)
     require_resolved_variation(architecture, system)
@@ -287,7 +291,7 @@ def generate_ssp(
             "'ssp_meta'; it is an analysis-only boundary and cannot be exported. "
             "Generate its analysis instead."
         )
-    validate_parameter_dialect(architecture, system)
+    validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
 
     fmu_resources = _collect_fmu_resources(
         architecture, system, fmu_root, allow_missing=allow_missing_fmus
@@ -299,7 +303,9 @@ def generate_ssp(
                 "component is exported without its FMU (design structure)",
                 stacklevel=2,
             )
-    set_definitions = parameter_sets_for_generation(architecture, system)
+    set_definitions = parameter_sets_for_generation(
+        architecture, system, policy=SSP_POLICY
+    )
     unique_resources = _unique_resources(fmu_resources)
 
     ensure_parent_dir(output_path)

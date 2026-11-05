@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pycps_sysml2.metadata.roles import SSP_ROLES
 import json
 import re
 import zipfile
@@ -148,7 +149,7 @@ def test_resolve_substitutes_the_selected_variant(tmp_path: Path) -> None:
     """Resolution rewrites the usage type on a copy and keeps the usage name."""
     _, architecture = _load_architecture(tmp_path, DEFINITION_VARIATION_FMU)
 
-    resolved = resolve(architecture, "System", {"source": "stepImplementation"})
+    resolved = resolve(architecture, "System", {"source": "stepImplementation"}, roles=SSP_ROLES)
 
     assert resolved.part_definitions["System"].parts["source"].type_name == "Step"
     assert architecture.part_definitions["System"].parts["source"].type_name == (
@@ -211,14 +212,14 @@ def test_resolve_rejects_an_unknown_key(tmp_path: Path) -> None:
     _, architecture = _load_architecture(tmp_path, DEFINITION_VARIATION_FMU)
 
     with pytest.raises(ValueError, match="Unknown selection key 'missing'"):
-        resolve(architecture, "System", {"missing": "stepImplementation"})
+        resolve(architecture, "System", {"missing": "stepImplementation"}, roles=SSP_ROLES)
 
 
 def test_resolve_accepts_a_dotted_path_for_nesting(tmp_path: Path) -> None:
     """A nested variation point is selected by its dotted usage path."""
     _, architecture = _load_architecture(tmp_path, NESTED_VARIATION)
 
-    resolved = resolve(architecture, "System", {"inner.source": "a"})
+    resolved = resolve(architecture, "System", {"inner.source": "a"}, roles=SSP_ROLES)
 
     assert resolved.part_definitions["Inner"].parts["source"].type_name == "A"
 
@@ -230,7 +231,7 @@ def test_resolve_rejects_an_ambiguous_bare_key(tmp_path: Path) -> None:
         ValueError,
         match="Selection key 'x' is ambiguous.*'x', 'inner.x'",
     ):
-        resolve(architecture, "System", {"x": "anything"})
+        resolve(architecture, "System", {"x": "anything"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_non_variation_usage(tmp_path: Path) -> None:
@@ -240,7 +241,7 @@ def test_resolve_rejects_a_non_variation_usage(tmp_path: Path) -> None:
         ValueError,
         match="'gain', which is not a variation point",
     ):
-        resolve(architecture, "System", {"gain": "stepImplementation"})
+        resolve(architecture, "System", {"gain": "stepImplementation"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_an_unknown_variant(tmp_path: Path) -> None:
@@ -250,7 +251,7 @@ def test_resolve_rejects_an_unknown_variant(tmp_path: Path) -> None:
         ValueError,
         match="Unknown variant 'nope' for variation point 'SourceChoice'",
     ):
-        resolve(architecture, "System", {"source": "nope"})
+        resolve(architecture, "System", {"source": "nope"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_an_unselected_variation_point(tmp_path: Path) -> None:
@@ -260,14 +261,14 @@ def test_resolve_rejects_an_unselected_variation_point(tmp_path: Path) -> None:
         ValueError,
         match="Variation point 'SourceChoice' at 'source'.*is not selected",
     ):
-        resolve(architecture, "System", {})
+        resolve(architecture, "System", {}, roles=SSP_ROLES)
 
 
 def test_resolve_substitutes_a_usage_level_variant(tmp_path: Path) -> None:
     """A usage-level point is selected by its usage path and keeps the name."""
     _, architecture = _load_architecture(tmp_path, USAGE_VARIATION)
 
-    resolved = resolve(architecture, "System", {"source": "stepSource"})
+    resolved = resolve(architecture, "System", {"source": "stepSource"}, roles=SSP_ROLES)
 
     source = resolved.part_definitions["System"].parts["source"]
     assert source.type_name == "Step"
@@ -279,7 +280,7 @@ def test_resolve_synthesises_a_body_variant(tmp_path: Path) -> None:
     """A body variant becomes a definition carrying the point's ports."""
     _, architecture = _load_architecture(tmp_path, BODY_VARIATION)
 
-    resolved = resolve(architecture, "System", {"path": "directPath"})
+    resolved = resolve(architecture, "System", {"path": "directPath"}, roles=SSP_ROLES)
 
     usage = resolved.part_definitions["System"].parts["path"]
     assert usage.type_name == "PathChoice__directPath"
@@ -420,7 +421,7 @@ def test_example_08_rejects_an_unselected_body_point(tmp_path: Path) -> None:
         ValueError,
         match="Variation point 'PathChoice' at 'path'.*is not selected",
     ):
-        resolve(architecture, "System", {})
+        resolve(architecture, "System", {}, roles=SSP_ROLES)
 
 
 UNDECLARED_BODY_PORT = fixture_text("variation/undeclared-body-port.sysml")
@@ -436,7 +437,7 @@ def test_resolve_rejects_a_body_port_the_point_does_not_declare(
         match="Variant 'directPath' of variation point 'PathChoice' connects to "
         "port 'missing', which the point does not declare",
     ):
-        resolve(architecture, "System", {"path": "directPath"})
+        resolve(architecture, "System", {"path": "directPath"}, roles=SSP_ROLES)
 
 
 def test_example_09_captures_body_attributes_and_bindings(tmp_path: Path) -> None:
@@ -463,7 +464,7 @@ def test_example_09_selected_body_merges_into_the_analysis(
     _, architecture = _load_architecture(tmp_path, PARAMETER_BINDING_VARIATION)
 
     resolved = resolve(
-        architecture, "test_selected", {"parameters": "lateStepBinding"}
+        architecture, "test_selected", {"parameters": "lateStepBinding"}, roles=SSP_ROLES
     )
     analysis = resolved.part_definitions["test_selected"]
     assert "parameters" not in analysis.parts
@@ -526,7 +527,7 @@ def test_example_09_analysis_ssd_equals_the_fixed_topology_ssd(
 
     fixed = generate_ssd(path, tmp_path / "fixed.ssd", "System")
     resolved = resolve(
-        architecture, "test_selected", {"parameters": "lateStepBinding"}
+        architecture, "test_selected", {"parameters": "lateStepBinding"}, roles=SSP_ROLES
     )
     selected = tmp_path / "selected.ssd"
     with SSD(selected, mode="w") as ssd:
@@ -559,7 +560,7 @@ def test_example_10_dotted_selection_resolves_both_points(
     resolved = resolve(
         architecture,
         "System",
-        {"path": "nestedPath", "path.stage": "attenuateStage"},
+        {"path": "nestedPath", "path.stage": "attenuateStage"}, roles=SSP_ROLES
     )
     part = resolved.part_definitions["System"].parts["path"]
     assert part.type_name == "PathChoice__nestedPath"
@@ -599,7 +600,7 @@ def test_example_10_unselected_inner_point_names_the_full_path(
         ValueError,
         match="Variation point 'StageChoice' at 'path.stage'.*is not selected",
     ):
-        resolve(architecture, "System", {"path": "nestedPath"})
+        resolve(architecture, "System", {"path": "nestedPath"}, roles=SSP_ROLES)
 
 
 def test_example_10_inner_key_needs_the_outer_body_first(
@@ -609,7 +610,7 @@ def test_example_10_inner_key_needs_the_outer_body_first(
     _, architecture = _load_architecture(tmp_path, NESTED_BODY_VARIATION)
 
     with pytest.raises(ValueError, match="Unknown selection key 'path.stage'"):
-        resolve(architecture, "System", {"path.stage": "attenuateStage"})
+        resolve(architecture, "System", {"path.stage": "attenuateStage"}, roles=SSP_ROLES)
 
 
 THREE_LEVELS = fixture_text("variation/three-levels.sysml")
@@ -625,7 +626,7 @@ def test_three_level_variation_is_rejected_not_flattened(tmp_path: Path) -> None
         resolve(
             architecture,
             "System",
-            {"path": "nestedPath", "path.stage": "deepStage"},
+            {"path": "nestedPath", "path.stage": "deepStage"}, roles=SSP_ROLES
         )
 
 
@@ -854,7 +855,7 @@ def test_resolve_substitutes_the_attribute_usage_type(tmp_path: Path) -> None:
     """Resolution rewrites the attribute usage type on a copy."""
     _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
-    resolved = resolve(architecture, "test_selected_scenario", {"scenario": "baseline"})
+    resolved = resolve(architecture, "test_selected_scenario", {"scenario": "baseline"}, roles=SSP_ROLES)
 
     assert (
         resolved.part_definitions["test_selected_scenario"]
@@ -872,7 +873,7 @@ def test_resolve_finds_an_analysis_attribute_from_the_model(tmp_path: Path) -> N
     """A composing analysis's attribute usage is selectable when its model is resolved."""
     _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
-    resolved = resolve(architecture, "System", {"scenario": "lateStep"})
+    resolved = resolve(architecture, "System", {"scenario": "lateStep"}, roles=SSP_ROLES)
 
     assert (
         resolved.part_definitions["test_selected_scenario"]
@@ -894,7 +895,7 @@ def test_every_attribute_variant_resolves(
 ) -> None:
     _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
-    resolved = resolve(architecture, "test_selected_scenario", {"scenario": variant})
+    resolved = resolve(architecture, "test_selected_scenario", {"scenario": variant}, roles=SSP_ROLES)
 
     assert (
         resolved.part_definitions["test_selected_scenario"]
@@ -992,7 +993,7 @@ def test_resolve_rejects_an_unknown_attribute_key(tmp_path: Path) -> None:
     _, architecture = _load_architecture(tmp_path, ATTRIBUTE_SET_VARIATION)
 
     with pytest.raises(ValueError, match="Unknown selection key 'missing'"):
-        resolve(architecture, "test_selected_scenario", {"missing": "baseline"})
+        resolve(architecture, "test_selected_scenario", {"missing": "baseline"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_non_variation_attribute_usage(tmp_path: Path) -> None:
@@ -1006,7 +1007,7 @@ def test_resolve_rejects_a_non_variation_attribute_usage(tmp_path: Path) -> None
         resolve(
             architecture,
             "test_selected_scenario",
-            {"experiment_baseline": "baseline"},
+            {"experiment_baseline": "baseline"}, roles=SSP_ROLES
         )
 
 
@@ -1017,7 +1018,7 @@ def test_resolve_rejects_an_unknown_attribute_variant(tmp_path: Path) -> None:
         ValueError,
         match="Unknown variant 'nope' for variation point 'ScenarioChoice'",
     ):
-        resolve(architecture, "test_selected_scenario", {"scenario": "nope"})
+        resolve(architecture, "test_selected_scenario", {"scenario": "nope"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
@@ -1028,7 +1029,7 @@ def test_resolve_rejects_an_unselected_attribute_point(tmp_path: Path) -> None:
         match="Attribute variation point 'ScenarioChoice' at 'scenario'.*"
         "is not selected",
     ):
-        resolve(architecture, "test_selected_scenario", {})
+        resolve(architecture, "test_selected_scenario", {}, roles=SSP_ROLES)
 
 
 UNTYPED_ATTRIBUTE_VARIANT = fixture_text("variation/untyped-attribute-variant.sysml")
@@ -1041,7 +1042,7 @@ def test_resolve_rejects_an_attribute_variant_without_a_type(tmp_path: Path) -> 
         ValueError,
         match="'empty' of variation point 'Choice' has no resolvable type",
     ):
-        resolve(architecture, "System", {"value": "empty"})
+        resolve(architecture, "System", {"value": "empty"}, roles=SSP_ROLES)
 
 
 def test_parse_selections_rejects_a_duplicate_key() -> None:
@@ -1093,7 +1094,7 @@ def test_resolve_rejects_a_nested_suffix_matching_two_paths(
             "it names 'a.inner.x', 'b.inner.x'. Write the full dotted path."
         ),
     ):
-        resolve(architecture, "System", {"inner.x": "anything"})
+        resolve(architecture, "System", {"inner.x": "anything"}, roles=SSP_ROLES)
 
 
 def test_resolve_accepts_one_full_nested_path(tmp_path: Path) -> None:
@@ -1107,7 +1108,7 @@ def test_resolve_accepts_one_full_nested_path(tmp_path: Path) -> None:
             "not a variation point; select a variation point instead."
         ),
     ):
-        resolve(architecture, "System", {"a.inner.x": "x"})
+        resolve(architecture, "System", {"a.inner.x": "x"}, roles=SSP_ROLES)
 
 
 # -- selection resolution order and canonical keys --
@@ -1120,10 +1121,10 @@ def test_resolution_is_independent_of_input_order(tmp_path: Path) -> None:
     _, architecture = _load_architecture(tmp_path, RESOLUTION_ORDER)
 
     first, first_map = resolve_selected(
-        architecture, "System", {"x": "a", "inner.y": "b"}
+        architecture, "System", {"x": "a", "inner.y": "b"}, roles=SSP_ROLES
     )
     second, second_map = resolve_selected(
-        architecture, "System", {"inner.y": "b", "x": "a"}
+        architecture, "System", {"inner.y": "b", "x": "a"}, roles=SSP_ROLES
     )
 
     assert first_map == second_map == {"x": "a", "inner.y": "b"}
@@ -1141,7 +1142,7 @@ def test_canonical_map_records_the_resolved_path_not_the_user_key(
     _, canonical = resolve_selected(
         architecture,
         "System",
-        {"path": "nestedPath", "stage": "attenuateStage"},
+        {"path": "nestedPath", "stage": "attenuateStage"}, roles=SSP_ROLES
     )
 
     assert canonical == {"path": "nestedPath", "path.stage": "attenuateStage"}
@@ -1154,7 +1155,7 @@ def test_canonical_map_keeps_both_paths_for_a_bare_and_an_inner_key(
     _, architecture = _load_architecture(tmp_path, RESOLUTION_ORDER)
 
     _, canonical = resolve_selected(
-        architecture, "System", {"x": "a", "y": "b"}
+        architecture, "System", {"x": "a", "y": "b"}, roles=SSP_ROLES
     )
 
     assert canonical == {"x": "a", "inner.y": "b"}
@@ -1179,7 +1180,7 @@ def test_resolve_rejects_a_key_removed_by_another_selection(
             "one variation point per path."
         ),
     ):
-        resolve(architecture, "System", {"astage": "a", "zpath": "plain"})
+        resolve(architecture, "System", {"astage": "a", "zpath": "plain"}, roles=SSP_ROLES)
 
 
 NESTED_UNKNOWN = fixture_text("variation/nested-unknown.sysml")
@@ -1196,7 +1197,7 @@ def test_nested_point_reports_an_unknown_variant(tmp_path: Path) -> None:
             "expected one of a, b."
         ),
     ):
-        resolve(architecture, "System", {"outer": "chosen", "outer.inner": "nope"})
+        resolve(architecture, "System", {"outer": "chosen", "outer.inner": "nope"}, roles=SSP_ROLES)
 
 
 # -- variant body checks against the point and its owner --
@@ -1217,7 +1218,7 @@ def test_resolve_rejects_a_body_part_the_body_does_not_declare(
             "part 'ghost', which its body does not declare."
         ),
     ):
-        resolve(architecture, "GhostSystem", {"path": "directPath"})
+        resolve(architecture, "GhostSystem", {"path": "directPath"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_synthesized_definition_name_collision(
@@ -1234,7 +1235,7 @@ def test_resolve_rejects_a_synthesized_definition_name_collision(
             "definition; rename the variant."
         ),
     ):
-        resolve(architecture, "CollisionSystem", {"path": "directPath"})
+        resolve(architecture, "CollisionSystem", {"path": "directPath"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_body_attribute_the_owner_already_declares(
@@ -1251,7 +1252,7 @@ def test_resolve_rejects_a_body_attribute_the_owner_already_declares(
             "'AttributeSystem' already declares; rename it."
         ),
     ):
-        resolve(architecture, "AttributeSystem", {"path": "withValues"})
+        resolve(architecture, "AttributeSystem", {"path": "withValues"}, roles=SSP_ROLES)
 
 
 # -- usage-level variant member rules --
@@ -1271,7 +1272,7 @@ def test_resolve_rejects_a_variant_with_a_type_and_a_body(
             "both type 'Gain' and a body; use one."
         ),
     ):
-        resolve(architecture, "BothSystem", {"point": "both"})
+        resolve(architecture, "BothSystem", {"point": "both"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_variant_with_neither_type_nor_body(
@@ -1287,7 +1288,7 @@ def test_resolve_rejects_a_variant_with_neither_type_nor_body(
             "<PartDef>;' or give it a body."
         ),
     ):
-        resolve(architecture, "EmptySystem", {"point": "empty"})
+        resolve(architecture, "EmptySystem", {"point": "empty"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_variant_typed_by_a_non_part_definition(
@@ -1303,7 +1304,7 @@ def test_resolve_rejects_a_variant_typed_by_a_non_part_definition(
             "variants are supported."
         ),
     ):
-        resolve(architecture, "WrongTypeSystem", {"point": "wrong"})
+        resolve(architecture, "WrongTypeSystem", {"point": "wrong"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_point_with_no_captured_part_variants(
@@ -1318,7 +1319,7 @@ def test_resolve_rejects_a_point_with_no_captured_part_variants(
             "'variant part <name> : <PartDef>;' members are supported."
         ),
     ):
-        resolve(architecture, "NoVariantsSystem", {"point": "anything"})
+        resolve(architecture, "NoVariantsSystem", {"point": "anything"}, roles=SSP_ROLES)
 
 
 def test_resolve_rejects_a_point_with_no_captured_attribute_variants(
@@ -1334,7 +1335,7 @@ def test_resolve_rejects_a_point_with_no_captured_attribute_variants(
             "members are supported."
         ),
     ):
-        resolve(architecture, "AttributeSystem", {"gain": "anything"})
+        resolve(architecture, "AttributeSystem", {"gain": "anything"}, roles=SSP_ROLES)
 
 
 # -- configuration and variant body capture errors --
@@ -1429,9 +1430,9 @@ def test_a_resolved_usage_is_no_longer_a_variation_point(tmp_path: Path) -> None
     """Resolving twice must not report the already substituted usage."""
     _, architecture = _load_architecture(tmp_path, USAGE_VARIATION)
 
-    resolved = resolve(architecture, "System", {"source": "stepSource"})
+    resolved = resolve(architecture, "System", {"source": "stepSource"}, roles=SSP_ROLES)
     source = resolved.part_definitions["System"].parts["source"]
     assert source.is_variation is False
 
-    again = resolve(resolved, "System", {})
+    again = resolve(resolved, "System", {}, roles=SSP_ROLES)
     assert again.part_definitions["System"].parts["source"].type_name == "Step"

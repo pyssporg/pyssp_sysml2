@@ -1,18 +1,17 @@
 ---
 id: IMP-005
 type: imp
-title: Reuse contract forms
-summary: Base sets, additive reuse, value override by redefinition, multiple inheritance as union, and explicit conflict resolution.
-date: 2026-10-22
-status: current
+title: Reuse contract forms: base and additive
+summary: A base set is a normal valued set, and a derived set adds members by specializing it.
+date: 2026-11-05
+status: proposed
 ---
 
-# Reuse contract forms
+# Reuse contract forms: base and additive
 
 Status: proposed, not implemented.
-## Proposed contract
 
-### Base set
+## Base and additive sets
 
 A base set is a normal parameter set with values.
 
@@ -23,7 +22,7 @@ attribute def NominalSet :> ParameterSet {
 }
 ```
 
-### Additive reuse
+Additive reuse specializes the base and adds members.
 
 ```sysml
 attribute def AggressiveSet :> NominalSet {
@@ -34,54 +33,7 @@ attribute def AggressiveSet :> NominalSet {
 `AggressiveSet` effectively contains all `NominalSet` members plus
 `max_speed`.
 
-### Value override
-
-Use standard SysML redefinition:
-
-```sysml
-attribute def AggressiveSet :> NominalSet {
-  attribute n_waypoints : Integer :>> NominalSet::n_waypoints = 20;
-  attribute max_speed = 15.0;
-}
-```
-
-The short form is also valid:
-
-```sysml
-attribute n_waypoints :>> NominalSet::n_waypoints = 20;
-```
-
-### Multiple inheritance as union
-
-```sysml
-attribute def SensorSet :> ParameterSet {
-  attribute range = 100.0;
-}
-
-attribute def CombinedSet :> AggressiveSet, SensorSet {
-  attribute extra_margin = 2.0;
-}
-```
-
-`ParameterSet` need not be repeated; the derived set is a parameter set
-transitively through both bases.
-
-### Conflict
-
-```sysml
-attribute def A :> ParameterSet { attribute gain = 1.0; }
-attribute def B :> ParameterSet { attribute gain = 2.0; }
-
-attribute def C :> A, B;  // invalid unless C redefines gain
-```
-
-`C` must resolve the conflict explicitly:
-
-```sysml
-attribute def C :> A, B {
-  attribute gain : Real :>> A::gain, B::gain = 3.0;
-}
-```
-
-There is no first-base-wins or last-base-wins rule. Explicit redefinition is
-the only resolution.
+- Specialization is definition-time reuse; the effective set is computed, then
+  flattened for SSP (`IMP-002`).
+- Override, multiple inheritance, and conflict forms are `IMP-012`.
+- A set inside a set stays rejected (`IMP-001`).

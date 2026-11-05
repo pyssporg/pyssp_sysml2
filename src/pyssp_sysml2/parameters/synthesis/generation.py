@@ -21,8 +21,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pyssp_sysml2.core.control import is_control_attribute
-from pyssp_sysml2.model import (
+from pycps_sysml2.core.control import is_control_attribute
+from pycps_sysml2.model import (
     Architecture,
     Attribute,
     AttributeDefinition,
@@ -31,14 +31,15 @@ from pyssp_sysml2.model import (
     PartUsage,
     PortDefinition,
 )
-from pyssp_sysml2.parameters.dialect.composition import validate_parameter_dialect
-from pyssp_sysml2.parameters.dialect.mapping import validate_applied_sets
-from pyssp_sysml2.parameters.dialect.markers import (
+from pycps_sysml2.parameters.dialect.composition import validate_parameter_dialect
+from pycps_sysml2.parameters.dialect.mapping import validate_applied_sets
+from pycps_sysml2.parameters.dialect.markers import (
     PARAMETER_SET_MARKER,
     PARAMETERS_PORT_NAME,
     is_parameter_set,
     validate_marker_definitions,
 )
+from pycps_sysml2.parameters.policy import SSP_POLICY
 
 from .application import (
     _absolute_values,
@@ -314,5 +315,5 @@ def synthesize_parameter_dialect(
                     system.bindings.append(binding)
 
     validate_marker_definitions(architecture)
-    validate_parameter_dialect(architecture, system)
-    validate_applied_sets(architecture, system)
+    validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
+    validate_applied_sets(architecture, system, policy=SSP_POLICY)

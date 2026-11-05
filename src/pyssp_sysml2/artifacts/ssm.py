@@ -6,9 +6,11 @@ from pathlib import Path
 
 from pyssp_standard import SSM
 
-from pyssp_sysml2.parameters.dialect.mapping import mapping_specs
+from pycps_sysml2.model import load
+from pycps_sysml2.parameters.dialect.mapping import mapping_specs
+from pycps_sysml2.parameters.policy import SSP_POLICY
+
 from pyssp_sysml2.core.paths import ensure_directory
-from pyssp_sysml2.model import load
 
 
 def generate_parameter_mappings(
@@ -23,7 +25,7 @@ def generate_parameter_mappings(
     system = architecture.get_part_def(composition)
 
     written: list[Path] = []
-    for spec in mapping_specs(architecture, system):
+    for spec in mapping_specs(architecture, system, policy=SSP_POLICY):
         if spec.identity:
             continue
         component_name = spec.component_name.replace(".", "_")

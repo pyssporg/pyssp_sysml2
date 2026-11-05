@@ -6,7 +6,6 @@ from pathlib import Path
 
 from pyssp_standard import Component, SSD, System
 
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
 from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
@@ -177,13 +176,6 @@ def test_nested_parameter_path_roundtrip(tmp_path: Path) -> None:
             (mapping.source, mapping.target)
             for mapping in binding.parameter_mapping.mapping.mappings
         ] == [("k", "outer.inner.k")]
-
-    model_descriptions = generate_model_descriptions(
-        architecture_dir,
-        tmp_path / "model_descriptions",
-        "SystemComposition",
-    )
-    assert [path.parent.name for path in model_descriptions] == ["Inner"]
 
 
 def test_nested_multiple_disjoint_sets_roundtrip(tmp_path: Path) -> None:

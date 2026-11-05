@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import Optional
 
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.core.paths import (
     DEFAULT_ARCH_PATH,
     DEFAULT_COMPOSITION_NAME,
@@ -78,12 +78,24 @@ def _parse_configuration(value: str | None) -> str | None:
     return value
 
 
+#: FMI generation left this package in 0.4.0; the message is the migration path.
+FMI_MOVED = (
+    "`generate fmi` was removed in pyssp_sysml2 0.4.0: FMI model descriptions "
+    "now come from pyfmi_sysml2 (install pyfmi-sysml2, then run "
+    "`pyfmi model-description`)."
+)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:2] == ["generate", "fmi"]:
+        print(f"[error] {FMI_MOVED}")
+        return 1
     parser = argparse.ArgumentParser(prog="pyssp", description=__doc__)
     root_subparsers = parser.add_subparsers(dest="command", required=True)
 
     generate_parser = root_subparsers.add_parser(
-        "generate", help="Generate SSP/FMI/SysML artifacts"
+        "generate", help="Generate SSP/SysML artifacts"
     )
     generate_subparsers = generate_parser.add_subparsers(dest="artifact", required=True)
     sync_parser = root_subparsers.add_parser(
@@ -238,17 +250,6 @@ def main(argv: Optional[list[str]] = None) -> int:
         help="SSD name the analysis targets inside the exported SSP.",
     )
 
-    fmi_parser = generate_subparsers.add_parser(
-        "fmi", help="Generate FMI model descriptions"
-    )
-    _add_common_architecture_args(fmi_parser)
-    fmi_parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=GENERATED_DIR / "model_descriptions",
-        help="Output directory for modelDescription.xml files.",
-    )
-
     sysml_parser = generate_subparsers.add_parser(
         "sysml", help="Generate a SysML file from an SSD"
     )
@@ -370,17 +371,6 @@ def main(argv: Optional[list[str]] = None) -> int:
             if artifacts.ssm is not None:
                 print(f"SSM written to {artifacts.ssm}")
             print(f"Analysis descriptor written to {artifacts.descriptor}")
-            return 0
-
-        if args.command == "generate" and args.artifact == "fmi":
-            written = generate_model_descriptions(
-                args.architecture, args.output_dir, args.composition
-            )
-            if not written:
-                print("No components matched the provided criteria.")
-                return 1
-            for path in written:
-                print(f"Wrote {path}")
             return 0
 
         if args.command == "generate" and args.artifact == "sysml":

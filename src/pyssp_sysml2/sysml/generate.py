@@ -6,17 +6,14 @@ from typing import Iterable
 
 from pyssp_standard import Component, SSD, System
 
-from pyssp_sysml2.core.control import (
+from pycps_sysml2.core.control import (
     DEFAULT_START_ATTR,
     DEFAULT_STOP_ATTR,
     FLAT_CONNECTOR_ATTR,
     is_control_attribute,
 )
-from pyssp_sysml2.metadata.fmu_metadata import update_fmu_metadata_from_component
-from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
-from pyssp_sysml2.parameters.dialect.markers import is_parameter_interface
-from pyssp_sysml2.core.paths import ensure_parent_dir, DEFAULT_PACKAGE_NAME
-from pyssp_sysml2.model import (
+from pycps_sysml2.metadata.fmu_metadata import update_fmu_metadata_from_component
+from pycps_sysml2.model import (
     Architecture,
     Attribute,
     Connection,
@@ -27,7 +24,12 @@ from pyssp_sysml2.model import (
     endpoint_text,
     load,
 )
-from pyssp_sysml2.parameters.variation import refuse_variation_erasure
+from pycps_sysml2.parameters.dialect.markers import is_parameter_interface
+from pycps_sysml2.parameters.variation import refuse_variation_erasure
+
+from pyssp_sysml2.artifacts.ssd import flat_connector
+from pyssp_sysml2.core.paths import DEFAULT_PACKAGE_NAME, ensure_parent_dir
+from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
 
 SCALAR_ATTRIBUTE_NAME = "value"
 
@@ -151,7 +153,7 @@ def _port_def_for(
             continue
         if (
             _port_def_signature(existing) == signature
-            and bool(existing.attributes.get(FLAT_CONNECTOR_ATTR)) == flat
+            and flat_connector(existing) == flat
         ):
             cache[key] = existing
             return existing

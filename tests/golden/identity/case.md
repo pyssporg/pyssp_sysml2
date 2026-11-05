@@ -4,7 +4,7 @@ The fixture record for this directory. It says what the bytes cannot: why the
 case exists, which oracle proves it, and how the output may be normalized.
 
 - **Conversion:** `architecture.sysml` (SysML v2) → `SystemStructure.ssd`,
-  `parameter_sets/*.ssv`, `*_*.ssm`, `<Component>/modelDescription.xml`
+  `parameter_sets/*.ssv`, `*_*.ssm`
 - **Requirement / fault:** a whole-object bind must reach the SSD as a
   `ParameterBinding` with its `prefix` and no per-member mapping, and a
   per-member bind must reach it as an explicit `MappingEntry`. Dropping either
@@ -15,17 +15,15 @@ case exists, which oracle proves it, and how the output may be normalized.
   (package `IdentityGolden`, composition `IdentityComposition`); no external
   source, no licence obligation
 - **Expected:** the committed artifacts listed under *Artifacts* below
-- **Independent oracle:** `pyssp_standard` facade — `SSD`, `SSV`, `SSM`,
-  `ModelDescription` re-parse each document and run `check_compliance()` (XSD
-  plus semantic validators). The writer is this repository; the checker is not.
+- **Independent oracle:** `pyssp_standard` facade — `SSD`, `SSV`, `SSM` re-parse
+  each document and run `check_compliance()` (XSD plus semantic validators). The
+  writer is this repository; the checker is not.
 - **Comparison:** exact bytes against the committed file (unified diff on
   mismatch), plus parsed structure through the facade for both the generated and
   the committed copy
-- **Normalization:** none; the writer is deterministic, and the only clock
-  value, `generationDateAndTime`, is pinned to `GENERATION_TIME`
-  (`2026-01-01T00:00:00Z`)
+- **Normalization:** none; the writer is deterministic
 - **Volatile fields:** none. `guid` is `uuid5` of `pyssp_sysml2/<package>/<part>`,
-  not random; `generationDateAndTime` is pinned by the test.
+  not random.
 - **Update policy:** `UPDATE_GOLDENS=1`, read the diff, commit inputs and outputs
   together; refused when `CI` is set
 - **Notes:** two components and two parameter sets, so one case exercises both
@@ -41,8 +39,6 @@ Generated from `architecture.sysml`; every path is relative to this directory.
 | `parameter_sets/GainSet.ssv` | SSV, bound whole-object with the gain prefix |
 | `parameter_sets/ControllerSet.ssv` | SSV, bound member by member |
 | `ControllerSet_controller.ssm` | SSM, explicit mapping for `controller` |
-| `Gain/modelDescription.xml` | FMI 2.0 model description for `Gain` |
-| `Controller/modelDescription.xml` | FMI 2.0 model description for `Controller` |
 
 `architecture.sysml` and this file are inputs and provenance, not goldens.
 
@@ -57,3 +53,4 @@ case only covers per-member binds, and every document would still validate.
 | Date | Change | Reason |
 | --- | --- | --- |
 | 2026-10-28 | Case record added | The goldens existed with no per-case provenance; bytes unchanged |
+| 2026-11-05 | FMI goldens removed | FMI model descriptions moved to `pyfmi_sysml2`; SSD/SSV/SSM bytes unchanged |

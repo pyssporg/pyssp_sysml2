@@ -1,11 +1,16 @@
 # pyssp_sysml2
 
-Generate SSP, FMI, and SysML artifacts from a SysML v2 architecture or SSD.
+Generate SSD, SSV, SSM, analysis, SSP, and SysML artifacts from a SysML v2
+architecture or SSD.
 
-**Library boundary:** the interchange is the SSP/FMI artifact (SSP, SSD, SSV,
-SSM, FMI XML). The CLI is the public surface for other projects. When a Python
-consumer needs this package, it uses documented public functions only; parser
-internals and schema bindings do not cross.
+**Library boundary:** the interchange is the SSP-family artifact (SSD, SSV, SSM,
+SSP). The CLI is the public surface for other projects. When a Python consumer
+needs this package, it uses documented public functions only; parser internals
+and schema bindings do not cross.
+
+**Package split (0.4.0):** `pycps_sysml2` owns the SysML dialect, IR, and
+parameter resolution; `pyfmi_sysml2` owns everything FMI; this package turns that
+IR into SSP-family artifacts and syncs SSD edits back into SysML.
 
 ## Who This Is For
 
@@ -20,11 +25,13 @@ Typical workflow:
 2. Generate SSD (`SystemStructure.ssd`) for system wiring.
 3. Generate one SSV per parameter set (`pyssp generate ssv`); see “Parameter Sets” below.
 4. Generate SSM mapping files for explicit `bind` mappings (`pyssp generate ssm`).
-5. Generate FMI `modelDescription.xml` per component.
-6. Package the built FMUs, SSD, and SSVs into an `.ssp` archive (`pyssp generate ssp`).
-7. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
-8. Optionally edit SSD wiring in an external tool.
-9. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
+5. Package the built FMUs, SSD, and SSVs into an `.ssp` archive (`pyssp generate ssp`).
+6. Generate a minimal SysML model from SSD when starting from an external SSP model (`pyssp generate sysml`).
+7. Optionally edit SSD wiring in an external tool.
+8. Sync SSD wiring changes back into an existing SysML composition (`pyssp sync ssd`).
+
+FMI `modelDescription.xml` generation is not part of this workflow; install
+`pyfmi_sysml2` for that (see “FMI moved to pyfmi_sysml2” below).
 
 If no SysML files are available yet, `pyssp generate sysml` can bootstrap a minimal SysML architecture from an SSD.
 
@@ -43,9 +50,11 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-This version targets the refactored `pyssp_standard` model API
-(`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
-`common_content_ssc` type objects. Install the refactored
+This version depends on `pycps-sysml2` (which owns the SysML dialect, IR, and
+parameter resolution) and on the refactored `experimental_pyssp_standard` model
+API (`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
+`common_content_ssc` type objects. `sysmlpy` is not a direct dependency:
+`pycps-sysml2` pins `sysmlpy==0.96.4` itself. Install the refactored
 `experimental_pyssp_standard` checkout before installing this package.
 
 If you are working in the `ssp_references` workspace and want to use its vendored `experimental_pyssp_standard` checkout instead of a package index:
@@ -62,11 +71,11 @@ pip install -e .
 `pyssp` exposes two command families:
 
 ```bash
-pyssp generate <ssp|ssd|ssv|ssm|analysis|fmi|sysml> [options]
+pyssp generate <ssp|ssd|ssv|ssm|analysis|sysml> [options]
 pyssp sync ssd [options]
 ```
 
-Common options for architecture-based generators (`ssp`, `ssd`, `ssv`, `ssm`, `fmi`):
+Common options for architecture-based generators (`ssp`, `ssd`, `ssv`, `ssm`):
 
 - `--architecture`: folder containing `.sysml` files (or a file inside that folder).
 - `--composition`: top-level part definition to generate from
@@ -233,7 +242,7 @@ Mapping to SSP artifacts:
 
 | SysML | SSP |
 | --- | --- |
-| `port def <X> :> ParameterInterface` | parameter connectors in SSD and parameter variables in `modelDescription.xml` |
+| `port def <X> :> ParameterInterface` | parameter connectors in SSD and, via `pyfmi_sysml2`, parameter variables in `modelDescription.xml` |
 | `attribute def <Set> :> ParameterSet` | one `<Set>.ssv` |
 | `bind path.parameters.member = set.member` | inline `ssm:MappingEntry source="member" target="path.member"` |
 | `bind path.parameters = set` | identity mapping → `ParameterBinding prefix="path."` |
@@ -266,8 +275,8 @@ Rules:
   the SSP hierarchical target name.
 - Fixed list lengths use declared multiplicity, e.g. `Real[3]`.
 - `generate ssd` emits parameter connectors from the interface and inlines
-  explicit mappings; `generate fmi` emits interface parameters using interface
-  defaults, never applied-set values.
+  explicit mappings. FMI parameter variables are emitted from the same
+  interfaces by `pyfmi_sysml2`.
 - `generate sysml` synthesizes interfaces, sets, ports, and binds from SSD
   parameter connectors and `ParameterBinding` entries; `sync ssd` reconciles
   them when the SysML model already uses the parameter dialect.
@@ -277,24 +286,39 @@ Rules:
   example `part`, `port`, `attribute`, `typed`) are rejected with a clear
   error instead of producing a model that cannot be parsed.
 
-### FMI model descriptions
+### FMI moved to pyfmi_sysml2
 
-```bash
-pyssp generate fmi \
-  --architecture examples/aircraft_subset \
-  --composition AircraftComposition \
-  --output-dir build/generated/model_descriptions
+FMI generation left this package in 0.4.0. `pyssp generate fmi` is removed and
+prints this error (exit code 1):
+
+```text
+[error] `generate fmi` was removed in pyssp_sysml2 0.4.0: FMI model descriptions now come from pyfmi_sysml2 (install pyfmi-sysml2, then run `pyfmi model-description`).
 ```
 
-Parameter-set interfaces produce FMI parameter variables (including fixed
-list expansion). `start` values come from the interface declarations only; an
-applied SSV/SSM supplies runtime values. Nested leaf components are discovered
-recursively and get their own model description.
+The Python API `generate_model_descriptions` is gone from `pyssp_sysml2` and its
+`__all__`; it has no replacement in this package.
+
+Migration:
+
+- Install the FMI implementer: `pip install pyfmi-sysml2`.
+- Replace `pyssp generate fmi --architecture ... --composition ... --output-dir ...`
+  with `pyfmi model-description ...`.
+- Replace `from pyssp_sysml2.artifacts.fmi import generate_model_descriptions`
+  with the corresponding `pyfmi_sysml2` API.
+
+SysML parsing and dialect ownership also moved: `pycps_sysml2` 0.1.0 owns the
+SysML IR and dialect — all `pyssp_*` control attributes, the `SspModel`,
+`Analysis`, `Experiment`, `SspMetadata`, `FmuMetadata`, `ParameterInterface`,
+and `ParameterSet` markers, and variation/configuration/selection/constraints.
+The compatibility shims `pyssp_sysml2.model`, `.core`, `.metadata`, and
+`.parameters` still import and only re-export `pycps_sysml2`; new code must
+import `pycps_sysml2` directly. The shims are removed in v0.5.0.
 
 ### FMU metadata
 
 Leaf component definitions can carry typed metadata for the built FMU. The
-schema is a normal `attribute def` hierarchy:
+schema is a normal `attribute def` hierarchy; the `FmuMetadata` marker role is
+defined by `pycps_sysml2`:
 
 ```sysml
 attribute def FmuMetadata {
@@ -439,7 +463,8 @@ Notes for `generate sysml`:
 
 `pyssp generate sysml` records SSD metadata that has no first-class SysML
 equivalent as typed FMU metadata or `pyssp_*` control attributes. They are
-preserved by `pyssp generate ssd` and skipped by the SSV/FMI generators:
+preserved by `pyssp generate ssd` and skipped by the SSV generator. FMI
+generation moved to `pyfmi_sysml2` in 0.4.0, so no FMI generator lives here:
 
 | SSD metadata | SysML representation |
 | --- | --- |
@@ -447,6 +472,10 @@ preserved by `pyssp generate ssd` and skipped by the SSV/FMI generators:
 | Parameter connectors / bindings | `port def` interfaces, sets, `parameters` ports, and `bind` |
 | `DefaultExperiment` | `attribute pyssp_default_start_time` / `pyssp_default_stop_time` |
 | Flat connector name | `attribute pyssp_flat_connector : Boolean` on the port def |
+
+`pyssp_flat_connector = false` means **do not flatten**. This is a 0.4.0
+behaviour change: earlier versions read the attribute for presence only, so
+`false` still flattened connectors.
 
 `Component/@source` is derived from the part definition name
 (`resources/<PartDef>.fmu`) when the leaf declares `fmu_meta.source`; with no
@@ -467,8 +496,7 @@ SSV values stay set values and are not promoted to interface defaults.
 from pathlib import Path
 
 from pyssp_sysml2.artifacts.ssd import generate_ssd
-from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
+from pyssp_sysml2.artifacts.ssv import generate_parameter_sets, parameter_set_resource
 from pyssp_sysml2.artifacts.ssp import generate_ssp
 from pyssp_sysml2.sysml.generate import generate_sysml_from_ssd
 from pyssp_sysml2.sysml.sync import sync_sysml_from_ssd
@@ -480,8 +508,6 @@ generate_ssd(architecture, Path("build/generated/SystemStructure.ssd"), composit
 generate_parameter_sets(
     architecture, Path("build/generated/parameter_sets"), composition
 )
-generate_model_descriptions(architecture, Path("build/generated/model_descriptions"), composition)
-# Pass generation_time=<timezone-aware datetime> for byte-identical reruns.
 # Leaves without a built source are exported as design placeholders.
 generate_ssp(
     architecture,
@@ -502,6 +528,11 @@ sync_sysml_from_ssd(
     synthesize_external_parts=True,
 )
 ```
+
+`parameter_set_resource(prefix, set_name)` returns the relative SSV path written
+into the SSD `ParameterBinding` source, for example
+`parameter_set_resource("parameter_sets", "NominalSet")` →
+`parameter_sets/NominalSet.ssv`.
 
 ## Runnable Examples
 
@@ -525,7 +556,7 @@ pyssp generate --help
 pyssp generate ssd --help
 pyssp generate ssv --help
 pyssp generate ssm --help
-pyssp generate fmi --help
+pyssp generate analysis --help
 pyssp generate ssp --help
 pyssp generate sysml --help
 pyssp sync --help
@@ -545,7 +576,6 @@ Typical generated structure:
 - `build/generated/SystemStructure.ssd`
 - `build/generated/parameter_sets/*.ssv`
 - `build/generated/parameter_mappings/*.ssm` (models with explicit binds)
-- `build/generated/model_descriptions/*/modelDescription.xml`
 - `build/generated/<Composition>.ssp` (when running `pyssp generate ssp`)
 - `build/generated/architecture.sysml` (when running `pyssp generate sysml`)
 - `build/synced_sysml/*.sysml` (when running `pyssp sync ssd --output-architecture-dir ...`)
@@ -555,7 +585,7 @@ Artifact purpose:
 - `SystemStructure.ssd`: component/connectors/connections structure plus parameter bindings for SSP workflows.
 - `parameter_sets/*.ssv`: one parameter set, referenced by SSD parameter bindings.
 - `parameter_mappings/*.ssm`: optional standalone source→target mapping for explicit binds.
-- `modelDescription.xml`: FMI variable/interface declaration per component.
+- `modelDescription.xml`: generated by `pyfmi_sysml2`, not by this package.
 - `<Composition>.ssp`: packaged SSD, FMUs, and applied parameter sets.
 - `architecture.sysml`: minimal SysML architecture generated from an SSD.
 - `synced_sysml/*.sysml`: SysML files exported after applying SSD wiring updates.
@@ -564,7 +594,8 @@ Artifact purpose:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `No module named sysmlpy` / `No module named pyssp_standard` | Dependencies not installed in current environment | Create/activate venv and run `pip install -r requirements.txt && pip install -e .`, or use `pip install -r requirements_local.txt && pip install -e .` when working with the bundled third-party checkouts |
+| `No module named pycps_sysml2` / `No module named pyssp_standard` | Dependencies not installed in current environment | Create/activate venv and run `pip install -r requirements.txt && pip install -e .`, or use `pip install -r requirements_local.txt && pip install -e .` when working with the bundled third-party checkouts |
+| `[error] \`generate fmi\` was removed ...` | FMI generation moved to `pyfmi_sysml2` in 0.4.0 | `pip install pyfmi-sysml2` and run `pyfmi model-description ...` |
 | `[error] 'Part not found: ...'` | `--composition` does not match a part definition name | Use the correct top-level composition name |
 | `[error] No .sysml files found under ...` | Running an architecture-based generator without SysML files in `--architecture` | Provide SysML inputs first, or use `pyssp generate sysml --ssd ...` to bootstrap from SSD |
 | `[error] ... partial/invalid attribute mapping ...` during `sync ssd` | SSD connection edits do not include full port attribute mapping | Ensure all attributes of connected ports are mapped consistently |

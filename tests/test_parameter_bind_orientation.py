@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pycps_sysml2.parameters.policy import SSP_POLICY
 import re
 from pathlib import Path
 
@@ -171,9 +172,9 @@ def test_parameter_examples_validate() -> None:
         architecture = load(directory)
         checked = 0
         for system in architecture.part_definitions.values():
-            if not has_parameter_dialect(architecture, system):
+            if not has_parameter_dialect(architecture, system, policy=SSP_POLICY):
                 continue
-            mapping_specs(architecture, system)
+            mapping_specs(architecture, system, policy=SSP_POLICY)
             checked += 1
         assert checked, (
             f"no parameter dialect found under {directory.relative_to(REPO_ROOT)}"

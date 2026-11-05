@@ -17,14 +17,12 @@ test refuses. See ``README.md`` in this directory.
 from __future__ import annotations
 
 import os
-from datetime import datetime, timezone
 from difflib import unified_diff
 from pathlib import Path
 
 import pytest
-from pyssp_standard import ModelDescription, SSD, SSM, SSV
+from pyssp_standard import SSD, SSM, SSV
 
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.artifacts.ssd import generate_ssd
 from pyssp_sysml2.artifacts.ssm import generate_parameter_mappings
 from pyssp_sysml2.artifacts.ssv import generate_parameter_sets
@@ -48,9 +46,6 @@ RECORD = "case.md"
 #: Everything in a case directory that generation does not produce.
 NON_GOLDENS = INPUTS | {RECORD}
 
-#: Frozen ``generationDateAndTime`` shared by every golden model description.
-GENERATION_TIME = datetime(2026, 1, 1, tzinfo=timezone.utc)
-
 UPDATE_GOLDENS = os.environ.get("UPDATE_GOLDENS") == "1"
 
 
@@ -60,12 +55,6 @@ def _generate(case_dir: Path, composition: str, output_dir: Path) -> None:
         case_dir, output_dir / "parameter_sets", composition
     )
     generate_parameter_mappings(case_dir, output_dir, composition)
-    generate_model_descriptions(
-        case_dir,
-        output_dir,
-        composition,
-        generation_time=GENERATION_TIME,
-    )
 
 
 def _files(root: Path, *, exclude: set[str] = frozenset()) -> dict[str, Path]:
@@ -78,10 +67,7 @@ def _files(root: Path, *, exclude: set[str] = frozenset()) -> dict[str, Path]:
 
 def _validate(path: Path) -> None:
     """Re-parse and check one artifact through the ``pyssp_standard`` facade."""
-    if path.name == "modelDescription.xml":
-        facade = ModelDescription
-    else:
-        facade = {".ssd": SSD, ".ssv": SSV, ".ssm": SSM}[path.suffix]
+    facade = {".ssd": SSD, ".ssv": SSV, ".ssm": SSM}[path.suffix]
     with facade(path, mode="r") as document:
         document.check_compliance()
 

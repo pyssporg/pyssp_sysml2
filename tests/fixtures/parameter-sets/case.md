@@ -1,8 +1,8 @@
 # Case: `parameter-sets`
 
 Inputs for `tests/test_parameter_sets.py`. The test is the oracle: it asserts on
-the generated SSV, SSM, SSD, and FMI structures, so this directory holds no
-expected file.
+the generated SSV, SSM, and SSD structures, so this directory holds no expected
+file.
 
 ## Artifacts
 
@@ -27,8 +27,8 @@ in the test on purpose: they are the case, not the document.
 
 The set pins the documented parameter dialect: marker definitions, parameter
 ports, applied and unapplied sets, per-member and whole-object binds, and the
-SSV/SSM/SSD/FMI artifacts generated from them. A deleted document removes the
-only place a change to that dialect is reviewed as SysML.
+SSV/SSM/SSD artifacts generated from them. A deleted document removes the only
+place a change to that dialect is reviewed as SysML.
 
 ## Update history
 

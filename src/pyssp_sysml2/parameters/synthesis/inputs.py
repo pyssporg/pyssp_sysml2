@@ -14,13 +14,13 @@ from typing import Iterable
 
 from pyssp_standard import Component, SSM, SSV, System
 
-from pyssp_sysml2.core.control import (
+from pycps_sysml2.core.control import (
     CONTROL_PREFIX,
     is_control_attribute,
 )
-from pyssp_sysml2.model import AttributeDefinition
-from pyssp_sysml2.model.names import RESERVED_IDENTIFIERS
-from pyssp_sysml2.parameters.dialect.declarations import (
+from pycps_sysml2.model import AttributeDefinition
+from pycps_sysml2.model.names import RESERVED_IDENTIFIERS
+from pycps_sysml2.parameters.dialect.declarations import (
     coerce_parameter_value,
 )
 

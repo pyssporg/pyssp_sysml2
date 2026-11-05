@@ -1,13 +1,13 @@
 ---
 id: INFO-021
 type: info
-title: CLI and example usage
-summary: The pyssp entry point exposes generate and sync subcommands; examples exercise both the CLI and the module API.
-date: 2026-10-22
+title: CLI usage
+summary: The pyssp entry point exposes generate and sync subcommands; generate fmi was removed and names pyfmi_sysml2 in its error.
+date: 2026-11-05
 status: current
 ---
 
-# CLI and example usage
+# CLI usage
 
 The entry point in `pyproject.toml` is `pyssp = pyssp_sysml2.cli:main`.
 
@@ -16,34 +16,22 @@ Subcommands:
 - `pyssp generate ssd`
 - `pyssp generate ssv`
 - `pyssp generate ssm`
-- `pyssp generate fmi`
 - `pyssp generate ssp`
 - `pyssp generate sysml`
+- `pyssp generate analysis`
 - `pyssp sync ssd`
 
-## Example validation
+`generate ssd`, `ssv`, `ssm`, `ssp`, and `analysis` accept repeatable
+`--select KEY=VARIANT` values; `generate ssp` also accepts `--configuration`
+for the selection provenance.
 
-```bash
-bash examples/cli_usage.sh
-PYTHONPATH=src python3 examples/module_usage.py
+`generate fmi` is gone. It prints an error naming `pyfmi_sysml2` and exits 1:
+
+```text
+`generate fmi` was removed in pyssp_sysml2 0.4.0: FMI model descriptions
+now come from pyfmi_sysml2 (install pyfmi-sysml2, then run
+`pyfmi model-description`).
 ```
 
-If `pyssp` is not installed as a console script, the CLI example falls back to:
-
-```bash
-PYTHONPATH=src python3 -m pyssp_sysml2.cli ...
-```
-
-## Runnable parameter-set examples
-
-`examples/parameter-sets/` holds self-contained models for the parameter
-dialect:
-
-- `identity/` shows matching names, an identity bind, and no SSM.
-- `explicit/` shows different set and interface names, per-member binds, and an
-  SSM.
-- `multiple/` shows two disjoint sets on one component.
-- `nested/` shows a set applied to a nested component path.
-
-Each example README states the generation commands and expected artifacts. The
-artifact sequence is in `INFO-006`.
+If `pyssp` is not installed as a console script, run the module:
+`PYTHONPATH=src python3 -m pyssp_sysml2.cli ...`.

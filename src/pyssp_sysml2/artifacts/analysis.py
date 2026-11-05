@@ -18,30 +18,33 @@ from pathlib import Path
 
 from pyssp_standard import SSM
 
-from pyssp_sysml2.parameters.dialect.composition import (
-    applied_sets,
-    validate_parameter_dialect,
-)
-from pyssp_sysml2.parameters.dialect.mapping import (
-    mapping_specs,
-    parameter_sets_for_generation,
-)
-from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
-from pyssp_sysml2.core.paths import ensure_directory
-from pyssp_sysml2.metadata.roles import (
+from pycps_sysml2.metadata.roles import (
+    SSP_ROLES,
     is_ssp_model,
     is_analysis,
     model_usage,
     read_experiment,
     validate_role_markers,
 )
-from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
+from pycps_sysml2.metadata.ssp_metadata import ssp_metadata
+from pycps_sysml2.model import load
+from pycps_sysml2.parameters.configuration import scope_analysis_to_root
+from pycps_sysml2.parameters.constraints import enforce_constraints
+from pycps_sysml2.parameters.dialect.composition import (
+    applied_sets,
+    validate_parameter_dialect,
+)
+from pycps_sysml2.parameters.dialect.mapping import (
+    mapping_specs,
+    parameter_sets_for_generation,
+)
+from pycps_sysml2.parameters.dialect.markers import validate_marker_definitions
+from pycps_sysml2.parameters.policy import SSP_POLICY
+from pycps_sysml2.parameters.selection import analysis_selection
+from pycps_sysml2.parameters.variation import resolve_selected
+
 from pyssp_sysml2.artifacts.ssv import write_parameter_set
-from pyssp_sysml2.model import load
-from pyssp_sysml2.parameters.constraints import enforce_constraints
-from pyssp_sysml2.parameters.configuration import scope_analysis_to_root
-from pyssp_sysml2.parameters.selection import analysis_selection
-from pyssp_sysml2.parameters.variation import resolve_selected
+from pyssp_sysml2.core.paths import ensure_directory
 
 
 @dataclass(frozen=True)
@@ -82,10 +85,10 @@ def generate_analysis(
     """
     architecture = load(architecture_path)
     if selections is None:
-        selections = analysis_selection(architecture, composition)
-    scope_analysis_to_root(architecture, composition)
+        selections = analysis_selection(architecture, composition, roles=SSP_ROLES)
+    scope_analysis_to_root(architecture, composition, roles=SSP_ROLES)
     architecture, canonical = resolve_selected(
-        architecture, composition, selections or {}
+        architecture, composition, selections or {}, roles=SSP_ROLES
     )
     enforce_constraints(architecture, composition, canonical)
     analysis = architecture.get_part_def(composition)
@@ -103,8 +106,8 @@ def generate_analysis(
         )
 
     validate_marker_definitions(architecture)
-    validate_parameter_dialect(architecture, analysis)
-    sets = parameter_sets_for_generation(architecture, analysis)
+    validate_parameter_dialect(architecture, analysis, policy=SSP_POLICY)
+    sets = parameter_sets_for_generation(architecture, analysis, policy=SSP_POLICY)
     if len(sets) > 1:
         names = ", ".join(definition.name for definition in sets) or "none"
         raise ValueError(
@@ -112,7 +115,7 @@ def generate_analysis(
             f"set; found {names}"
         )
 
-    model_applications = applied_sets(architecture, model_definition)
+    model_applications = applied_sets(architecture, model_definition, policy=SSP_POLICY)
     if model_applications and sets:
         raise ValueError(
             f"Analysis '{composition}' applies a scenario set, but its sut "
@@ -137,7 +140,7 @@ def generate_analysis(
         prefix = f"{model_part_usage.name}."
         ssm_path = output_dir / f"{composition}.ssm"
         with SSM(ssm_path, mode="w") as ssm:
-            for spec in mapping_specs(architecture, analysis):
+            for spec in mapping_specs(architecture, analysis, policy=SSP_POLICY):
                 for source, target in spec.entries:
                     if not target.startswith(prefix):
                         raise ValueError(

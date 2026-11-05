@@ -27,7 +27,7 @@ status: current
 - **Control attribute**: a `pyssp_*` attribute carrying metadata with no
   first-class SysML v2 equivalent. Generators skip it as model data.
 - **Leaf component**: a part definition with no subparts. It becomes an SSD
-  `Component` and gets an FMI model description.
+  `Component`; its FMI model description is `pyfmi_sysml2`'s (`INFO-031`).
 - **Nested system**: a part definition with subparts. It becomes a nested SSD
   `System`.
 

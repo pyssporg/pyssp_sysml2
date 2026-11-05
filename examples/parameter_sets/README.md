@@ -17,20 +17,15 @@ pyssp generate ssd \
   --architecture examples/parameter_sets \
   --composition AircraftComposition \
   --output build/generated/SystemStructure.ssd
-
-pyssp generate fmi \
-  --architecture examples/parameter_sets \
-  --composition AircraftComposition \
-  --output-dir build/generated/model_descriptions
 ```
 
 `generate ssv --all-sets` also writes `AggressiveSet.ssv`.
 
 The SSD gets parameter connectors from the interface and an inline
 `ssd:ParameterMapping` for the explicit binds; its `ParameterBinding/@source`
-points at `parameter_sets/NominalSet.ssv`. The FMI model description gets
-parameter variables (with interface defaults when declared; the applied set
-is a runtime mapping, not an FMI start value).
+points at `parameter_sets/NominalSet.ssv`. FMI model descriptions are no longer
+generated here; install `pyfmi-sysml2` and run `pyfmi model-description` over the
+same architecture when the component needs one.
 
 The same dialect supports multiple disjoint sets per component and nested part
 paths such as `bind outer.inner.parameters.k = nominal.k`. For the full

@@ -2,8 +2,8 @@
 id: INFO-022
 type: info
 title: Troubleshooting
-summary: Missing console script, dependency resolution, and SSD shape failures have direct fixes.
-date: 2026-10-22
+summary: Missing console script, dependency resolution, generate fmi, and SSD shape failures have direct fixes.
+date: 2026-11-05
 status: current
 ---
 
@@ -16,8 +16,12 @@ pip install -e .
 python3 -m pyssp_sysml2.cli --help
 ```
 
-If dependency resolution from `requirements.txt` fails in your environment, use
-`requirements_local.txt` with bundled third-party packages.
+If dependency resolution from `requirements.txt` fails, use
+`requirements_local.txt` with the bundled `experimental_pyssp_standard`
+checkout (`INFO-020`).
+
+If `generate fmi` fails, that subcommand no longer exists. Install
+`pyfmi_sysml2` and run `pyfmi model-description` (`INFO-058`).
 
 If `sync ssd` fails on external SSD files, check the SSD shape first:
 

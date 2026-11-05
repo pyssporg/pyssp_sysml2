@@ -6,17 +6,31 @@ from typing import Dict, Iterable, Mapping, Tuple
 
 from pyssp_standard import Component, System
 
-from pyssp_sysml2.metadata.fmu_metadata import (
+from pycps_sysml2.metadata.fmu_metadata import (
     component_source,
     fmu_metadata,
     update_fmu_metadata_from_component,
 )
-from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
-from pyssp_sysml2.parameters.dialect.composition import (
+from pycps_sysml2.model import (
+    Architecture,
+    Attribute,
+    Connection,
+    PartDefinition,
+    PartUsage,
+    PortDefinition,
+    PortUsage,
+    endpoint_text,
+    load,
+)
+from pycps_sysml2.parameters.dialect.composition import (
     has_parameter_dialect,
     validate_parameter_dialect,
 )
+from pycps_sysml2.parameters.policy import SSP_POLICY
+from pycps_sysml2.parameters.variation import refuse_variation_erasure
+
 from pyssp_sysml2.core.paths import ensure_parent_dir
+from pyssp_sysml2.parameters.synthesis.generation import synthesize_parameter_dialect
 from pyssp_sysml2.sysml.generate import (
     SCALAR_ATTRIBUTE_NAME,
     _ensure_system_part_def,
@@ -28,18 +42,6 @@ from pyssp_sysml2.sysml.generate import (
     split_connector,
     split_connector_or_scalar,
 )
-from pyssp_sysml2.model import (
-    Architecture,
-    Attribute,
-    Connection,
-    PartDefinition,
-    PartUsage,
-    PortDefinition,
-    PortUsage,
-    endpoint_text,
-    load,
-)
-from pyssp_sysml2.parameters.variation import refuse_variation_erasure
 
 INFERRED_PARTS_FILENAME = "inferred_external_parts.sysml"
 
@@ -467,8 +469,10 @@ def sync_sysml_from_ssd(
 
     if loaded:
         refuse_variation_erasure(architecture, architecture_path)
-        validate_parameter_dialect(architecture, system)
-    parameter_dialect = loaded and has_parameter_dialect(architecture, system)
+        validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
+    parameter_dialect = loaded and has_parameter_dialect(
+        architecture, system, policy=SSP_POLICY
+    )
 
     _sync_system_level(
         architecture,

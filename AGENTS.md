@@ -27,12 +27,14 @@ become. It is the first document to read, not a reference of last resort.
 
 ## Repository Focus
 
-`pyssp_sysml2` generates SSP, FMI, and SysML artifacts from a SysML v2
-architecture or an SSD, and syncs SSD wiring edits back into SysML. The
-interchange artifact (SSD/SSV/SSM/SSP/FMI XML) is the library boundary; the CLI
-is the public surface for other projects.
+`pyssp_sysml2` generates SSP artifacts (SSD, SSV, SSM, analysis descriptor,
+packaged SSP) and SysML from a SysML v2 architecture or an SSD, and syncs SSD
+wiring edits back into SysML. The interchange artifact (SSD/SSV/SSM/SSP) is the
+library boundary; the CLI is the public surface for other projects.
 
-- SysML parsing sits behind the adapter in `src/pyssp_sysml2/model/`.
+- The SysML dialect, parser and IR belong to `pycps_sysml2`; this package
+  consumes them and never imports `sysmlpy`. FMI artifacts belong to
+  `pyfmi_sysml2`.
 - Current state, intent, and modeling conventions live in `docs/breakdown/`; the
   code is the source of truth when the two disagree.
 - This is also a test and experiment repo: keep it easy to extend.
@@ -40,14 +42,16 @@ is the public surface for other projects.
 ## Hard constraints
 
 - **The artifact is the library boundary.** Cross-project interchange is the
-  SSD, SSV, SSM, SSP, or FMI XML artifact. A Python consumer uses only
-  documented public functions; parser internals and schema bindings do not
-  cross.
-- **SysML parsing stays in the adapter.** Only
-  `src/pyssp_sysml2/model/parser.py` imports `sysmlpy`; generators use the
-  repo-owned dataclasses in `src/pyssp_sysml2/model/model.py`, and
-  `src/pyssp_sysml2/model/exporter.py` emits the SysML text contract.
-- **SSP/FMI XML object handling belongs to `pyssp_standard`.** Do not duplicate
+  SSD, SSV, SSM, or SSP artifact. A Python consumer uses only documented public
+  functions; parser internals and schema bindings do not cross.
+- **The SysML dialect is not owned here.** Parsing, the IR, the marker roles,
+  the parameter dialect and selection resolution come from `pycps_sysml2`.
+  Nothing under `src/` imports `sysmlpy`; `tests/test_module_layout.py` enforces
+  both rules.
+- **The moved packages stay shims.** `pyssp_sysml2.{model,core,metadata,
+  parameters}` re-export `pycps_sysml2` and hold no logic; they are removed in
+  v0.5.0. New code imports `pycps_sysml2` directly.
+- **SSP XML object handling belongs to `pyssp_standard`.** Do not duplicate
   it.
 - **Generated SysML is deliberately minimal.** Only SSD information with a
   documented SysML representation is emitted; the rest is carried as typed FMU

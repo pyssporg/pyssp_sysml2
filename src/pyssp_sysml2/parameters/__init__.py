@@ -1,11 +1,6 @@
-"""Parameter dialect, synthesis, variation resolution, and analysis plans.
+"""Deprecated shim: use :mod:`pycps_sysml2.parameters` instead.
 
-The dialect helpers live one module per layer under
-``pyssp_sysml2.parameters.dialect``: ``markers``, ``declarations``,
-``composition``, and ``mapping``. Callers import from the precise layer, for
-example ``from pyssp_sysml2.parameters.dialect.mapping import mapping_specs``.
-SSD-to-SysML synthesis (``synthesis``), variation resolution (``variation``),
-configuration derivation (``configuration``), analysis plans (``selection``),
-and constraint evaluation (``constraints``) stay in this package; there is no
-flat re-export surface.
+Kept for one minor release; removed in pyssp_sysml2 v0.5.0.
 """
+
+from pycps_sysml2.parameters import *  # noqa: F403

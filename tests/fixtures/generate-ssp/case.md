@@ -8,6 +8,7 @@ The SysML inputs and the mismatched FMI document for SSP packaging.
 | --- | --- |
 | `template.sysml` | Input, template with `$parameter_defs`, `$metadata_fields`, `$flat_connector`, `$parameter_port`, `$composition_parameters`, `$COMPOSITION_NAME` |
 | `nested-component.sysml` | Input, template with `$leaf_fmu`, `$COMPOSITION_NAME` |
+| `valid-model-description.xml` | Input, FMI 2.0 model description zipped as a fake FMU |
 | `mismatched-model-description.xml` | Input, FMI 2.0 model description zipped as a fake FMU |
 
 No expected artifact: packaged SSPs are opened through `pyssp_standard` and
@@ -22,9 +23,12 @@ slots, because whether they are present is the case: parameterized versus not,
 source present, missing, or absent, CoSimulation versus ModelExchange. The
 conditional that builds the block stays in Python; the document no longer does.
 `nested-component.sysml` proves a part inside a subpart is packaged and
-validated, with the FMU path a slot. `mismatched-model-description.xml` declares
-a variable `other` where the SSD expects `output`, so it proves connector-name
-validation fails and that skipping validation packages it anyway.
+validated, with the FMU path a slot. `valid-model-description.xml` declares the
+variables the architecture's SSD expects, so the packaging tests can validate a
+present FMU without generating a model description from SysML; FMI model
+descriptions come from `pyfmi_sysml2`. `mismatched-model-description.xml`
+declares a variable `other` where the SSD expects `output`, so it proves
+connector-name validation fails and that skipping validation packages it anyway.
 
 Origin: inline f-string in `_write_architecture`, an f-string in the
 nested-component test, and an XML literal in `_write_mismatched_fmu`, all in
@@ -35,3 +39,4 @@ nested-component test, and an XML literal in `_write_mismatched_fmu`, all in
 | Date | Change | Reason |
 | --- | --- | --- |
 | 2026-10-28 | Moved out of `tests/test_generate_ssp.py` | Documents belong in files; the Python conditional stays, the document does not |
+| 2026-11-05 | Added `valid-model-description.xml` | FMI generation left the package; the FMU the SSP tests validate is now a committed input |

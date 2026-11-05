@@ -1,13 +1,13 @@
 # Conversion goldens
 
-Each directory is one case: a small SysML v2 architecture plus the SSP/FMI
+Each directory is one case: a small SysML v2 architecture plus the SSP
 artifacts generated from it. They are the regression gate for the generator
 output itself, in two independent ways:
 
 1. **Independent validator.** Every produced document is re-read through the
-   `pyssp_standard` facade (`SSD`, `SSV`, `SSM`, `ModelDescription`) and
-   validated with `check_compliance()`, which runs the registered XSD and
-   semantic validators. The writer is this repository; the checker is not.
+   `pyssp_standard` facade (`SSD`, `SSV`, `SSM`) and validated with
+   `check_compliance()`, which runs the registered XSD and semantic validators.
+   The writer is this repository; the checker is not.
 2. **Exact bytes.** Each produced file must equal its committed golden
    byte-for-byte. A changed attribute, a reordered element, or an extra
    document fails the test with a unified diff.
@@ -19,9 +19,8 @@ output itself, in two independent ways:
 | `identity` | `IdentityComposition` | whole-object bind (SSD `ParameterBinding` prefix), per-member SSM for a second component, two components |
 | `mapping`  | `MappingComposition`  | per-member binds, fixed-length list expansion into `[0]`/`[1]` entries |
 
-Both cases produce all four artifact kinds: `SystemStructure.ssd`, one `.ssv`
-per parameter set, one `.ssm` per explicit set/component mapping, and one
-`<Component>/modelDescription.xml` per leaf component.
+Both cases produce `SystemStructure.ssd`, one `.ssv` per parameter set, and one
+`.ssm` per explicit set/component mapping.
 
 Layout inside a case directory mirrors a built SSP runtime, so an SSD
 `source="parameter_sets/<Set>.ssv"` resolves inside the case:
@@ -32,12 +31,10 @@ Layout inside a case directory mirrors a built SSP runtime, so an SSD
   SystemStructure.ssd           SSD artifact
   parameter_sets/<Set>.ssv      one per applied parameter set
   <Set>_<component>.ssm         one per explicit mapping
-  <Component>/modelDescription.xml
 ```
 
-`modelDescription.xml` carries `generationDateAndTime`, so the golden test
-passes a frozen `GENERATION_TIME` (2026-01-01T00:00:00Z). Keep that constant and
-the goldens in sync when regenerating.
+FMI model descriptions are not generated here; they come from
+`pyfmi_sysml2`.
 
 ## Regenerating
 

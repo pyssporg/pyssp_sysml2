@@ -13,47 +13,54 @@ from pyssp_standard import (
     System,
 )
 
-from pyssp_sysml2.core.control import is_control_attribute
-from pyssp_sysml2.core.fmi_helpers import to_fmi_direction_definition
-from pyssp_sysml2.metadata.fmu_metadata import (
+from pycps_sysml2.core.control import (
+    DEFAULT_START_ATTR,
+    DEFAULT_STOP_ATTR,
+    FLAT_CONNECTOR_ATTR,
+    is_control_attribute,
+)
+from pycps_sysml2.core.fmi_helpers import to_fmi_direction_definition
+from pycps_sysml2.metadata.fmu_metadata import (
     component_implementation,
     component_source,
     fmu_metadata,
 )
-from pyssp_sysml2.parameters.dialect.composition import (
+from pycps_sysml2.metadata.roles import (
+    SSP_ROLES,
+    is_analysis,
+    require_resolved_variation,
+    validate_role_markers,
+)
+from pycps_sysml2.metadata.ssp_metadata import ssp_metadata
+from pycps_sysml2.model import (
+    Architecture,
+    PartDefinition,
+    PortDefinition,
+    PortUsage,
+    load,
+)
+from pycps_sysml2.parameters.constraints import enforce_constraints
+from pycps_sysml2.parameters.dialect.composition import (
     MappingSpec,
     has_parameter_dialect,
     validate_parameter_dialect,
 )
-from pyssp_sysml2.parameters.dialect.declarations import (
+from pycps_sysml2.parameters.dialect.declarations import (
     fixed_count,
     parameter_declarations,
     parameter_interface,
     parameter_items,
 )
-from pyssp_sysml2.parameters.dialect.mapping import mapping_specs
-from pyssp_sysml2.parameters.dialect.markers import (
-    is_parameter_interface,
-    parameter_set_resource,
-)
-from pyssp_sysml2.core.paths import ensure_parent_dir
-from pyssp_sysml2.metadata.roles import (
-    is_analysis,
-    require_resolved_variation,
-    validate_role_markers,
-)
-from pyssp_sysml2.metadata.ssp_metadata import ssp_metadata
-from pyssp_sysml2.sysml.generate import (
-    DEFAULT_START_ATTR,
-    DEFAULT_STOP_ATTR,
-    FLAT_CONNECTOR_ATTR,
-)
-from pyssp_sysml2.model import Architecture, PartDefinition, PortUsage, load
-from pyssp_sysml2.parameters.constraints import enforce_constraints
-from pyssp_sysml2.parameters.variation import (
+from pycps_sysml2.parameters.dialect.mapping import mapping_specs
+from pycps_sysml2.parameters.dialect.markers import is_parameter_interface
+from pycps_sysml2.parameters.policy import SSP_POLICY
+from pycps_sysml2.parameters.variation import (
     require_resolved_attribute_variation,
     resolve_selected,
 )
+
+from pyssp_sysml2.artifacts.ssv import parameter_set_resource
+from pyssp_sysml2.core.paths import ensure_parent_dir
 
 
 def _endpoint_port_def(
@@ -110,6 +117,17 @@ def _port_indices(port_usage: PortUsage) -> tuple[int | None, ...]:
         return (None,)
     count = fixed_count(port_usage.multiplicity, port_usage.name)
     return tuple(range(1, count + 1))
+
+
+def flat_connector(port_def: PortDefinition) -> bool:
+    """True when ``port_def`` asks for flattened connectors.
+
+    The control attribute is a Boolean; an absent attribute or ``false`` means
+    per-member connectors, so the stored value must be read, never the presence
+    of the attribute.
+    """
+    attribute = port_def.attributes.get(FLAT_CONNECTOR_ATTR)
+    return attribute is not None and bool(attribute.value)
 
 
 def _multiplicity_text(port_usage: PortUsage) -> str:
@@ -182,7 +200,7 @@ def _add_part_connectors(
         if is_parameter_interface(port_def):
             # Emitted by the parameter branch below, flattened to member names.
             continue
-        flat = bool(port_def.attributes.get(FLAT_CONNECTOR_ATTR))
+        flat = flat_connector(port_def)
         for index in _port_indices(port_usage):
             for attribute in port_def.attributes.values():
                 if is_control_attribute(attribute.name):
@@ -236,8 +254,8 @@ def _add_connections(
                 f"{conn.destination_port} must be same type"
             )
 
-        src_flat = bool(src_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
-        dst_flat = bool(dst_port_def.attributes.get(FLAT_CONNECTOR_ATTR))
+        src_flat = flat_connector(src_port_def)
+        dst_flat = flat_connector(dst_port_def)
         src_indices = _port_indices(src_port_usage)
         dst_indices = _port_indices(dst_port_usage)
         if src_indices != dst_indices:
@@ -334,9 +352,9 @@ def build_ssd(
             "attach parameter interfaces to component usages"
         )
 
-    validate_parameter_dialect(architecture, system)
-    parameter_model = has_parameter_dialect(architecture, system)
-    specs = mapping_specs(architecture, system) if parameter_model else []
+    validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
+    parameter_model = has_parameter_dialect(architecture, system, policy=SSP_POLICY)
+    specs = mapping_specs(architecture, system, policy=SSP_POLICY) if parameter_model else []
 
     _add_part_connectors(top, system, architecture, parameter_model)
     _write_elements(
@@ -372,7 +390,9 @@ def generate_ssd(
     system = architecture.get_part_def(composition)
     canonical = None
     if selections:
-        architecture, canonical = resolve_selected(architecture, system, selections)
+        architecture, canonical = resolve_selected(
+            architecture, system, selections, roles=SSP_ROLES
+        )
         system = architecture.get_part_def(composition)
     enforce_constraints(architecture, composition, canonical)
     require_resolved_variation(architecture, system)

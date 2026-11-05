@@ -3,8 +3,8 @@ id: IMP-001
 type: imp
 title: Parameter-set reuse contract
 summary: Reuse by inheritance and union; a set inside a set is rejected because SSP parameters are flat.
-date: 2026-10-22
-status: current
+date: 2026-11-05
+status: proposed
 ---
 
 # Parameter-set reuse contract
@@ -12,14 +12,9 @@ status: current
 Status: proposed, not implemented. Current tooling rejects inherited sets and
 `:>>` redefinitions.
 
-## Problem
-
-An analysis often needs several variants of the same parameters:
-
-- a nominal set;
-- an aggressive set that changes a few values;
-- a sensor set that adds unrelated values;
-- a combined set that reuses both.
+An analysis often needs several variants of the same parameters: a nominal set,
+an aggressive set that changes a few values, a sensor set that adds unrelated
+values, and a combined set that reuses both.
 
 The current dialect has two options:
 
@@ -43,5 +38,4 @@ Both add complexity and ambiguity that reuse does not require.
 
 Inheritance is different: it is definition-time reuse. The effective set is
 computed in SysML, then flattened into one SSP parameter set. SSP sees no
-inheritance.
-
+inheritance. Forms are `IMP-005` and `IMP-012`; semantics are `IMP-002`.

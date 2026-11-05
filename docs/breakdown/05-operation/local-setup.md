@@ -2,8 +2,8 @@
 id: INFO-020
 type: info
 title: Local setup
-summary: Create a virtual environment, install dependencies, and install the package editable.
-date: 2026-10-22
+summary: Create a virtual environment, install the two direct-URL dependencies, and install the package editable; sysmlpy is transitive.
+date: 2026-11-05
 status: current
 ---
 
@@ -18,10 +18,8 @@ pip install -r requirements.txt
 pip install -e .
 ```
 
-`requirements_local.txt` is for local or shared development setups where
-dependencies are available from local paths instead of remote package indexes.
-
-For this repository, the local setup is often the most reliable option:
+`requirements_local.txt` is for local or shared development where
+`experimental_pyssp_standard` comes from a path instead of a remote URL.
 
 ```bash
 python3 -m venv venv
@@ -30,5 +28,11 @@ pip install -r requirements_local.txt
 pip install -e .
 ```
 
-The editable install provides the `pyssp` console script. Without it, run the
-module directly with `PYTHONPATH=src python3 -m pyssp_sysml2.cli`.
+`pyproject.toml` declares two direct-URL wheels:
+
+- `pycps-sysml2` 0.1.0, which pins `sysmlpy==0.96.4` itself;
+- `experimental-pyssp-standard` 0.9.2.dev0.
+
+`sysmlpy` is no longer a direct dependency: this package never imports the
+grammar (`AD-004`). The editable install provides the `pyssp` console script.
+Without it, run `PYTHONPATH=src python3 -m pyssp_sysml2.cli`.

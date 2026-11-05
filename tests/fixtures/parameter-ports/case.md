@@ -1,8 +1,8 @@
 # Case: `parameter-ports`
 
 Inputs for `tests/test_parameter_ports.py`. The test is the oracle: it asserts
-on the loaded model and the generated SSD and FMI structures, so this directory
-holds no expected file.
+on the loaded model and the generated SSD structure, so this directory holds no
+expected file.
 
 ## Artifacts
 
@@ -24,10 +24,9 @@ document.
 ## What this case proves
 
 The set pins the parameter port contract: direction and marker validation,
-rejection of the retired attribute carrier, flat FMI variables with `parameter`
-causality, flat SSD connectors, and the refusal to `connect` two parameter
-ports. The document is what a reviewer reads as SysML; the test decides pass or
-fail.
+rejection of the retired attribute carrier, flat SSD parameter connectors, and
+the refusal to `connect` two parameter ports. The document is what a reviewer
+reads as SysML; the test decides pass or fail.
 
 ## Update history
 

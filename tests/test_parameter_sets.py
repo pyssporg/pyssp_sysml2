@@ -1,13 +1,12 @@
 from __future__ import annotations
 
+from pycps_sysml2.parameters.policy import SSP_POLICY
 import warnings
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 from pyssp_standard import SSD, SSM, SSV
 
-from pyssp_sysml2.artifacts.fmi import generate_model_descriptions
 from pyssp_sysml2.parameters.dialect.declarations import (
     parameter_declarations,
     parameter_interface,
@@ -193,7 +192,7 @@ def test_whole_object_bind_is_identity_and_needs_no_ssm(tmp_path) -> None:
     architecture = load(architecture_dir)
     system = architecture.get_part_def(COMPOSITION_NAME)
 
-    specs = mapping_specs(architecture, system)
+    specs = mapping_specs(architecture, system, policy=SSP_POLICY)
     assert len(specs) == 1
     assert specs[0].identity is True
     assert specs[0].entries == (
@@ -272,44 +271,6 @@ def test_generate_ssd_identity_binding_uses_prefix(tmp_path) -> None:
         assert binding.source == "parameter_sets/NominalSet.ssv"
         assert binding.prefix == "autopilot"
         assert binding.parameter_mapping is None
-
-
-def test_generate_model_descriptions_uses_interface_defaults(tmp_path) -> None:
-    """FMI start values come from interface defaults, never from an applied set."""
-    model = _model(
-        interface_members=(
-            "attribute waypointCount : Integer = 7;\n"
-            "    attribute waypointX_km : Real[2] = (1.0, 2.0);"
-        ),
-        sets="""
-        attribute def NominalSet :> ParameterSet {
-          attribute n_waypoints = 99;
-          attribute waypoints_x_km = (9.0, 9.0);
-        }
-        """,
-        composition="""
-        attribute nominal : NominalSet;
-        bind autopilot.parameters.waypointCount = nominal.n_waypoints;
-        bind autopilot.parameters.waypointX_km = nominal.waypoints_x_km;
-        """,
-    )
-    architecture_dir = _write(tmp_path, model)
-    output_dir = tmp_path / "model_descriptions"
-
-    written = generate_model_descriptions(
-        architecture_dir, output_dir, COMPOSITION_NAME
-    )
-
-    root = ET.parse(written[0]).getroot()
-    starts = {
-        variable.get("name"): next(iter(variable)).get("start")
-        for variable in root.findall(".//ScalarVariable")
-    }
-    assert starts == {
-        "waypointCount": "7",
-        "waypointX_km[0]": "1",
-        "waypointX_km[1]": "2",
-    }
 
 
 def test_whole_object_bind_requires_matching_names(tmp_path) -> None:

@@ -6,17 +6,25 @@ from typing import Iterable
 
 from pyssp_standard import SSV
 
-from pyssp_sysml2.core.control import is_control_attribute
-from pyssp_sysml2.core.fmi_helpers import format_value
-from pyssp_sysml2.parameters.dialect.composition import validate_parameter_dialect
-from pyssp_sysml2.parameters.dialect.declarations import fixed_count
-from pyssp_sysml2.parameters.dialect.mapping import (
+from pycps_sysml2.core.control import is_control_attribute
+from pycps_sysml2.core.fmi_helpers import format_value
+from pycps_sysml2.model import Attribute, AttributeDefinition, load
+from pycps_sysml2.parameters.dialect.composition import validate_parameter_dialect
+from pycps_sysml2.parameters.dialect.declarations import fixed_count
+from pycps_sysml2.parameters.dialect.mapping import (
     parameter_sets_for_generation,
     validate_applied_sets,
 )
-from pyssp_sysml2.parameters.dialect.markers import validate_marker_definitions
+from pycps_sysml2.parameters.dialect.markers import validate_marker_definitions
+from pycps_sysml2.parameters.policy import SSP_POLICY
+
 from pyssp_sysml2.core.paths import ensure_directory, ensure_parent_dir
-from pyssp_sysml2.model import Attribute, AttributeDefinition, load
+
+
+def parameter_set_resource(prefix: str, set_name: str) -> str:
+    """Archive-relative path of one parameter set inside an SSP."""
+    prefix = prefix.strip().strip("/")
+    return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
 
 
 def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attribute]]) -> None:
@@ -81,11 +89,11 @@ def generate_parameter_sets(
     architecture = load(architecture_path)
     system = architecture.get_part_def(composition)
     validate_marker_definitions(architecture)
-    validate_parameter_dialect(architecture, system)
-    validate_applied_sets(architecture, system)
+    validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
+    validate_applied_sets(architecture, system, policy=SSP_POLICY)
     definitions = parameter_sets_for_generation(
         architecture, system, set_names=list(set_names) if set_names else None,
-        all_sets=all_sets,
+        all_sets=all_sets, policy=SSP_POLICY,
     )
     if not definitions:
         return []
