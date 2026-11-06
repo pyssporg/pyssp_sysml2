@@ -20,7 +20,7 @@ else
   if ! python3 -c "import pycps_sysml2, pyssp_standard" >/dev/null 2>&1; then
     echo "Missing runtime dependencies. Install first:"
     echo "  python3 -m venv venv && source venv/bin/activate"
-    echo "  pip install -r requirements.txt && pip install -e ."
+    echo "  pip install -r requirements-dev.txt && pip install -e ."
     exit 1
   fi
 fi

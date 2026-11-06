@@ -16,8 +16,8 @@ pip install -e .
 python3 -m pyssp_sysml2.cli --help
 ```
 
-If dependency resolution from `requirements.txt` fails, use
-`requirements_local.txt` with the sibling `experimental_pyssp_standard`
+If dependency resolution from `requirements-dev.txt` fails, reinstall it with
+the sibling `experimental_pyssp_standard`
 checkout (`INFO-020`).
 
 If `generate fmi` fails, that subcommand no longer exists. Install

@@ -1,0 +1,15 @@
+# Development install for this repository. The runtime and sibling
+# dependencies (pycps-sysml2, experimental-pyssp-standard) are declared in
+# pyproject.toml as PEP 508 direct references, so this file delegates to it
+# and adds the dev extra; sibling versions are not re-listed here so they
+# cannot drift from the pyproject pins.
+#
+# To develop against the experimental_pyssp_standard working tree instead of
+# its wheel, install it as a sibling editable checkout from the flat ecosystem
+# workspace (pyssp_dev/repos/, i.e. one level above here) -- it overrides the
+# wheel after resolution:
+#
+#   python3 -m pip install -e ../experimental_pyssp_standard
+#
+# Adjust that path if your workspace layout differs.
+-e ".[dev]"

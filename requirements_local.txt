@@ -1,8 +1,0 @@
-pytest
-coverage
-pycps-sysml2 @ https://github.com/pyssporg/pycps_sysml2/releases/download/v0.1.0/pycps_sysml2-0.1.0-py3-none-any.whl
-# Refactored pyssp_standard checkout (pyssporg/experimental_pyssp_standard),
-# installed from a sibling checkout in the flat ecosystem workspace
-# (pyssp_dev/repos/experimental_pyssp_standard).
-# Adjust this path if your workspace layout differs.
--e ../experimental_pyssp_standard

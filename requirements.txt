@@ -1,4 +1,0 @@
-pytest
-pycps-sysml2 @ https://github.com/pyssporg/pycps_sysml2/releases/download/v0.1.0/pycps_sysml2-0.1.0-py3-none-any.whl
-# Not on PyPI: fork pinned to the canonical checkout revision 676673b81fb1d5802d4728392c229ef412b01835.
-experimental-pyssp-standard @ git+https://github.com/pyssporg/experimental_pyssp_standard.git@676673b81fb1d5802d4728392c229ef412b01835

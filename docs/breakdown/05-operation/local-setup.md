@@ -14,18 +14,18 @@ Standard setup:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 
-`requirements_local.txt` is for local or shared development where
+`requirements-dev.txt` is for local or shared development where
 `experimental_pyssp_standard` comes from a sibling checkout (in the flat
 ecosystem workspace) instead of the pinned git reference.
 
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements_local.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 

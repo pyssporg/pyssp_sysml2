@@ -46,7 +46,7 @@ For local development:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 
@@ -54,7 +54,7 @@ This version depends on `pycps-sysml2` (which owns the SysML dialect, IR, and
 parameter resolution) and on the refactored `experimental_pyssp_standard` model
 API (`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
 `common_content_ssc` type objects. `sysmlpy` is not a direct dependency:
-`pycps-sysml2` pins `sysmlpy==0.96.4` itself. `requirements.txt` installs the
+`pycps-sysml2` pins `sysmlpy==0.96.4` itself. `requirements-dev.txt` installs the
 refactored `experimental_pyssp_standard` fork directly from the canonical git
 revision.
 
@@ -65,7 +65,7 @@ reference:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements_local.txt
+pip install -r requirements-dev.txt
 pip install -e .
 ```
 
@@ -628,7 +628,7 @@ Artifact purpose:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `No module named pycps_sysml2` / `No module named pyssp_standard` | Dependencies not installed in current environment | Create/activate venv and run `pip install -r requirements.txt && pip install -e .`, or use `pip install -r requirements_local.txt && pip install -e .` when working with the bundled third-party checkouts |
+| `No module named pycps_sysml2` / `No module named pyssp_standard` | Dependencies not installed in current environment | Create/activate venv and run `pip install -r requirements-dev.txt && pip install -e .` |
 | `[error] \`generate fmi\` was removed ...` | FMI generation moved to `pyfmi_sysml2` in 0.4.0 | `pip install pyfmi-sysml2` and run `pyfmi model-description ...` |
 | `[error] 'Part not found: ...'` | `--composition` does not match a part definition name | Use the correct top-level composition name |
 | `[error] No .sysml files found under ...` | Running an architecture-based generator without SysML files in `--architecture` | Provide SysML inputs first, or use `pyssp generate sysml --ssd ...` to bootstrap from SSD |
