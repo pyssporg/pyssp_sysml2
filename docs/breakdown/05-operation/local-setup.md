@@ -19,7 +19,8 @@ pip install -e .
 ```
 
 `requirements_local.txt` is for local or shared development where
-`experimental_pyssp_standard` comes from a path instead of a remote URL.
+`experimental_pyssp_standard` comes from a sibling checkout (in the flat
+ecosystem workspace) instead of the pinned git reference.
 
 ```bash
 python3 -m venv venv

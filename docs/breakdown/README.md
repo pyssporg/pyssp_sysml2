@@ -35,5 +35,5 @@ state only.
 
 - Runnable parameter-set models: `examples/parameter-sets/`.
 - Generated builds and artifacts: `build/` and `/tmp`.
-- Vendored dependencies and capability checkouts: `3rd_party/`.
+- Sibling package checkouts: the flat ecosystem workspace (`../..` repos).
 - Dated history: the decision archive, read via `pb archive`.

@@ -54,10 +54,13 @@ This version depends on `pycps-sysml2` (which owns the SysML dialect, IR, and
 parameter resolution) and on the refactored `experimental_pyssp_standard` model
 API (`SSD.xml`, `SSV.xml`, `Connector.type_name`). It does not use the older
 `common_content_ssc` type objects. `sysmlpy` is not a direct dependency:
-`pycps-sysml2` pins `sysmlpy==0.96.4` itself. Install the refactored
-`experimental_pyssp_standard` checkout before installing this package.
+`pycps-sysml2` pins `sysmlpy==0.96.4` itself. `requirements.txt` installs the
+refactored `experimental_pyssp_standard` fork directly from the canonical git
+revision.
 
-If you are working in the `ssp_references` workspace and want to use its vendored `experimental_pyssp_standard` checkout instead of a package index:
+If you are working in the flat ecosystem workspace and want to install the
+`experimental_pyssp_standard` sibling checkout instead of the pinned git
+reference:
 
 ```bash
 python3 -m venv venv
