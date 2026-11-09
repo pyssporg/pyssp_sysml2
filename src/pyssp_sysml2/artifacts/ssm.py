@@ -20,11 +20,15 @@ def generate_parameter_mappings(
     composition: str,
     *,
     includes: Sequence[Path | str] = (),
+    base_index: int = 0,
 ) -> list[Path]:
     """Write one SSM file per (set, component usage) explicit mapping.
 
     Whole-object identity bindings need no SSM; they map to an SSP
     ``ParameterBinding`` with ``prefix="<component>."`` instead.
+
+    ``base_index`` is the first array index emitted in mapping source and
+    target names, e.g. 0 -> ``waypoints_x_km[0]`` and 1 -> ``waypoints_x_km[1]``.
 
     ``includes`` names additional definition roots (files or directories)
     merged into the loaded architecture; pass
@@ -35,7 +39,9 @@ def generate_parameter_mappings(
     system = architecture.get_part_def(composition)
 
     written: list[Path] = []
-    for spec in mapping_specs(architecture, system, policy=SSP_POLICY):
+    for spec in mapping_specs(
+        architecture, system, policy=SSP_POLICY, base_index=base_index
+    ):
         if spec.identity:
             continue
         component_name = spec.component_name.replace(".", "_")

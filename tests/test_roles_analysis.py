@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 
+from pyssp_standard import SSV
+
 from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.model import load
 from pyssp_sysml2.model.exporter import export_declared
@@ -68,6 +70,40 @@ def test_generate_analysis_writes_scenario_and_descriptor(tmp_path: Path) -> Non
     ssm = artifacts.ssm.read_text(encoding="utf-8")
     assert 'target="leaf.k"' in ssm
     assert 'target="sut.' not in ssm
+
+
+def test_generate_analysis_base_index_one(tmp_path: Path) -> None:
+    """Analysis SSV and SSM name array entries from one with base_index=1."""
+    architecture = tmp_path / "analysis.sysml"
+    architecture.write_text(
+        ARCHITECTURE.replace("  attribute k : Real;", "  attribute k : Real[2];").replace(
+            "  attribute k = 2.0;", "  attribute k = (1.0, 2.0);"
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "analysis"
+    artifacts = generate_analysis(
+        architecture,
+        output,
+        "test_baseline",
+        model_name="role_model",
+        base_index=1,
+    )
+
+    assert artifacts.ssv is not None and artifacts.ssm is not None
+    with SSV(artifacts.ssv, mode="r") as ssv:
+        entries = sorted(
+            f"{parameter.name}:{parameter.attributes.get('value')}"
+            for parameter in ssv.xml.parameters
+        )
+    assert entries == ["k[1]:1", "k[2]:2"]
+
+    ssm = artifacts.ssm.read_text(encoding="utf-8")
+    assert 'source="k[1]"' in ssm
+    assert 'source="k[2]"' in ssm
+    assert 'target="leaf.k[1]"' in ssm
+    assert 'target="leaf.k[2]"' in ssm
+    assert "[0]" not in ssm
 
 
 EXPERIMENT_ONLY_ARCHITECTURE = fixture_text("roles-analysis/experiment-only.sysml")

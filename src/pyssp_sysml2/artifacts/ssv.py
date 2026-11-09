@@ -28,14 +28,19 @@ def parameter_set_resource(prefix: str, set_name: str) -> str:
     return f"{prefix}/{set_name}.ssv" if prefix else f"{set_name}.ssv"
 
 
-def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attribute]]) -> None:
+def populate_parameter_set(
+    ssv: SSV,
+    parameter_pairs: Iterable[tuple[str, Attribute]],
+    *,
+    base_index: int = 0,
+) -> None:
     for name, attr in parameter_pairs:
         data_type = attr.primitive_type_str()
         if attr.value is None:
             continue
 
         if isinstance(attr.value, (list, tuple)):
-            for idx, item in enumerate(attr.value, start=0):
+            for idx, item in enumerate(attr.value, start=base_index):
                 indexed_name = f"{name}[{idx}]"
                 formatted = format_value(data_type, item)
                 ssv.add_parameter(indexed_name, formatted, type_name=data_type)
@@ -46,9 +51,16 @@ def populate_parameter_set(ssv: SSV, parameter_pairs: Iterable[tuple[str, Attrib
 
 
 def write_parameter_set(
-    definition: AttributeDefinition, output_path: Path
+    definition: AttributeDefinition,
+    output_path: Path,
+    *,
+    base_index: int = 0,
 ) -> Path:
-    """Write one parameter-set definition as an SSV file."""
+    """Write one parameter-set definition as an SSV file.
+
+    ``base_index`` is the first array index emitted in parameter names, e.g.
+    0 -> ``waypointX_km[0]`` and 1 -> ``waypointX_km[1]``.
+    """
     pairs = [
         (name, attribute)
         for name, attribute in definition.attributes.items()
@@ -69,7 +81,7 @@ def write_parameter_set(
     ensure_parent_dir(output_path)
     with SSV(output_path, mode="w") as ssv:
         ssv.xml.name = definition.name
-        populate_parameter_set(ssv, pairs)
+        populate_parameter_set(ssv, pairs, base_index=base_index)
     return output_path
 
 
@@ -82,11 +94,15 @@ def generate_parameter_sets(
     all_sets: bool = False,
     output_path: Path | None = None,
     includes: Sequence[Path | str] = (),
+    base_index: int = 0,
 ) -> list[Path]:
     """Generate one SSV per parameter-set definition.
 
     With ``output_path`` exactly one set may be selected. Otherwise files are
     written as ``<output_dir>/<SetName>.ssv``.
+
+    ``base_index`` is the first array index emitted in parameter names, e.g.
+    0 -> ``waypointX_km[0]`` and 1 -> ``waypointX_km[1]``.
 
     ``includes`` names additional definition roots (files or directories)
     merged into the loaded architecture; pass
@@ -111,10 +127,12 @@ def generate_parameter_sets(
                 "A single --output file requires exactly one parameter set; "
                 f"selected {len(definitions)}"
             )
-        return [write_parameter_set(definitions[0], output_path)]
+        return [write_parameter_set(definitions[0], output_path, base_index=base_index)]
 
     ensure_directory(output_dir)
     return [
-        write_parameter_set(definition, output_dir / f"{definition.name}.ssv")
+        write_parameter_set(
+            definition, output_dir / f"{definition.name}.ssv", base_index=base_index
+        )
         for definition in definitions
     ]

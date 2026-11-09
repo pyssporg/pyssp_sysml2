@@ -57,6 +57,18 @@ def _add_common_architecture_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _add_base_index_arg(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--base-index",
+        type=int,
+        default=0,
+        help=(
+            "First array index emitted in parameter names, e.g. 0 -> "
+            "waypointX_km[0] and 1 -> waypointX_km[1] (default: 0)."
+        ),
+    )
+
+
 def _parse_selections(values: list[str] | None) -> dict[str, str] | None:
     """Parse repeatable ``--select KEY=VARIANT`` values into a mapping."""
     if not values:
@@ -138,6 +150,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "e.g. 'parameter_sets' -> 'parameter_sets/<Set>.ssv'."
         ),
     )
+    _add_base_index_arg(ssd_parser)
 
     ssp_parser = generate_subparsers.add_parser(
         "ssp", help="Package an SSP archive from SysML and built FMUs"
@@ -200,6 +213,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             "root."
         ),
     )
+    _add_base_index_arg(ssp_parser)
 
     ssv_parser = generate_subparsers.add_parser("ssv", help="Generate parameter .ssv")
     _add_common_architecture_args(ssv_parser)
@@ -229,6 +243,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         action="store_true",
         help="Generate every parameter set in the architecture, applied or not.",
     )
+    _add_base_index_arg(ssv_parser)
 
     ssm_parser = generate_subparsers.add_parser(
         "ssm", help="Generate SSP parameter mappings"
@@ -240,6 +255,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         default=GENERATED_DIR / "parameter_mappings",
         help="Output directory for .ssm parameter mapping files.",
     )
+    _add_base_index_arg(ssm_parser)
 
     analysis_parser = generate_subparsers.add_parser(
         "analysis", help="Generate analysis scenario SSV, SSM, and descriptor"
@@ -261,6 +277,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         default="SystemStructure.ssd",
         help="SSD name the analysis targets inside the exported SSP.",
     )
+    _add_base_index_arg(analysis_parser)
 
     sysml_parser = generate_subparsers.add_parser(
         "sysml", help="Generate a SysML file from an SSD"
@@ -330,6 +347,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 selections=selections,
                 configuration=configuration,
                 includes=includes,
+                base_index=args.base_index,
             )
             print(f"SSP written to {output}")
             return 0
@@ -343,6 +361,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 parameter_set_prefix=args.parameter_set_prefix,
                 selections=selections,
                 includes=includes,
+                base_index=args.base_index,
             )
             print(f"SSD written to {output}")
             return 0
@@ -356,6 +375,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 all_sets=args.all_sets,
                 output_path=args.output,
                 includes=includes,
+                base_index=args.base_index,
             )
             if not written:
                 print("No parameter sets matched.")
@@ -370,6 +390,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.output_dir,
                 args.composition,
                 includes=includes,
+                base_index=args.base_index,
             )
             if not written:
                 print(
@@ -389,6 +410,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 target_ssd=args.target_ssd,
                 selections=selections,
                 includes=includes,
+                base_index=args.base_index,
             )
             if artifacts.ssv is not None:
                 print(f"SSV written to {artifacts.ssv}")

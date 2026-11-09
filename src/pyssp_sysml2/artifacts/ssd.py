@@ -188,6 +188,8 @@ def _add_part_connectors(
     part_def: PartDefinition,
     architecture: Architecture,
     parameter_model: bool,
+    *,
+    base_index: int = 0,
 ) -> None:
     """Append port and parameter connectors for one component or system."""
     for port_usage in part_def.ports.values():
@@ -217,7 +219,7 @@ def _add_part_connectors(
     has_interface = parameter_interface(architecture, part_def) is not None
     if parameter_model and has_interface:
         for attribute in parameter_declarations(architecture, part_def):
-            for item in parameter_items(attribute):
+            for item in parameter_items(attribute, base_index=base_index):
                 element.add_connector(
                     name=item.name,
                     kind="parameter",
@@ -288,6 +290,7 @@ def _write_elements(
     *,
     parameter_model: bool,
     type_check: bool,
+    base_index: int = 0,
 ) -> None:
     """Recursively write nested systems and leaf FMU components."""
     for part_name, part_usage in part_def.parts.items():
@@ -304,13 +307,14 @@ def _write_elements(
                     "a nested system cannot also be an FMU component"
                 )
             nested = parent.add_subsystem(part_name)
-            _add_part_connectors(nested, child, architecture, parameter_model)
+            _add_part_connectors(nested, child, architecture, parameter_model, base_index=base_index)
             _write_elements(
                 nested,
                 child,
                 architecture,
                 parameter_model=parameter_model,
                 type_check=type_check,
+                base_index=base_index,
             )
             continue
 
@@ -320,7 +324,7 @@ def _write_elements(
             component_type="application/x-fmu-sharedlibrary",
             implementation=component_implementation(metadata),
         )
-        _add_part_connectors(component, child, architecture, parameter_model)
+        _add_part_connectors(component, child, architecture, parameter_model, base_index=base_index)
 
     _add_connections(parent, part_def, architecture, type_check)
 
@@ -331,6 +335,8 @@ def build_ssd(
     architecture: Architecture,
     type_check=True,
     parameter_set_prefix: str = "parameter_sets",
+    *,
+    base_index: int = 0,
 ) -> None:
     validate_role_markers(architecture)
     if is_analysis(architecture, system):
@@ -354,15 +360,16 @@ def build_ssd(
 
     validate_parameter_dialect(architecture, system, policy=SSP_POLICY)
     parameter_model = has_parameter_dialect(architecture, system, policy=SSP_POLICY)
-    specs = mapping_specs(architecture, system, policy=SSP_POLICY) if parameter_model else []
+    specs = mapping_specs(architecture, system, policy=SSP_POLICY, base_index=base_index) if parameter_model else []
 
-    _add_part_connectors(top, system, architecture, parameter_model)
+    _add_part_connectors(top, system, architecture, parameter_model, base_index=base_index)
     _write_elements(
         top,
         system,
         architecture,
         parameter_model=parameter_model,
         type_check=type_check,
+        base_index=base_index,
     )
 
     start = system.attributes.get(DEFAULT_START_ATTR)
@@ -386,8 +393,13 @@ def generate_ssd(
     selections: Mapping[str, str] | None = None,
     *,
     includes: Sequence[Path | str] = (),
+    base_index: int = 0,
 ) -> Path:
     """Write an SSD for one composition.
+
+    ``base_index`` is the first array index emitted in parameter connector
+    names, e.g. 0 -> ``waypointX_km[0]`` and 1 -> ``waypointX_km[1]``. Data
+    ports keep their FMI-style 1-based indices regardless.
 
     ``includes`` names additional definition roots (files or directories)
     merged into the loaded architecture; pass
@@ -413,5 +425,6 @@ def generate_ssd(
             architecture,
             type_check,
             parameter_set_prefix=parameter_set_prefix,
+            base_index=base_index,
         )
     return output_path

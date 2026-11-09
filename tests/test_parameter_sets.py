@@ -247,6 +247,78 @@ def test_generate_ssd_emits_interface_parameter_connectors(tmp_path) -> None:
         ]
 
 
+def test_generate_ssv_base_index_one(tmp_path) -> None:
+    """base_index=1 names SSV array entries from one, matching FMU arrays."""
+    architecture_dir = _write(tmp_path, _model())
+    output_dir = tmp_path / "sets"
+
+    written = generate_parameter_sets(
+        architecture_dir, output_dir, COMPOSITION_NAME, base_index=1
+    )
+
+    assert _ssv_summary(written[0]) == [
+        "n_waypoints:Integer:10",
+        "waypoints_x_km[1]:Real:0",
+        "waypoints_x_km[2]:Real:10",
+        "waypoints_x_km[3]:Real:20",
+    ]
+
+
+def test_generate_ssm_base_index_one(tmp_path) -> None:
+    """base_index=1 names SSM mapping sources and targets from one."""
+    architecture_dir = _write(tmp_path, _model())
+    output_dir = tmp_path / "mappings"
+
+    written = generate_parameter_mappings(
+        architecture_dir, output_dir, COMPOSITION_NAME, base_index=1
+    )
+
+    assert _ssm_summary(written[0]) == [
+        ("n_waypoints", "autopilot.waypointCount"),
+        ("waypoints_x_km[1]", "autopilot.waypointX_km[1]"),
+        ("waypoints_x_km[2]", "autopilot.waypointX_km[2]"),
+        ("waypoints_x_km[3]", "autopilot.waypointX_km[3]"),
+    ]
+
+
+def test_generate_ssd_connector_names_base_index_one(tmp_path) -> None:
+    """base_index=1 names SSD parameter connectors and inline SSM from one."""
+    architecture_dir = _write(tmp_path, _model())
+    output_path = tmp_path / "SystemStructure.ssd"
+
+    generate_ssd(
+        architecture_dir,
+        output_path,
+        COMPOSITION_NAME,
+        parameter_set_prefix="sets",
+        base_index=1,
+    )
+
+    with SSD(output_path, mode="r") as ssd:
+        component = ssd.system.elements[0]
+        assert sorted(
+            (connector.name, connector.kind, connector.type_name)
+            for connector in component.connectors
+        ) == [
+            ("waypointCount", "parameter", "Integer"),
+            ("waypointX_km[1]", "parameter", "Real"),
+            ("waypointX_km[2]", "parameter", "Real"),
+            ("waypointX_km[3]", "parameter", "Real"),
+        ]
+
+        [binding] = ssd.system.parameter_bindings
+        assert binding.parameter_mapping is not None
+        assert [
+            (mapping.source, mapping.target)
+            for mapping in binding.parameter_mapping.mapping.mappings
+        ] == [
+            ("n_waypoints", "autopilot.waypointCount"),
+            ("waypoints_x_km[1]", "autopilot.waypointX_km[1]"),
+            ("waypoints_x_km[2]", "autopilot.waypointX_km[2]"),
+            ("waypoints_x_km[3]", "autopilot.waypointX_km[3]"),
+        ]
+
+
 def test_generate_ssd_identity_binding_uses_prefix(tmp_path) -> None:
     """A whole-object bind becomes ParameterBinding/@prefix with no SSM."""
     model = _model(

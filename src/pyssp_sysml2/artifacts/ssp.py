@@ -241,8 +241,14 @@ def generate_ssp(
     selections: Mapping[str, str] | None = None,
     configuration: str | None = None,
     includes: Sequence[Path | str] = (),
+    base_index: int = 0,
 ) -> Path:
     """Build an ``.ssp`` archive from a SysML architecture and its built FMUs.
+
+    ``base_index`` is the first array index emitted in SSD parameter connector
+    names and SSV entry names, e.g. 0 -> ``waypointX_km[0]`` and 1 ->
+    ``waypointX_km[1]``. Data ports keep their FMI-style 1-based indices
+    regardless.
 
     Relative ``fmu_meta.source`` paths are resolved against ``fmu_root`` (the
     current working directory when omitted). ``SSD`` parameter bindings and
@@ -326,6 +332,7 @@ def generate_ssp(
                 architecture,
                 type_check,
                 parameter_set_prefix=parameter_set_prefix,
+                base_index=base_index,
             )
             if validate_fmus:
                 assert ssd.system is not None
@@ -334,7 +341,9 @@ def generate_ssp(
         ssv_paths = []
         for definition in set_definitions:
             ssv_path = write_parameter_set(
-                definition, temp_path / f"{definition.name}.ssv"
+                definition,
+                temp_path / f"{definition.name}.ssv",
+                base_index=base_index,
             )
             ssv_paths.append((definition, ssv_path))
 

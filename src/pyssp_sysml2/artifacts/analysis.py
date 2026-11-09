@@ -71,8 +71,12 @@ def generate_analysis(
     target_ssd: str = "SystemStructure.ssd",
     selections: Mapping[str, str] | None = None,
     includes: Sequence[Path | str] = (),
+    base_index: int = 0,
 ) -> AnalysisArtifacts:
     """Write ``analysis.json`` and, for one applied set, its SSV and SSM.
+
+    ``base_index`` is the first array index emitted in SSV entry and SSM
+    mapping names, e.g. 0 -> ``waypointX_km[0]`` and 1 -> ``waypointX_km[1]``.
 
     ``selections`` resolves variation points in the analysis before generation;
     see :func:`pyssp_sysml2.parameters.variation.resolve`. When it is ``None``,
@@ -140,13 +144,17 @@ def generate_analysis(
     scenario: dict[str, str] | None = None
     if set_definition is not None:
         ssv_path = write_parameter_set(
-            set_definition, output_dir / f"{set_definition.name}.ssv"
+            set_definition,
+            output_dir / f"{set_definition.name}.ssv",
+            base_index=base_index,
         )
 
         prefix = f"{model_part_usage.name}."
         ssm_path = output_dir / f"{composition}.ssm"
         with SSM(ssm_path, mode="w") as ssm:
-            for spec in mapping_specs(architecture, analysis, policy=SSP_POLICY):
+            for spec in mapping_specs(
+                architecture, analysis, policy=SSP_POLICY, base_index=base_index
+            ):
                 for source, target in spec.entries:
                     if not target.startswith(prefix):
                         raise ValueError(
