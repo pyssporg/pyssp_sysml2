@@ -20,8 +20,8 @@ authors = [
 # sysmlpy is not a direct dependency any more: pycps-sysml2 pins ==0.96.4 and
 # this package never imports the grammar.
 dependencies = [
-    "pycps-sysml2 @ https://github.com/pyssporg/pycps_sysml2/releases/download/v0.1.0/pycps_sysml2-0.1.0-py3-none-any.whl",
-    "experimental-pyssp-standard @ https://github.com/pyssporg/experimental_pyssp_standard/releases/download/v0.9.2.dev0/experimental_pyssp_standard-0.9.2.dev0-py3-none-any.whl"
+    "pycps-sysml2 @ https://github.com/pyssporg/pycps_sysml2/releases/download/v0.2.0/pycps_sysml2-0.2.0-py3-none-any.whl",
+    "experimental-pyssp-standard @ https://github.com/pyssporg/experimental_pyssp_standard/releases/download/v0.9.3.dev0/experimental_pyssp_standard-0.9.3.dev0-py3-none-any.whl"
   ]
 
 

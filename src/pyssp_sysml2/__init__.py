@@ -1,6 +1,6 @@
 """SysML utilities package for architecture parsing and generation SSP."""
 
-__version__ = "0.4.0"
+__version__ = "0.5.0"
 
 from pyssp_sysml2.artifacts.analysis import generate_analysis
 from pyssp_sysml2.artifacts.ssd import build_ssd, generate_ssd
